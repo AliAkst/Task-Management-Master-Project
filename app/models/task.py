@@ -21,3 +21,22 @@ class TaskCreate(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     priority: TaskPriority = TaskPriority.MEDIUM
     due_date: datetime | None
+
+
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    status: TaskStatus | None = None
+    priority: TaskPriority | None = None
+    due_date: datetime | None = None
+
+
+class TaskResponse(BaseModel):
+    id: int
+    title: str
+    description: str | None
+    status: TaskStatus
+    priority: TaskPriority
+    due_date: datetime | None
+    created_at: datetime
+    updated_at: datetime

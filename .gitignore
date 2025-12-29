@@ -8,3 +8,20 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment files(gizli anahtarlar ve sifreler icin)
+.env
+.env.*
+!.env.example
+
+# IDE files (kisisel editor ayarlari)
+
+.idea/
+.vscode/
+
+# Test and Coverage(Pytest-cov)
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
