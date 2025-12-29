@@ -7,6 +7,8 @@ app = FastAPI(
     title=settings.app_name, version=settings.app_version, debug=settings.debug
 )
 
+app.include_router(tasks_router, prefix=settings.api_v1_prefix)
+
 
 @app.get("/health", tags=["Health"])
 def health_check():
