@@ -5,13 +5,27 @@ from app.config import settings
 from contextlib import asynccontextmanager
 from app.db.database import engine
 from app.db.entities import Base
+from app.core.exceptions import AppException
+from app.core.handlers import app_exception_handler, generic_exception_handler
+from app.core.logging import setup_logging, get_logger
+
+
+setup_logging()
+
+logger = get_logger(__name__)
+logger.info("Starting my little tiny app...(finally i made it)")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    logger.info("Database tables created")
+
     yield
+
+    logger.info("Shutting down application...")
 
 
 app = FastAPI(
@@ -20,7 +34,10 @@ app = FastAPI(
     debug=settings.debug,
     lifespan=lifespan,
 )
-
+# --- Exception Handler Kaydi baslatiliyor ---
+app.add_exception_handler(AppException, app_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(Exception, generic_exception_handler)
+# -------------------------
 app.include_router(tasks_router, prefix=settings.api_v1_prefix)
 
 
