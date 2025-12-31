@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
+    database_url: str = "sqlite+aiosqlite:///./task_management.db"
 
     # Yapılandırma (ConfigDict)
     model_config = SettingsConfigDict(
