@@ -1,8 +1,9 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
 from app.core.exceptions import AppException
-from app.models.common import ApiResponse, ErrorDetail
 from app.core.logging import get_logger
+from app.models.common import ApiResponse, ErrorDetail
 
 logger = get_logger(__name__)
 
@@ -13,7 +14,7 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
 
     logger.warning(f"App exception: {exc.error_code} - {exc.message}")
 
-    response = ApiResponse(success=False, error=error_detail)
+    response: ApiResponse = ApiResponse(success=False, error=error_detail)
     return JSONResponse(
         status_code=exc.status_code, content=response.model_dump(mode="json")
     )
@@ -25,5 +26,5 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
         code="INTERNAL_SERVER_ERROR", message="An unexpected error occurred"
     )
     logger.exception(f"Unexpected error: {exc}")
-    response = ApiResponse(success=False, error=error_detail)
+    response: ApiResponse = ApiResponse(success=False, error=error_detail)
     return JSONResponse(status_code=500, content=response.model_dump(mode="json"))

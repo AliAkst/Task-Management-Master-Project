@@ -1,14 +1,14 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.v1.tasks import tasks_router as tasks_router
 from app.config import settings
-from contextlib import asynccontextmanager
-from app.db.database import engine
-from app.db.entities import Base
 from app.core.exceptions import AppException
 from app.core.handlers import app_exception_handler, generic_exception_handler
-from app.core.logging import setup_logging, get_logger
-
+from app.core.logging import get_logger, setup_logging
+from app.db.database import engine
+from app.db.entities import Base
 
 setup_logging()
 
