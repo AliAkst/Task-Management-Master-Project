@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.v1.auth import auth_router as auth_router
 from app.api.v1.tasks import tasks_router as tasks_router
 from app.config import settings
 from app.core.exceptions import AppException
@@ -39,6 +40,7 @@ app.add_exception_handler(AppException, app_exception_handler)  # type: ignore[a
 app.add_exception_handler(Exception, generic_exception_handler)
 # -------------------------
 app.include_router(tasks_router, prefix=settings.api_v1_prefix)
+app.include_router(auth_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health", tags=["Health"])

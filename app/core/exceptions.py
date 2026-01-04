@@ -32,3 +32,49 @@ class ValidationException(AppException):
         super().__init__(
             status_code=422, error_code="VALIDATION_ERROR", message=message
         )
+
+
+"""
+Kimlik doğrulama ve kullanıcı işlemleriyle ilgili özel hata sınıflarını içerir.
+Bu hatalar, API katmanında yakalanarak uygun HTTP statü kodlarına dönüştürülür.
+"""
+
+
+class AuthenticationException(AppException):
+    """
+    Genel kimlik dogrulama hatalari icin temel sinif.
+    Status Code: 401(Unauthorized)
+    """
+
+    def __init__(self, message: str = "Autentication failed"):
+        super().__init__(
+            status_code=401, error_code="AUTHENTICATION FAILED", message=message
+        )
+
+
+class InvalidCredentialsException(AuthenticationException):
+    """Hatali e-posta veya sifre girislerinde firlatilir."""
+
+    def __init__(self):
+        super().__init__(message="Invalid email or password")
+
+
+class InvalidTokenException(AuthenticationException):
+    """
+    Jwt Token'in gecersiz, bozulmus veya
+    suresinin dolmus olmasi durumunda firlatilir
+    """
+
+    def __init__(self):
+        super().__init__(message="Invalid or expired Token")
+
+
+class UserAlreadyExistException(AppException):
+    """Kullanici zaten var oldugunda bu hata firlatilir."""
+
+    def __init__(self, email: str):
+        super().__init__(
+            status_code=409,
+            error_code="USER_ALREADY_EXISTS",
+            message=f"User with email {email} already exists",
+        )
