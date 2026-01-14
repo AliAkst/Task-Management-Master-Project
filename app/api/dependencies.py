@@ -9,7 +9,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import InvalidTokenException
+from app.core.exceptions import ForbiddenException, InvalidTokenException
 from app.core.security import decode_token
 from app.db.database import get_db_session
 from app.db.entities import UserEntity
@@ -75,3 +75,14 @@ async def get_current_user(
 TaskServiceDep = Annotated[TaskService, Depends(get_task_service)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 CurrentUserDep = Annotated[UserEntity, Depends(get_current_user)]
+
+
+async def get_current_admin_user(current_user: CurrentUserDep) -> UserEntity:
+    """Sadece admin kullanicilari gecirir,digerlerine 403 doner."""
+    if not current_user.is_superuser:
+        raise ForbiddenException("Admin access required")
+    return current_user
+
+
+# admin kisayolu
+AdminUserDep = Annotated[UserEntity, Depends(get_current_admin_user)]
