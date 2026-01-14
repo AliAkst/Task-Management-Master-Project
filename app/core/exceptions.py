@@ -48,7 +48,7 @@ class AuthenticationException(AppException):
 
     def __init__(self, message: str = "Autentication failed"):
         super().__init__(
-            status_code=401, error_code="AUTHENTICATION FAILED", message=message
+            status_code=401, error_code="AUTHENTICATION_FAILED", message=message
         )
 
 
@@ -78,3 +78,12 @@ class UserAlreadyExistException(AppException):
             error_code="USER_ALREADY_EXISTS",
             message=f"User with email {email} already exists",
         )
+
+
+class ForbiddenException(AppException):
+    """Kullanici yetkisi yok."""
+
+    def __init__(
+        self, message: str = "You don't have permission to perform this action"
+    ):
+        super().__init__(status_code=403, error_code="FORBIDDEN", message=message)
