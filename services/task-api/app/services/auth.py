@@ -7,6 +7,7 @@ ve repository ile güvenlik araçları arasında köprü kurar.
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.unit_of_work import TaskUnitOfWork
 from app.core.exceptions import (
     InvalidCredentialsException,
     InvalidTokenException,
@@ -31,12 +32,12 @@ logger = get_logger(__name__)
 class AuthService:
     """Kullanici kimlik dogrulama mantigini kapsayan servis sinifi."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, uow: TaskUnitOfWork):
         """
         AuthService baslatilirken bir veritabani oturumunu alir
         ve UserRepository'yi kurar
         """
-        self.repo = UserRepository(session)
+        self.uow = uow
 
     async def register(self, user_in: UserCreate) -> UserResponse:
         """
@@ -52,7 +53,7 @@ class AuthService:
         logger.info(f"Registering user:{user_in.email}")
 
         # e-mail kontrolu
-        existing_user = await self.repo.get_by_email(user_in.email)
+        existing_user = await self.uow.users.get_by_email(user_in.email)
         if existing_user:
             raise UserAlreadyExistException(email=user_in.email)
 
@@ -65,7 +66,8 @@ class AuthService:
 
         # kaydet ve don
 
-        created_user = await self.repo.create(new_user)
+        created_user = await self.uow.users.create(new_user)
+        await self.uow.commit()
         return UserResponse.model_validate(created_user)
 
     async def login(self, user_in: UserLogin) -> TokenResponse:
@@ -83,7 +85,7 @@ class AuthService:
         logger.info(f"Login attempt:{user_in.email}")
 
         # kullaniciyi bul
-        user = await self.repo.get_by_email(user_in.email)
+        user = await self.uow.users.get_by_email(user_in.email)
         if not user:
             raise InvalidCredentialsException()
 

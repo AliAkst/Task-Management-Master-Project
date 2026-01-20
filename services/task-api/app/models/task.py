@@ -44,3 +44,9 @@ class TaskResponse(BaseModel):
     due_date: datetime | None
     created_at: datetime
     updated_at: datetime
+
+class TaskFilter(BaseModel):
+    """Task Filtreleme parametreleri"""
+    status: TaskStatus | None = None
+    priority: TaskPriority | None = None
+    search: str | None = None

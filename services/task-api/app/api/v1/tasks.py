@@ -1,8 +1,10 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Query, Depends
 
 from app.api.dependencies import CurrentUserDep, TaskServiceDep
 from app.models.common import ApiResponse
-from app.models.task import TaskCreate, TaskResponse, TaskUpdate
+from app.models.task import TaskCreate, TaskResponse, TaskUpdate, TaskFilter, TaskStatus, TaskPriority
+from app.models.common import PaginationParams, PaginatedResponse
+from app.db.repositories.specifications import Specification, TaskUserSpecification, TaskPrioritySpecification, TaskSearchSpecification, TaskStatusSpecification,PaginationSpecification
 
 tasks_router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -19,12 +21,37 @@ async def create_task(
     return ApiResponse(success=True, data=task)
 
 
-@tasks_router.get("/", response_model=ApiResponse[list[TaskResponse]])
-async def get_all_tasks(service: TaskServiceDep, current_user: CurrentUserDep):
-    """Giris yapan kullanicinin tum task'larini listeler."""
-    tasks = await service.get_all(user_id=current_user.id)
+@tasks_router.get("/", response_model=ApiResponse[PaginatedResponse[TaskResponse]])
+async def get_all_tasks(
+    service: TaskServiceDep,
+      current_user: CurrentUserDep,
+      status: TaskStatus | None = None,
+      priority: TaskPriority | None = None,
+      search: str | None= None,
+      page: int = Query(default=1, ge=1),
+      page_size: int = Query(default=10, ge=1, le=100)
+    ):
+    """Giris yapan kullanicinin tum task'larini filtre ve sayfali olarak listeler."""
+    filters= TaskFilter(status=status, priority=priority, search=search)
+    pagination = PaginationParams(page=page,page_size=page_size)
 
-    return ApiResponse(success=True, data=tasks)
+    tasks, total = await service.get_all(
+        user_id=current_user.id,
+        filters=filters,
+        pagination=pagination
+    ) 
+
+    total_pages = (total + page_size - 1) // page_size # Yukari yuvarlama
+
+    paginated = PaginatedResponse(
+        items=tasks,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages
+    )
+
+    return ApiResponse(success=True, data=paginated)
 
 
 @tasks_router.get("/{task_id}", response_model=ApiResponse[TaskResponse])
