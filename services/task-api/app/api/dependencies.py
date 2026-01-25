@@ -14,9 +14,9 @@ from app.core.security import decode_token
 from app.db.database import get_db_session
 from app.db.entities import UserEntity
 from app.db.repositories.user import UserRepository
+from app.db.unit_of_work import TaskUnitOfWork
 from app.services.auth import AuthService
 from app.services.task import TaskService
-from app.db.unit_of_work import TaskUnitOfWork
 
 # Bearer semasi, Swagger UI'da "Authorize" butonunu aktiflestirir ve token bekler.
 bearer_scheme = HTTPBearer()

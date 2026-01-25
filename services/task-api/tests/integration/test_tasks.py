@@ -7,7 +7,6 @@ Bu testler:
 denetlemektedir.
 """
 
-import pytest
 from httpx import AsyncClient
 
 
@@ -158,7 +157,7 @@ class TestUpdateTask:
     ):
         """Var olmayan task update edilebiliyor mu ?"""
         response = await client.put(
-            f"/api/v1/tasks/91",
+            "/api/v1/tasks/91",
             json={"title": "updated Task", "description": "updated desc"},
             headers=auth_headers,
         )

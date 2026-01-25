@@ -87,3 +87,4 @@ class ForbiddenException(AppException):
         self, message: str = "You don't have permission to perform this action"
     ):
         super().__init__(status_code=403, error_code="FORBIDDEN", message=message)
+

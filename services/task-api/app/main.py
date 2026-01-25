@@ -5,11 +5,12 @@ from fastapi import FastAPI
 from app.api.v1.auth import auth_router as auth_router
 from app.api.v1.tasks import tasks_router as tasks_router
 from app.config import settings
+from app.core.cache import redis_cache
 from app.core.exceptions import AppException
 from app.core.handlers import app_exception_handler, generic_exception_handler
 from app.core.logging import get_logger, setup_logging
-from app.db.database import engine
-from app.db.entities import Base
+from app.core.middleware import RateLimitMiddleware
+
 
 setup_logging()
 
@@ -19,8 +20,11 @@ logger.info("Starting my little tiny app...(finally i made it)")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await redis_cache.connect()
     logger.info("Database tables created")
+
     yield
+    
     logger.info("Shutting down application...")
 
 
@@ -30,6 +34,10 @@ app = FastAPI(
     debug=settings.debug,
     lifespan=lifespan,
 )
+
+#---MIDDLEWARE KAYDI BASLATILIYOR...---
+app.add_middleware(RateLimitMiddleware)
+
 # --- Exception Handler Kaydi baslatiliyor ---
 app.add_exception_handler(AppException, app_exception_handler)  # type: ignore[arg-type]
 app.add_exception_handler(Exception, generic_exception_handler)

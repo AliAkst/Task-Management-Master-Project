@@ -17,7 +17,6 @@ from pydantic import ValidationError
 from app.models.task import (
     TaskCreate,
     TaskPriority,
-    TaskResponse,
     TaskStatus,
     TaskUpdate,
 )

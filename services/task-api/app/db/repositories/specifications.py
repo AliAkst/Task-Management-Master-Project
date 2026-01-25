@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import TypeVar, Generic
-from sqlalchemy.sql import Select
-from sqlalchemy import select, or_, desc, asc
-from app.db.entities.task import TaskEntity, TaskStatus, TaskPriority
+from typing import Generic, TypeVar
 
+from sqlalchemy import asc, desc, or_
+from sqlalchemy.sql import Select
+
+from app.db.entities.task import TaskEntity, TaskPriority, TaskStatus
 
 #Generic tip tanimi (hangi model ile calisacagimi temsil eder)
 T= TypeVar("T")

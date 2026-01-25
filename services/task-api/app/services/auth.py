@@ -5,9 +5,7 @@ Bu modül, iş kurallarını uygular
 ve repository ile güvenlik araçları arasında köprü kurar.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.unit_of_work import TaskUnitOfWork
 from app.core.exceptions import (
     InvalidCredentialsException,
     InvalidTokenException,
@@ -22,7 +20,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db.entities import UserEntity
-from app.db.repositories.user import UserRepository
+from app.db.unit_of_work import TaskUnitOfWork
 from app.models.user import TokenResponse, UserCreate, UserLogin, UserResponse
 
 # auth loglari tutmak icin

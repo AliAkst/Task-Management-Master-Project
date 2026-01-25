@@ -15,7 +15,6 @@ Bu testler gerçek HTTP istekleri yaparak:
 
 """
 
-import pytest
 from httpx import AsyncClient
 
 

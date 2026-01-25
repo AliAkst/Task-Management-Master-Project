@@ -1,10 +1,15 @@
-from fastapi import APIRouter, status, Query, Depends
+from fastapi import APIRouter, Query, status
 
 from app.api.dependencies import CurrentUserDep, TaskServiceDep
-from app.models.common import ApiResponse
-from app.models.task import TaskCreate, TaskResponse, TaskUpdate, TaskFilter, TaskStatus, TaskPriority
-from app.models.common import PaginationParams, PaginatedResponse
-from app.db.repositories.specifications import Specification, TaskUserSpecification, TaskPrioritySpecification, TaskSearchSpecification, TaskStatusSpecification,PaginationSpecification
+from app.models.common import ApiResponse, PaginatedResponse, PaginationParams
+from app.models.task import (
+    TaskCreate,
+    TaskFilter,
+    TaskPriority,
+    TaskResponse,
+    TaskStatus,
+    TaskUpdate,
+)
 
 tasks_router = APIRouter(prefix="/tasks", tags=["Tasks"])
 

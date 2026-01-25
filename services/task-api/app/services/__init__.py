@@ -1,5 +1,5 @@
-from .task import TaskService
 from .auth import AuthService
+from .task import TaskService
 
 __all__ = ["TaskService", "AuthService"]
 

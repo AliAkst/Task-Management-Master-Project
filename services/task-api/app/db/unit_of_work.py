@@ -1,8 +1,11 @@
-from abc import ABC, abstractmethod
-from sqlalchemy.ext.asyncio import AsyncSession
+from abc import ABC
 from typing import Self
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db.repositories.task import TaskRepository
 from app.db.repositories.user import UserRepository
+from app.core.resilience import with_db_retry
 
 class BaseUnitOfWork(ABC):
     """
@@ -12,6 +15,7 @@ class BaseUnitOfWork(ABC):
     def __init__(self,session:AsyncSession):
         self.session=session
     
+    @with_db_retry
     async def commit(self):
         """Degisiklikleri veritabanina kalici olarak kaydeder"""
         await self.session.commit()
@@ -43,6 +47,7 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.tasks = TaskRepository(session)
         self.users = UserRepository(session)
     
+    @with_db_retry
     async def commit(self):
         """
         Degisiklikleri kaydeder ve veritabanindan gelen guncel bilgileri(ID vb.)
