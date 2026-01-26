@@ -88,3 +88,43 @@ class ForbiddenException(AppException):
     ):
         super().__init__(status_code=403, error_code="FORBIDDEN", message=message)
 
+# --- RESILIANCE EXCEPTIONS
+class ResilienceException(AppException):
+    """
+    Resiliance pattern'leri icin temel exception.
+    Tum resiliance hatalari bundan turer
+    """
+    def __init__(self, message: str):
+        super().__init__(
+            status_code=503, # service yok 
+            error_code="SERVICE_UNAVAILABLE",
+            message=message
+        )
+class CircuitBreakerError(ResilienceException):
+    """
+    Curcuit Breaker acik oldugunda firlatilir.
+
+    Kullanim:
+        raise CurcuitBreakerError("database", 30)
+    """
+    def __init__(self, service_name: str, recovery_timeout: int):
+        super().__init__(
+            message=f"Circuit '{service_name}' acik. {recovery_timeout}s sonra tekrar deneyin."
+        )
+        self.service_name= service_name
+        self.recovery_timeout=recovery_timeout
+
+class BulkheadFullError(ResilienceException):
+    """
+    Bulkhead Kapasitesi doldugunda firlatilir.
+
+    Kullanim:
+        raise BulkheadFullError("database", 10, 20)
+    """
+    def __init__(self, service_name:str, active: int, max_concurrent: int):
+        super().__init__(
+            message=f"Bulkhead '{service_name}' dolu. Aktif:{active}/{max_concurrent}"
+        )
+        self.service_name=service_name
+        self.active= active
+        self.max_concurrent= max_concurrent

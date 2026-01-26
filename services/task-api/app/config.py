@@ -37,7 +37,14 @@ class Settings(BaseSettings):
     circuit_breaker_failure_threshold: int = 5 #kac hata sonrasi acilsin
     circuit_breaker_recovery_timeout: int = 30 #kac saniye acik kalsin
     circuit_breaker_half_open_max_calls: int = 1 #half-open'da kac test istegi
-
+    # Timeout Settings
+    db_timeout_seconds:float = 5.0 # Database islemleri icin
+    external_api_timeout_seconds: float = 30.0 # Dis API cagrilari icin
+    default_timeout_seconds: float = 10.0 # Genel Varsayilan timeout secenegi 
+    #Feature Flags
+    feature_cache_enabled: bool = True
+    feature_ai_suggestions_enabled: bool = True
+    feature_notifications_enabled: bool = True
 
 #Global Instance oluşturma(baska bir fonksiyonda cagirirken kullaniyoruz)
 settings = Settings()
