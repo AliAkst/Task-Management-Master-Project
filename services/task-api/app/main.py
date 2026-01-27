@@ -10,7 +10,7 @@ from app.core.exceptions import AppException
 from app.core.handlers import app_exception_handler, generic_exception_handler
 from app.core.logging import get_logger, setup_logging
 from app.core.middleware import RateLimitMiddleware
-
+from app.api.v1.health import router as health_router
 
 setup_logging()
 
@@ -44,11 +44,8 @@ app.add_exception_handler(Exception, generic_exception_handler)
 # -------------------------
 app.include_router(tasks_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
+app.include_router(health_router)
 
-
-@app.get("/health", tags=["Health"])
-def health_check():
-    return {"status": "healthy", "app_name": settings.app_name}
 
 
 @app.get("/")
