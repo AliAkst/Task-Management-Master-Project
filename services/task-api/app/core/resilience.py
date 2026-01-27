@@ -7,11 +7,13 @@ Bu modul uygulamayi hatalara karsi dayanikli hale getirir.
 
 """
 
+from ast import Call
 import asyncio
 from functools import wraps
+from math import log
 from sys import exception
 from tkinter import NO
-from typing import Callable, Type
+from typing import Callable, Type, Any
 
 from tenacity import(
     retry,
@@ -550,5 +552,91 @@ def with_fallback(
                 
                 # Hicbiri de yoksa mecbur orjinal hatayi gonderiyoruz(umarim prodda bu yasanmaz.)
                 raise
+        return wrapper
+    return decorator
+
+class FeatureFlag:
+    """
+    Feature Flag sistemi - Ozellikleri dinamik olarak acip kapatmaya yarar.
+
+    Kullanim:
+    cache_flag = FeatureFlag("cache", settings.feature_cache_enabled)
+
+    if cache_flag_enabled():
+        return await get_from_cache()
+    else:
+        return await get_from_database()
+    """
+
+    _flags: dict[str,bool] = {} # Global Flag storage
+
+    def __init__(self,name : str,default_enabled: bool= True):
+        self.name = name
+        if name not in FeatureFlag._flags:
+            FeatureFlag._flags[name] = default_enabled
+    
+    def is_enabled(self) -> bool:
+        """flag aktif mi ?"""
+        return FeatureFlag._flags.get(self.name, True)
+    
+    def enable(self):
+        """Flag'i aktif et"""
+        FeatureFlag._flags[self.name]=True
+        logger.info(f"Feature '{self.name}' ENABLED")
+    
+    def disable(self):
+        """Flag'i devre disi birak"""
+        FeatureFlag._flags[self.name]= False
+        logger.info(f"Feature '{self.name}'DISABLED")
+    
+    @classmethod
+    def get_all_flags(cls) -> dict[str,bool]:
+        """Tum flag'lerin durumunu dondurur."""
+        return cls._flags.copy()
+
+# ----- GLOBAL FEATURE FLAGS -----
+cache_feature = FeatureFlag("cache",settings.feature_cache_enabled)
+ai_feature = FeatureFlag("ai_suggestions",settings.feature_ai_suggestions_enabled)
+notifications_feature = FeatureFlag("notifications",settings.feature_notifications_enabled)
+
+def with_feature_flag(
+    flag: FeatureFlag,
+    disable_return: Any = None,
+    fallback_func: Callable | None =None
+):
+    """
+    Feature Flag Decorator - Flag kapaliysa fonksiyon calismaz.
+
+    Kullanim:
+        @with_feature_flag(cache_feature, fallback_func= get_from_db)
+        async def get_from_cache(key: str):
+            return await redis.get(key)
+        
+        @with_feature_flag(ai_feature, disable_return=[])
+        async def get_ai_recommendations():
+            return await ai_service.recommend()
+    
+    Args:
+        flag: Kontrol edilecek FeatureFlag
+        disabled_return: Flag kapaliyken dondurulecek deger
+        fallback_func: Flag kapaliyken cagrilacak alternatif fonksiyon
+    """
+    def decorator(func: Callable)->Callable:
+        @wraps(func)
+        async def wrapper(*args,**kwargs):
+            if not flag.is_enabled():
+                logger.debug(
+                    f"Feature '{flag.name} devre disi.'"
+                    f"{func.__name__} atlaniyor."
+                )
+
+                if fallback_func is not None:
+                    if asyncio.iscoroutinefunction(fallback_func):
+                        return await fallback_func(*args,**kwargs)
+                    else:
+                        return fallback_func(*args,**kwargs)
+                
+                return disable_return
+            return await func(*args,**kwargs)
         return wrapper
     return decorator
