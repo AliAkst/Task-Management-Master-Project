@@ -11,6 +11,7 @@ from app.core.handlers import app_exception_handler, generic_exception_handler
 from app.core.logging import get_logger, setup_logging
 from app.core.middleware import RateLimitMiddleware
 from app.api.v1.health import router as health_router
+from app.core.correlation import CorrelationIdMiddleware
 
 setup_logging()
 
@@ -36,12 +37,14 @@ app = FastAPI(
 )
 
 #---MIDDLEWARE KAYDI BASLATILIYOR...---
+app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 # --- Exception Handler Kaydi baslatiliyor ---
 app.add_exception_handler(AppException, app_exception_handler)  # type: ignore[arg-type]
 app.add_exception_handler(Exception, generic_exception_handler)
-# -------------------------
+
+# -------------------------ROUTERLAR EKLENIYOR------------------- #
 app.include_router(tasks_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(health_router)

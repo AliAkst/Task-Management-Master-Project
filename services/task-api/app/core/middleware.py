@@ -1,7 +1,7 @@
 """
 Docstring for services.task-api.app.core.middleware
 
-FastAPI middleware'lerini barindirir.
+FastAPI middleware'lerini barindirir.(amaci kullaniciyi etiketlemektir.)
 
 Calisma prensibi:
 - Request -> Middleware -> Endpoint -> Middleware -> Response
