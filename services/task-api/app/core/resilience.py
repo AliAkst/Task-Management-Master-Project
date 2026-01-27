@@ -6,7 +6,7 @@ Resilience Patterns: Retry, Circuit Breaker, Timeout, vb...
 Bu modul uygulamayi hatalara karsi dayanikli hale getirir.
 
 """
-
+from __future__ import annotations
 from ast import Call
 import asyncio
 from functools import wraps
@@ -279,7 +279,7 @@ def with_resilience(
         min_wait: float | None = None,
         max_wait: float | None = None,
         timeout: float | None = None,
-        bulkhead:Bulkhead | None = None
+        bulkhead: Bulkhead | None = None
 ) -> Callable:
     """
     Retry + Circuit Breaker + Timeout + Bulkhead birlestiren decorator.
