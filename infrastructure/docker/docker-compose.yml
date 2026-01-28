@@ -31,8 +31,26 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: task-rabbitmq
+    ports:
+      - "5672:5672" # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=taskuser
+      - RABBITMQ_DEFAULT_PASS=taskpass
+      - RABBITMQ_DEFAULT_VHOST=taskhost
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 # Kalici Veri Depolama Alanlari
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:

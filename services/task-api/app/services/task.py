@@ -1,11 +1,14 @@
 
 # --- CACHE IMPORTLARI ---
+from asyncio import create_task
 from app.core.cache import redis_cache
 from app.core.cache_keys import (
     get_task_detail_cache_key,
     get_task_list_cache_key,
     get_task_user_pattern,
 )
+from app.core.events import task_event_publisher
+from app.models.task import TaskStatus
 from app.core.exceptions import TaskNotFoundException
 from app.core.logging import get_logger
 from app.db.entities import TaskEntity
@@ -40,7 +43,15 @@ class TaskService:
         # ---CACHE INVALIDATION---
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))
 
-        return TaskResponse.model_validate(created_task)
+        # Event publish
+        task_response= TaskResponse.model_validate(created_task)
+        await task_event_publisher.publish_task_created(
+            task_id=created_task.id,
+            user_id=user_id,
+            task_data= task_response.model_dump(mode='json')
+        )
+
+        return task_response
 
     async def get_all(
             self,
@@ -142,6 +153,7 @@ class TaskService:
         if entity.user_id != user_id:
             logger.warning(f"User {user_id} tried to access task {task_id}")
             raise TaskNotFoundException(task_id=task_id)
+        old_status = entity.status
 
         update_data = task_in.model_dump(exclude_unset=True)
         for key, value in update_data.items():
@@ -150,7 +162,23 @@ class TaskService:
         updated_entity = await self.uow.tasks.update(entity)
         await self.uow.commit()
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))
-        return TaskResponse.model_validate(updated_entity)
+
+        #Event Publish
+        task_response= TaskResponse.model_validate(updated_entity)
+        await task_event_publisher.publish_task_updated(
+            task_id=updated_entity.id,
+            user_id=user_id,
+            task_data=task_response.model_dump(mode='json')
+        )
+        # Eger status completed'a cekildiyse ekstra event
+        if old_status != TaskStatus.COMPLETED and updated_entity.status == TaskStatus.COMPLETED:
+            await task_event_publisher.publish_task_completed(
+                task_id=updated_entity.id,
+                user_id=user_id,
+                task_data=task_response.model_dump(mode='json')
+            )
+
+        return task_response
 
     async def delete(self, task_id: int, user_id: int) -> None:
         """Sadece kullanicinin kendisine ait taski silmesini saglar."""
@@ -167,3 +195,9 @@ class TaskService:
         await self.uow.tasks.delete(entity)
         await self.uow.commit()
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))
+
+        # Event Publish
+        await task_event_publisher.publish_task_deleted(
+            task_id=task_id,
+            user_id=user_id
+        )

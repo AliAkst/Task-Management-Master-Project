@@ -1,7 +1,7 @@
 """
 Docstring for services.task-api.app.core.resilience
 
-Resilience Patterns: Retry, Circuit Breaker, Timeout, vb...
+Resilience Patterns: Retry, Circuit Breaker, Timeout, Bulkhead ve Graceful degration
 
 Bu modul uygulamayi hatalara karsi dayanikli hale getirir.
 

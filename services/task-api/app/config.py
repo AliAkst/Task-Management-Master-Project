@@ -19,11 +19,20 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
-
+    #RabbitMQ Settings
+    rabbitmq_host: str = "localhost"
+    rabbitmq_port: int = 5672
+    rabbitmq_user: str = "taskuser"
+    rabbitmq_password: str = "taskpass" 
+    rabbitmq_vhost: str = "taskhost"
+    @property
+    def rabbitmq_url(self) -> str:
+        """RabbitMQ AMQP URL'ini dondurur."""
+        return f"amqp://{self.rabbitmq_user}:{self.rabbitmq_password}@{self.rabbitmq_host}:{self.rabbitmq_port}/{self.rabbitmq_vhost}"
     # Reddis Settings
     redis_host: str = "localhost"
     redis_port: int = 6379
-    redis_db:int = 0 
+    redis_db: int = 0 
     redis_password: str |None = None
     cache_ttl_seconds: int = 300 # cache ne kadar yasasin suresi 300 saniye
     #Rate Limiting Settings
