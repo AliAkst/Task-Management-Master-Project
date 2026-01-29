@@ -17,8 +17,8 @@ class Settings:
     @property
     def rabbitmq_url(self)-> str:
         """RabbitMQ connection URL."""
-        return f"amqp://{self.rabbitmq_user}:{self.rabbitmq_password}@{self.rabbitmq_host}:{self.rabbitmq_port},{self.rabbitmq_vhost}"
+        return f"amqp://{self.rabbitmq_user}:{self.rabbitmq_password}@{self.rabbitmq_host}:{self.rabbitmq_port}/{self.rabbitmq_vhost}"
     
 
-    # Global Instance
-    settings = Settings()
+# Global Instance
+settings = Settings()

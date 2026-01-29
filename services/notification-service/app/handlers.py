@@ -5,8 +5,6 @@ Her event tipi icin ayri handler fonksiyonu icerir.
 from argparse import Action
 import asyncio
 import logging
-from readline import set_completion_display_matches_hook
-from statistics import correlation
 logger=logging.getLogger(__name__)
 
 async def handle_task_created(event_data: dict) -> None:
@@ -104,7 +102,7 @@ async def send_email_notification(
     await asyncio.sleep(0.1)
 
     logger.info(
-        f"EMAIL SENT: TASK{action} - {task_data.get('title'.'N/A')}",
+        f"EMAIL SENT: TASK{action} - {task_data.get('title','N/A')}",
         extra={"correlation_id":correlation_id}
     )
 
