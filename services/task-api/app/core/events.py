@@ -3,25 +3,28 @@ Task event publisher
 Event'leri RabbitMQ'ya publish eden is mantigi.
 """
 from datetime import datetime, UTC
+from statistics import correlation
 from app.core.correlation import get_correlation_id
 from app.core.logging import get_logger
 from app.core.messaging import RabbitMQClient,rabbitmq_client
 from app.models.events import TaskEventType,TaskEvent
-
-logger= get_logger(__name__)
+from app.core.dapr_pubsub import dapr_pubsub, TOPIC_NAME
+logger = get_logger(__name__)
 
 class TaskEventPublisher:
     """
-    Task event'lerini RabbitMQ'ya publish eden class.
-
-    Neden var ?
+    Task event'lerini Dapr Pub/Sub uzerinden publish eden class.
+    Artik rabbiMQ'ya baglamiyoruz.
+    Dapr sidecar'a HTTP ile event gonderiyoruz.
+    Dapr, event'i RabbitMQ'ya (veya baska broker'a) iletiyor.
+    
     1. Encapsulation: Event olusturma ve publish mantigi tek yerde
     2. Reusability: Tum service'ler ayni publisher'i kullanir
     3. Testability: Mock'lanarak test edilebilir
     4. Single Responsibility: Sadece event publishing ile ilgilenir
     """
 
-    def __init__(self, client: RabbitMQClient | None = None):
+    def __init__(self, topic: str = TOPIC_NAME):
         """
         Publisher instance' i olusturur.
         
@@ -30,7 +33,7 @@ class TaskEventPublisher:
             Dependency inhection icin parametre olarak aliyoruz.
             Test'te mock client verebilmemizi sagliyor.
         """
-        self.client = client or rabbitmq_client
+        self._topic= topic
 
     async def publish_task_created(
         self,
@@ -146,18 +149,22 @@ class TaskEventPublisher:
         )
     async def _publish(self, event: TaskEvent) -> None:
         """
-        Event'i RabbitMQ'ya gonderir.
+        Event'i Dapr Pub/Sub'a gonderir.
 
         Args:
             event: Gonderilecek event
         
         """
         try:
-            await self.client.publish(
-                routing_key=event.event_type.value,
-                message=event.to_dict(),
-                correlation_id=event.correlation_id
+            success= await dapr_pubsub.publish(
+                topic=self._topic,
+                data= event.to_dict()
             )
+            if not success:
+                logger.warning(
+                    f"Event publish returned False: {event.event_type.value}",
+                    extra={"correlation_id":event.correlation_id}
+                )
         except Exception as e:
             #Event publish hatasi ana islemi etkilememeli
             logger.error(
