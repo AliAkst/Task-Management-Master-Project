@@ -1,0 +1,20 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: taskpubsub  
+spec:
+  type: pubsub.rabbitmq  
+  version: v1
+  metadata:
+    - name: host  
+      value: "amqp://taskuser:taskpass@localhost:5672/taskhost"
+    - name: durable
+      value: "true"
+    - name: deletedWhenUnused
+      value: "false"
+    - name: autoAck  
+      value: "false"
+    - name: deliveryMode
+      value: "2"  
+    - name: requeueInFailure
+      value: "true"
