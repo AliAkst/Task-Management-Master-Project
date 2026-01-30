@@ -5,7 +5,9 @@ description = "Task notification consumer service"
 requires-python= ">=3.12"
 dependencies=[
     "aio-pika>=9.4.0",
+    "fastapi>=0.128.0",
     "python-dotenv>=1.0.0",
+    "uvicorn>=0.40.0",
 ]
 
 [build-system]

@@ -13,6 +13,7 @@ from app.core.middleware import RateLimitMiddleware
 from app.api.v1.health import router as health_router
 from app.core.correlation import CorrelationIdMiddleware
 from app.core.messaging import rabbitmq_client
+from app.core.dapr_client import dapr_client
 
 setup_logging()
 
@@ -25,11 +26,14 @@ async def lifespan(app: FastAPI):
     await redis_cache.connect()
     await rabbitmq_client.connect()
     logger.info("Database tables created")
-    yield
-    
-    await rabbitmq_client.disconnect()
-    logger.info("Shutting down application...")
 
+    yield
+
+    #Shutdown
+    logger.info("Shutting down application...")
+    await dapr_client.close()  # YENİ
+    await rabbitmq_client.disconnect()
+    await redis_cache.disconnect()
 
 app = FastAPI(
     title=settings.app_name,
