@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
     database_url: str = "sqlite+aiosqlite:///./task_management.db"
+    # Frontend (Vite dev server) icin CORS
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # Yapılandırma (ConfigDict)
     model_config = SettingsConfigDict(

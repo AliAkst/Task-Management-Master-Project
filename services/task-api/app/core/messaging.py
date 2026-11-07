@@ -6,8 +6,8 @@ Event publishing ve consuming islemlerini yonetir.
 
 import json
 import logging
-from types import coroutine
-from typing import Any, Awaitable, Optional
+
+from typing import Any
 from aio_pika import connect_robust, Message, ExchangeType
 from aio_pika.abc import AbstractRobustConnection, AbstractRobustChannel, AbstractRobustExchange
 from app.config import settings
@@ -27,9 +27,9 @@ class RabbitMQClient:
 
     def __init__(self):
         """RabbitMQClient instance' i olusturur."""
-        self.connection:AbstractRobusConnection | None = None
-        self.channel: Optional[AbstractRobusChannel] = None
-        self.exchange: Optional[AbstractRobusExchange] = None
+        self.connection:AbstractRobustConnection | None = None
+        self.channel: AbstractRobustChannel | None = None
+        self.exchange: AbstractRobustExchange | None = None
     
     async def connect(self) -> None:
         """
@@ -112,7 +112,7 @@ class RabbitMQClient:
             extra={"correlation_id":correlation_id}
         )
     
-    async def health_check() -> bool:
+    async def health_check(self) -> bool:
         """
         RabbitMQ baglanti durumunu kontrol eder.
 

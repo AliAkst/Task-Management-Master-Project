@@ -18,7 +18,7 @@ class ApiResponse[T](BaseModel):
 
 class PaginationParams(BaseModel):
     """Sayfalama Parametreleri"""
-    page: int = Field(default=1,ge=1,descriptiption="Sayfa numarasi")
+    page: int = Field(default=1, ge=1, description="Sayfa numarasi")
     page_size : int =Field(default=10, ge=1, le=100, description="Sayfa basina kayit")
 
 class PaginatedResponse(BaseModel, Generic[T]):
