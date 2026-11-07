@@ -26,4 +26,5 @@ htmlcov/
 .ruff_cache/
 
 # Docker
-**/docker-compose.override.yml
+**/docker-compose.override.ymltest_database.db
+*.db
