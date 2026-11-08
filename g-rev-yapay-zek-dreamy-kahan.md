@@ -2,7 +2,7 @@
 
 > ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
 >
-> **Faz 8 (2026-11-08) planlandı:** `planlar/faz8/00-genel.md` + faz başına detay dosyası (8a–8g, sırayla; her faz yeni Sonnet oturumu, ardından Haiku push). **Sıradaki: 8d** — yeni oturumda yalnız `00-genel.md` + `8d-teams-toplantilari.md` oku. (8a–8c kod tamam.)
+> **Faz 8 (2026-11-08) planlandı:** `planlar/faz8/00-genel.md` + faz başına detay dosyası (8a–8g, sırayla; her faz yeni Sonnet oturumu, ardından Haiku push). **Sıradaki: 8d** — yeni oturumda yalnız `00-genel.md` + `8d-teams-toplantilari.md` oku. (8a–8c commit'lendi; 8c push bekliyor.)
 >
 > **Branch:** `feature/ai-life-manager` · Faz 0–6 tamam, **7a–7d commit'lendi** (7a–7c: `b8b46d1`, 7d: `b21b062`) ve push edildi. **Opus Faz 7 denetimi yapıldı** (aşağıda "Faz 7 denetimi"); denetimde eklenen OAuth kurulum sihirbazı **commit'lenmedi** (Haiku oturumu). **Sıradaki:** commit/push → kullanıcı gerçek hesaplarla kabul denemesi (Google, Microsoft, Trello, gemma4 triage).
 
@@ -31,7 +31,7 @@
 | 7 denetimi (Opus) | ✅ Tamam | `d0a2c3c` | plan ↔ kod uyumlu; eksik: OAuth kimliği yalnız `.env`'den → **arayüzde kurulum sihirbazı** eklendi (aşağıda) |
 | 8a — Asistan: checklist + etiket + "bu kart" | 🟡 Commit'lendi, push bekliyor (gerçek-model kabulü kullanıcıyla) | `6b7e233` | `planlar/faz8/8a-asistan-kart-araclari.md` (genel: `planlar/faz8/00-genel.md`) |
 | 8b — Not editörü (çift tıkla düzenle, kod, GFM) | 🟡 Commit'lendi, push bekliyor (görsel kontrol kullanıcıda) | `dcfb1e1` | `planlar/faz8/8b-not-editoru.md` |
-| 8c — Kart ekleri | 🟡 Kod tamam, commit bekliyor (2026-11-09; PDF "Aç" CSP riski + gerçek yapıştırma kullanıcıda) | — | `planlar/faz8/8c-ekler.md` · migration `a5c9e1b3d7f2` `card_attachments` |
+| 8c — Kart ekleri | 🟡 Commit'lendi, push bekliyor (2026-11-09; PDF "Aç" CSP riski + gerçek yapıştırma kullanıcıda) | `ab4571c` | `planlar/faz8/8c-ekler.md` · migration `a5c9e1b3d7f2` `card_attachments` |
 | 8d — Teams/Outlook toplantıları | 📝 Planlandı | — | `planlar/faz8/8d-teams-toplantilari.md` · migration `events.meeting_url` |
 | 8e — Sürükle-bırak animasyonları | 📝 Planlandı | — | `planlar/faz8/8e-surukle-birak.md` |
 | 8f — Sesli dikte | 📝 Planlandı | — | `planlar/faz8/8f-sesli-dikte.md` |

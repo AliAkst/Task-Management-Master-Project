@@ -44,7 +44,7 @@ Yükleme + liste + indirme içeriği/sha; 25 MB aşımı 413 (sınırı testte k
 - Tarayıcıda (5175): PDF + PNG ekle, küçük resim görünür, Aç/İndir/Sil çalışır; nota ekran görüntüsü yapıştır → notta resim görünür; kanban kartında ataş sayısı.
 
 ## İlerleme
-**Durum: ✅ Kod tamam (2026-11-09), commit bekliyor.** Migration `a5c9e1b3d7f2_card_attachments.py` (down = `e4b8c2f6a9d3`).
+**Durum: ✅ Kod tamam, commit'lendi (`ab4571c`, 2026-11-09), push bekliyor.** Migration `a5c9e1b3d7f2_card_attachments.py` (down = `e4b8c2f6a9d3`).
 
 ### Yapılanlar
 - **Backend:** `python-multipart`; `CardAttachmentEntity` + `AttachmentRepository` (UoW `attachments`); `app/services/attachment_storage.py` (`LocalAttachmentStorage` save/path/delete/sweep_orphans, `make/read_attachment_token`); `app/services/attachment.py` (`AttachmentService`: upload/list_for_card/get_for_download/delete, ad temizleme, yasak uzantılar, MIME uzantıdan); `app/api/v1/attachments.py` (4 uç; indirme token'lı ya da Authorization'lı); `AttachmentResponse`, `CardDetail.attachments`, `CardSummary.attachment_count`; config `ATTACHMENTS_MAX_MB` (25) + `ATTACHMENTS_DIR`; açılışta yetim temizliği (`main.sweep_orphan_attachments`, try/except).
