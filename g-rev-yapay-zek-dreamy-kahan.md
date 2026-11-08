@@ -17,7 +17,7 @@
 | 3b — Planlama/Değerlendirme/İstatistik | ✅ Tamam | `4e8431d` | day_plans, Bugün sayfası, `/analytics/summary`, İstatistik sayfası, hatırlatıcılar (bkz. sapmalar) |
 | 4 — AI Çekirdek | ✅ Tamam | `e52b4b7` | assistant-service, Ollama native adaptörü, benchmark, okuma araçları, gizlilik filtresi, sohbet paneli |
 | 5a — AI Aksiyonları | ✅ Tamam | `1d4f701` | yazma araçları, ai_permissions (ask/auto/never), ai_actions, onay kartları, `X-Actor: ai` |
-| 5b — Hafıza + Tasarım | ✅ Tamam | (bu oturumun son commit'i) | **Tasarım yenilemesi** (aşağıda), user_facts, goals, profil ekranı, tanışma sohbeti, ayrı hafıza çıkarımı |
+| 5b — Hafıza + Tasarım | ✅ Tamam | `347b36a` | **Tasarım yenilemesi** (aşağıda), user_facts, goals, profil ekranı, tanışma sohbeti, ayrı hafıza çıkarımı |
 | 5c — Claude + model ayarları | ⏳ Sıradaki | — | AnthropicProvider, provider_configs (şifreli key, Fernet), Ayarlar'da model ekranı, board varsayılan modeli. **Önce `claude-api` skill'ini oku.** |
 | 6 — Proaktif & Öğrenen | ⏳ Bekliyor | — | review.submitted → gün özeti + ertesi gün planı (gemma4:26b), ai_insights, tahmin katsayısı, görev bazlı ModelRouter, RRULE |
 | 7 — Dış Entegrasyonlar | ⏳ Bekliyor | — | Trello (tek seferlik import), Google, Microsoft To Do (Samsung Reminder üzerinden) |
