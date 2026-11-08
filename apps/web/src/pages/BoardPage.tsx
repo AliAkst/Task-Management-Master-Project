@@ -1,13 +1,18 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useIsMutating } from '@tanstack/react-query'
 import {
-  closestCorners,
+  defaultDropAnimationSideEffects,
   DndContext,
   DragOverlay,
   KeyboardSensor,
+  MeasuringStrategy,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -23,7 +28,7 @@ import BoardForm, { COLORS } from '../components/BoardForm'
 import CardFace from '../components/CardFace'
 import CardModal from '../components/CardModal'
 import InboxTriage from '../components/InboxTriage'
-import KanbanList, { listKey } from '../components/KanbanList'
+import KanbanList, { ListOverlay, listKey } from '../components/KanbanList'
 import Modal from '../components/Modal'
 import { Segmented } from '../components/Page'
 import { useModels } from '../api/assistant'
@@ -39,6 +44,24 @@ const parseKey = (key: string | number) => {
   const [type, id] = String(key).split('-')
   return { type, id: Number(id) }
 }
+
+// Faz 8e: once imlec altindaki, yoksa kesisen hedef; liste surukleniyorsa yalniz listeler
+const collisionDetection: CollisionDetection = (args) => {
+  const activeIsList = String(args.active.id).startsWith('list-')
+  const containers = args.droppableContainers.filter((c) =>
+    activeIsList ? String(c.id).startsWith('list-') : true,
+  )
+  const a = { ...args, droppableContainers: containers }
+  const hits = pointerWithin(a)
+  const found = hits.length ? hits : rectIntersection(a)
+  if (activeIsList) return found
+  // kart: imlec bir kartin ustundeyse kart, degilse (bosluk/bos liste) liste hedefi
+  const cardHits = found.filter((c) => String(c.id).startsWith('card-'))
+  return cardHits.length ? cardHits : found
+}
+
+const reducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export default function BoardPage() {
   const boardId = Number(useParams().boardId)
@@ -62,6 +85,10 @@ export default function BoardPage() {
   const [columns, setColumns] = useState<Columns>({})
   const [listOrder, setListOrder] = useState<number[]>([])
   const [activeKey, setActiveKey] = useState<string | null>(null)
+  // Iyimser tasima suruyorken sunucu verisiyle yerel siralamayi yeniden kurma
+  const [pendingMoves, setPendingMoves] = useState(0)
+  const mutating =
+    useIsMutating({ mutationKey: ['moveCard'] }) + useIsMutating({ mutationKey: ['moveList'] })
   const dragOrigin = useRef<{ listId: number; index: number } | null>(null)
 
   const cardsById = useMemo(
@@ -74,7 +101,7 @@ export default function BoardPage() {
   )
 
   useEffect(() => {
-    if (!board.data || activeKey) return // surukleme sirasinda sunucu verisiyle ezme
+    if (!board.data || activeKey || pendingMoves > 0 || mutating > 0) return // surukleme/tasima sirasinda sunucu verisiyle ezme
     const cols: Columns = {}
     board.data.lists.forEach((l) => (cols[l.id] = []))
     ;[...board.data.cards]
@@ -82,7 +109,13 @@ export default function BoardPage() {
       .forEach((c) => c.list_id != null && cols[c.list_id]?.push(c.id))
     setColumns(cols)
     setListOrder(board.data.lists.map((l) => l.id))
-  }, [board.data, activeKey])
+  }, [board.data, activeKey, pendingMoves, mutating])
+
+  /** Tasima mutasyonunu baslatir; bitene kadar yerel siralama korunur. */
+  function runMove<V>(mut: { mutate: (v: V, o: { onSettled: () => void }) => void }, vars: V) {
+    setPendingMoves((n) => n + 1)
+    mut.mutate(vars, { onSettled: () => setPendingMoves((n) => Math.max(0, n - 1)) })
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // tik = karti ac
@@ -136,7 +169,7 @@ export default function BoardPage() {
         const newIndex = overList != null ? listOrder.indexOf(overList) : oldIndex
         if (newIndex !== oldIndex) {
           setListOrder(arrayMove(listOrder, oldIndex, newIndex))
-          m.moveList.mutate({ id, index: newIndex })
+          runMove(m.moveList, { id, index: newIndex })
         }
       }
       setActiveKey(null)
@@ -159,7 +192,7 @@ export default function BoardPage() {
     if (listId != null && origin) {
       const index = finalCols[listId].indexOf(id)
       if (origin.listId !== listId || origin.index !== index) {
-        m.moveCard.mutate({ id, list_id: listId, index })
+        runMove(m.moveCard, { id, list_id: listId, index })
       }
     }
     dragOrigin.current = null
@@ -179,6 +212,8 @@ export default function BoardPage() {
   const b = board.data.board
   const listsById = new Map(board.data.lists.map((l) => [l.id, l]))
   const activeCard = activeKey?.startsWith('card-') ? cardsById.get(parseKey(activeKey).id) : null
+
+  const activeList = activeKey?.startsWith('list-') ? listsById.get(parseKey(activeKey).id) : null
 
   function addList(e: FormEvent) {
     e.preventDefault()
@@ -244,11 +279,16 @@ export default function BoardPage() {
       ) : (
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        autoScroll={{ threshold: { x: 0.15, y: 0.1 }, acceleration: 8 }}
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
-        onDragCancel={() => setActiveKey(null)}
+        onDragCancel={() => {
+          dragOrigin.current = null
+          setActiveKey(null)
+        }}
       >
         <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto p-4">
           <SortableContext items={listOrder.map(listKey)} strategy={horizontalListSortingStrategy}>
@@ -284,8 +324,25 @@ export default function BoardPage() {
           </form>
         </div>
 
-        <DragOverlay>
+        <DragOverlay
+          dropAnimation={
+            reducedMotion()
+              ? null
+              : {
+                  duration: 200,
+                  easing: 'cubic-bezier(0.18,0.67,0.6,1.22)',
+                  sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
+                }
+          }
+        >
           {activeCard ? <CardFace card={activeCard} labels={labels} dragging /> : null}
+          {activeList ? (
+            <ListOverlay
+              list={activeList}
+              cards={(columns[activeList.id] ?? []).map((id) => cardsById.get(id)).filter((c): c is CardSummary => !!c)}
+              labels={labels}
+            />
+          ) : null}
         </DragOverlay>
       </DndContext>
       )}

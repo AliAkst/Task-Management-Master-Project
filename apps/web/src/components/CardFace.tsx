@@ -46,7 +46,7 @@ export default function CardFace({ card, labels, dragging }: Props) {
   return (
     <div
       className={`relative rounded-md border bg-white px-3 py-2.5 text-[14px] leading-snug ${
-        dragging ? 'rotate-1 border-slate-400 shadow-[0_8px_24px_-8px_rgb(23_32_56/0.35)]' : 'border-slate-200 hover:border-slate-400'
+        dragging ? 'rotate-2 scale-[1.03] cursor-grabbing border-slate-400 shadow-[0_12px_28px_-6px_rgb(23_32_56/0.45)]' : 'border-slate-200 hover:border-slate-400'
       } ${tracking ? 'border-l-[3px] border-l-[var(--color-rec)]' : high && !done ? 'border-l-[3px] border-l-slate-900' : ''}`}
     >
       {card.label_ids.length > 0 && (
