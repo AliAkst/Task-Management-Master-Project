@@ -11,7 +11,7 @@ from typing import Any, Literal
 from app.llm.types import LLMError, LLMProvider, Msg, ToolCall, Usage
 from app.tools.read_tools import ToolBox
 
-EventType = Literal["token", "tool_start", "tool_end", "message", "error"]
+EventType = Literal["token", "tool_start", "tool_end", "action", "message", "error"]
 
 
 @dataclass
@@ -69,8 +69,12 @@ async def run_agent(
                 "tool_start",
                 {"id": call.id, "name": call.name, "arguments": call.arguments},
             )
-            result, ok = await toolbox.execute(call)
-            tool_msg = Msg("tool", result, tool_call_id=call.id, name=call.name)
+            result = await toolbox.execute(call)
+            tool_msg = Msg("tool", result.text, tool_call_id=call.id, name=call.name)
             messages.append(tool_msg)
-            yield AgentEvent("tool_end", {"id": call.id, "name": call.name, "ok": ok})
+            yield AgentEvent(
+                "tool_end", {"id": call.id, "name": call.name, "ok": result.ok}
+            )
+            if result.action is not None:
+                yield AgentEvent("action", result.action)
             yield AgentEvent("message", message=tool_msg)

@@ -31,10 +31,19 @@ class TaskApiClient:
 
     async def get(self, path: str, **params: Any) -> Any:
         clean = {k: v for k, v in params.items() if v is not None}
+        return await self._send("GET", path, params=clean)
+
+    async def write(self, method: str, path: str, body: Any | None = None) -> Any:
+        """Yazma istegi. `X-Actor: ai`: task-api kaydi 'AI yapti' diye isaretler."""
+        return await self._send(method, path, json=body, headers={"X-Actor": "ai"})
+
+    async def _send(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
-            res = await self.client.get(path, params=clean)
+            res = await self.client.request(method, path, **kwargs)
         except httpx.HTTPError as e:
             raise TaskApiError(503, f"Görev servisine ulaşılamadı: {e}") from e
+        if res.status_code == 204:
+            return None
         body = res.json() if res.content else {}
         if res.status_code >= 400 or not body.get("success", False):
             err = (body.get("error") or {}).get("message") or str(

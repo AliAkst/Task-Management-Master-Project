@@ -40,7 +40,8 @@ class TestPrivacy:
         return await ToolBox.create(api, cloud=cloud, tz=TZ)
 
     async def _run(self, box: ToolBox, name: str, **args):
-        result, ok = await box.execute(ToolCall(id="x", name=name, arguments=args))
+        _r = await box.execute(ToolCall(id="x", name=name, arguments=args))
+        result, ok = _r.text, _r.ok
         return json.loads(result.removesuffix('… (kısaltıldı)"')), ok
 
     async def test_local_model_sees_everything(self, task_api_transport):
@@ -63,7 +64,9 @@ class TestPrivacy:
             ("get_board", {"board_id": 2}),
             ("get_card", {"card_id": 21}),
         ]:
-            result, _ = await box.execute(ToolCall(id="x", name=name, arguments=args))
+            result = (
+                await box.execute(ToolCall(id="x", name=name, arguments=args))
+            ).text
             dumped.append(result)
         everything = "\n".join(dumped)
         for secret in ("Date planları", "Gizli date planı", "Gizli akşam yemeği"):
@@ -81,12 +84,14 @@ class TestPrivacy:
             ("get_board", {}),  # eksik arguman
             ("get_calendar", {"start_date": "2026-11-10", "end_date": "2026-11-01"}),
         ]:
-            result, ok = await box.execute(ToolCall(id="x", name=name, arguments=args))
+            _r = await box.execute(ToolCall(id="x", name=name, arguments=args))
+            result, ok = _r.text, _r.ok
             assert ok is False and "error" in json.loads(result)
         bad = ToolCall(
             id="x", name="list_boards", arguments={}, raw_arguments="{", valid=False
         )
-        _, ok = await box.execute(bad)
+        _r = await box.execute(bad)
+        _, ok = _r.text, _r.ok
         assert ok is False
 
 

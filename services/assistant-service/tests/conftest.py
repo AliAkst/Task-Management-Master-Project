@@ -70,7 +70,10 @@ def fake_task_api(request: httpx.Request) -> httpx.Response:
         return ok(
             {
                 "board": _board(b),
-                "lists": [{"id": bid * 10, "name": "Yapılacak"}],
+                "lists": [
+                    {"id": bid * 10, "name": "Yapılacak", "is_done_list": False},
+                    {"id": bid * 10 + 1, "name": "Tamamlandı", "is_done_list": True},
+                ],
                 "cards": [c for c in CARDS.values() if c["board_id"] == bid],
                 "labels": [],
             }
@@ -177,9 +180,96 @@ def fake_task_api(request: httpx.Request) -> httpx.Response:
     return httpx.Response(404, json={"success": False, "error": {"message": "yok"}})
 
 
+class FakeTaskApi:
+    """Okumalar fake_task_api'den; yazmalari kaydeder (X-Actor dahil), gun planini tutar."""
+
+    def __init__(self) -> None:
+        self.writes: list[dict[str, Any]] = []
+        self.plans: dict[str, list[dict[str, Any]]] = {}
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path.removeprefix("/api/v1")
+        method = request.method
+
+        def ok(data: Any) -> httpx.Response:
+            return httpx.Response(200, json={"success": True, "data": data})
+
+        if method == "GET" and path.startswith("/day-plans/"):
+            day = path.split("/")[2]
+            items = self.plans.get(day, [])
+            return ok(
+                {
+                    "date": day,
+                    "exists": bool(items),
+                    "status": "planned" if items else None,
+                    "items": [
+                        {
+                            **i,
+                            "id": n,
+                            "title": i.get("title") or f"kart {i.get('card_id')}",
+                            "was_planned": True,
+                            "event_id": i.get("event_id"),
+                            "board_id": None,
+                            "tracked_sec": 0,
+                            "tracked_today_sec": 0,
+                            "outcome": None,
+                            "reason": None,
+                            "planned_minutes": i.get("planned_minutes"),
+                        }
+                        for n, i in enumerate(items, 1)
+                    ],
+                    "tracked_today_sec": 0,
+                }
+            )
+        if method == "GET":
+            return fake_task_api(request)
+
+        body = json.loads(request.content or b"null")
+        self.writes.append(
+            {
+                "method": method,
+                "path": path,
+                "body": body,
+                "actor": request.headers.get("X-Actor"),
+            }
+        )
+        if method == "POST" and path == "/cards":
+            return ok({"id": 100, "title": body["title"]})
+        if method == "POST" and path == "/events":
+            return ok(
+                {"id": 7, "title": body.get("title", "x"), "start_at": body["start_at"]}
+            )
+        if method == "POST" and path.endswith("/split"):
+            return ok(
+                {
+                    "subtasks": [
+                        {"id": 200 + i, "title": f"Parça {i}"}
+                        for i in range(body.get("parts", 2))
+                    ]
+                }
+            )
+        if method == "POST" and path.endswith("/notes"):
+            return ok({"id": 5})
+        if method == "PUT" and path.startswith("/day-plans/"):
+            self.plans[path.split("/")[2]] = body["items"]
+            return ok({"date": path.split("/")[2], "items": body["items"]})
+        if method == "POST" and path.endswith("/dependencies"):
+            if body["depends_on_id"] == 11 and path.startswith("/cards/11/"):
+                return httpx.Response(
+                    409, json={"success": False, "error": {"message": "döngü"}}
+                )
+            return ok(CARDS[11])
+        return ok(CARDS.get(11))
+
+
 @pytest.fixture
-def task_api_transport() -> httpx.MockTransport:
-    return httpx.MockTransport(fake_task_api)
+def fake_api() -> FakeTaskApi:
+    return FakeTaskApi()
+
+
+@pytest.fixture
+def task_api_transport(fake_api) -> httpx.MockTransport:
+    return httpx.MockTransport(fake_api)
 
 
 class FakeProvider:

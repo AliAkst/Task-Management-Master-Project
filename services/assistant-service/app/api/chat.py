@@ -12,11 +12,18 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.actions import ActionGate, action_payload, load_modes
 from app.agent.context import build_system_prompt
 from app.agent.loop import run_agent
 from app.api.deps import current_user, ok
 from app.config import settings
-from app.db.models import ConversationEntity, MessageEntity, get_session, session_maker
+from app.db.models import (
+    AiActionEntity,
+    ConversationEntity,
+    MessageEntity,
+    get_session,
+    session_maker,
+)
 from app.llm.registry import build_provider, list_models
 from app.llm.types import LLMError, Msg, ToolCall
 from app.tools.read_tools import ToolBox
@@ -138,6 +145,14 @@ async def messages(
         .where(MessageEntity.conversation_id == conversation_id)
         .order_by(MessageEntity.id)
     )
+    actions = {
+        a.tool_call_id: action_payload(a)
+        for a in await session.scalars(
+            select(AiActionEntity).where(
+                AiActionEntity.conversation_id == conversation_id
+            )
+        )
+    }
     return ok(
         [
             {
@@ -145,6 +160,9 @@ async def messages(
                 "role": m.role,
                 "content": m.content,
                 "tools": [c["name"] for c in m.tool_calls or []],
+                "actions": [
+                    actions[c["id"]] for c in m.tool_calls or [] if c["id"] in actions
+                ],
                 "model_id": m.model_id,
                 "is_local": m.is_local,
                 "created_at": m.created_at,
@@ -233,6 +251,14 @@ async def _stream(
             settings_data = await api.get("/settings/")
             tz = ZoneInfo(settings_data.get("timezone") or DEFAULT_TZ)
             toolbox = await ToolBox.create(api, cloud=not is_local, tz=tz)
+            toolbox.gate = ActionGate(
+                session_maker,
+                toolbox.writer,
+                user_id=user["id"],
+                conversation_id=conversation_id,
+                model_id=model_id,
+                modes=await load_modes(session, user["id"]),
+            )
             system = await build_system_prompt(
                 api, toolbox, user, tz, provider.info.label, is_local
             )

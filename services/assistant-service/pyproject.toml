@@ -34,4 +34,7 @@ asyncio_default_fixture_loop_scope = "function"
 # Arac aciklamalari ve benchmark prompt'lari uzun Turkce metinler
 "app/tools/read_tools.py" = ["E501"]
 "app/agent/context.py" = ["E501"]
+"app/tools/write_tools.py" = ["E501"]
+"app/agent/actions.py" = ["E501"]
+"tests/*" = ["E501"]
 "scripts/benchmark_models.py" = ["E501"]

@@ -2,6 +2,43 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { UserSettings, UserSettingsUpdate } from '../lib/types'
+import { usePermissions, useSetPermission, type Permission } from '../api/assistant'
+
+const MODE_LABEL: Record<Permission['mode'], string> = {
+  ask: 'Bana sor',
+  auto: 'Otomatik yap',
+  never: 'Asla yapma',
+}
+
+/** AI'in hangi islemleri sormadan yapabilecegi: kullanici karar verir. */
+function AssistantPermissions() {
+  const perms = usePermissions()
+  const set = useSetPermission()
+  return (
+    <section className="mt-6 space-y-3 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <h2 className="font-medium">Asistan izinleri</h2>
+      <p className="text-sm text-slate-500">
+        Asistan bir işlem yapmak istediğinde ne olsun? “Bana sor” seçiliyse sohbette onay kartı çıkar.
+      </p>
+      {perms.error && <p className="text-sm text-red-600">{perms.error.message} (asistan servisi çalışıyor mu?)</p>}
+      {perms.data?.map((p) => (
+        <label key={p.action_type} className="flex items-center justify-between gap-4 text-sm">
+          <span>{p.label}</span>
+          <select
+            className="rounded-md border border-slate-300 px-2 py-1"
+            value={p.mode}
+            disabled={set.isPending}
+            onChange={(e) => set.mutate({ actionType: p.action_type, mode: e.target.value as Permission['mode'] })}
+          >
+            {(Object.keys(MODE_LABEL) as Permission['mode'][]).map((m) => (
+              <option key={m} value={m}>{MODE_LABEL[m]}</option>
+            ))}
+          </select>
+        </label>
+      ))}
+    </section>
+  )
+}
 
 const toInput = (t: string | null | undefined) => (t ? t.slice(0, 5) : '')
 
@@ -94,6 +131,7 @@ export default function SettingsPage() {
           </div>
         </form>
       )}
+      <AssistantPermissions />
     </div>
   )
 }
