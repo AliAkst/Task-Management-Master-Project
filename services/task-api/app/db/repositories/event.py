@@ -14,6 +14,20 @@ class EventRepository(BaseRepository[EventEntity]):
         super().__init__(session, EventEntity)
 
     @with_db_retry
+    async def recurring_before(self, user_id: int, end: datetime) -> list[EventEntity]:
+        """Tekrar kurali olan ve ilk tekrari `end`'den once baslayan etkinlikler."""
+        result = await self.session.execute(
+            select(EventEntity)
+            .where(
+                EventEntity.user_id == user_id,
+                EventEntity.recurrence_rule.is_not(None),
+                EventEntity.start_at < end,
+            )
+            .order_by(EventEntity.start_at, EventEntity.id)
+        )
+        return list(result.scalars().all())
+
+    @with_db_retry
     async def in_range(
         self, user_id: int, start: datetime, end: datetime
     ) -> list[EventEntity]:

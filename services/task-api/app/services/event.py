@@ -21,6 +21,8 @@ from app.models.event import (
 )
 from app.services.activity import ActivityLogger, diff
 from app.services.board import BoardService
+from app.services.recurrence import events_in_range, normalize_rule
+from app.services.timeutil import user_tz
 
 DEFAULT_COLOR = "#64748b"
 MAX_RANGE = timedelta(days=400)
@@ -89,6 +91,7 @@ class EventService:
             all_day=data.all_day,
             location=data.location,
             notes=data.notes,
+            recurrence_rule=normalize_rule(data.recurrence_rule),
             created_by=self.actor,
         )
         await self.uow.events.create(event)
@@ -121,6 +124,8 @@ class EventService:
     ) -> EventResponse:
         event = await self._owned(event_id, user_id)
         update = data.model_dump(exclude_unset=True)
+        if "recurrence_rule" in update:
+            update["recurrence_rule"] = normalize_rule(update["recurrence_rule"])
 
         if "board_id" in update and update["board_id"] != event.board_id:
             if event.card_id is not None:
@@ -203,16 +208,17 @@ class EventService:
             board = boards.get(board_id) if board_id is not None else None
             return board.color if board else DEFAULT_COLOR
 
-        events = await self.uow.events.in_range(user_id, start, end)
+        tz = await user_tz(self.uow, user_id)
+        expanded = await events_in_range(self.uow, user_id, start, end, tz)
         linked = {
             c.id: c
             for c in await self.uow.tasks.get_many(
-                [e.card_id for e in events if e.card_id is not None]
+                [e.card_id for e, _, _ in expanded if e.card_id is not None]
             )
         }
 
         items: list[CalendarItem] = []
-        for e in events:
+        for e, occ_start, occ_end in expanded:
             card = linked.get(e.card_id) if e.card_id is not None else None
             # Karta bagli blogun board'u (ve rengi) her zaman kartin guncel board'u
             board_id = card.board_id if card is not None else e.board_id
@@ -221,10 +227,13 @@ class EventService:
             items.append(
                 CalendarItem(
                     kind="event",
-                    id=f"event-{e.id}",
+                    # Tekrarlarin takvimde benzersiz kimligi: etkinlik + tekrar zamani
+                    id=f"event-{e.id}-{int(occ_start.timestamp())}"
+                    if e.recurrence_rule
+                    else f"event-{e.id}",
                     title=e.title,
-                    start=e.start_at,
-                    end=e.end_at,
+                    start=occ_start,
+                    end=occ_end,
                     all_day=e.all_day,
                     board_id=board_id,
                     color=color(board_id),
@@ -232,6 +241,7 @@ class EventService:
                     card_id=e.card_id,
                     card_status=card.status if card is not None else None,
                     location=e.location,
+                    recurrence_rule=e.recurrence_rule,
                 )
             )
 

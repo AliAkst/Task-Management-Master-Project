@@ -19,7 +19,7 @@ import CardModal from '../components/CardModal'
 import EventDialog, { type EventDraft } from '../components/EventDialog'
 import { Check, Hourglass } from 'lucide-react'
 import { api } from '../lib/api'
-import type { BoardDetail, CalendarItem, CardSummary, UserSettings } from '../lib/types'
+import type { BoardDetail, CalendarEvent, CalendarItem, CardSummary, UserSettings } from '../lib/types'
 
 const HOUR = 60 * 60 * 1000
 const addMs = (d: Date, ms: number) => new Date(d.getTime() + ms)
@@ -97,7 +97,9 @@ export default function CalendarPage() {
       backgroundColor: deadline ? '#fff' : i.color,
       borderColor: i.color,
       textColor: deadline ? i.color : '#fff',
-      durationEditable: !deadline,
+      durationEditable: !deadline && !i.recurrence_rule,
+      // Tekrarlar suruklenmez: degisiklik butun seriye uygulanir (pencereden)
+      startEditable: !i.recurrence_rule,
       classNames: done ? ['opacity-50', 'line-through'] : [],
       extendedProps: { item: i },
     }
@@ -150,10 +152,27 @@ export default function CalendarPage() {
     )
   }
 
-  function onClick(arg: EventClickArg) {
+  async function onClick(arg: EventClickArg) {
     const item = arg.event.extendedProps.item as CalendarItem
     if (item.kind === 'deadline') {
       setOpenCard({ cardId: item.card_id!, boardId: item.board_id! })
+      return
+    }
+    if (item.recurrence_rule) {
+      // Tekrar degil seri duzenlenir: serinin asil zamanini getir
+      const ev = await api<CalendarEvent>(`/events/${item.event_id}`)
+      setDraft({
+        id: ev.id,
+        title: ev.title,
+        start: ev.start_at,
+        end: ev.end_at,
+        allDay: ev.all_day,
+        boardId: ev.board_id,
+        cardId: ev.card_id,
+        location: ev.location,
+        notes: ev.notes,
+        recurrenceRule: ev.recurrence_rule,
+      })
       return
     }
     setDraft({
