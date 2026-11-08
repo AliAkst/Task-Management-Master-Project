@@ -23,7 +23,7 @@
 - Elle (kullanıcıyla, Chrome/Edge, 5175 ya da gerçek uygulama): asistan panelinde Ctrl+M → Türkçe cümle yazıya döner, gönderilmez; notta ve checklist'te çalışır; izin reddi mesajı; Firefox'ta düğme yok. Tarayıcı paneli mikrofon vermeyebilir → otomatik doğrulama yalnız: düğmenin görünmesi, `supported` tespiti, sahte `window.webkitSpeechRecognition` (javascript_tool ile enjekte) üzerinden `onresult` → metin girişte.
 
 ## İlerleme
-**Durum:** kod tamam, commit edilmedi (2026-11-09; tarayıcı/mikrofon doğrulaması yapılmadı). Migration yok.
+**Durum:** kod tamam, commit edildi `e3006ac` (2026-11-09, push edilmedi; tarayıcı/mikrofon doğrulaması yapılmadı). Migration yok. Testler: task-api 333 passed, assistant-service 152 passed, web build başarılı.
 
 ### Yapılanlar
 - `stores/prefs.ts` (Zustand `persist`, anahtar `prefs`): `dictationEnabled` (true), `dictationAutoSend` (false), `dictationNoticeSeen`.
