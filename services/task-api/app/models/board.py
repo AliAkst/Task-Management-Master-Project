@@ -91,7 +91,8 @@ class ListResponse(BaseModel):
 # ---------------- Label ----------------
 class LabelCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
-    color: str = Field("#64748b", pattern=HEX_COLOR)
+    # Verilmezse servis board'da kullanilmayan ilk palet rengini secer
+    color: str | None = Field(None, pattern=HEX_COLOR)
 
 
 class LabelUpdate(BaseModel):

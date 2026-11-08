@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Markdown from 'react-markdown'
 import { useQueryClient } from '@tanstack/react-query'
-import { useMatch } from 'react-router-dom'
-import { useBoards } from '../api/boards'
+import { useMatch, useSearchParams } from 'react-router-dom'
+import { useBoards, useCard } from '../api/boards'
 import {
   assistantKeys,
   CLOUD_COST_WARNING,
@@ -15,7 +15,7 @@ import {
   type AiAction,
   type ChatMessage,
 } from '../api/assistant'
-import { AlertTriangle, ChevronDown, Loader2, Lock, Search, Sparkles } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Loader2, Lock, Search, Sparkles, X } from 'lucide-react'
 import ActionCard from './ActionCard'
 import { useAssistantUi } from '../stores/assistant'
 
@@ -126,6 +126,13 @@ export default function AssistantPanel() {
   // Acik board (varsa): varsayilan modeli "Otomatik" secimini belirler
   const boardMatch = useMatch('/boards/:boardId')
   const boardId = boardMatch ? Number(boardMatch.params.boardId) : null
+  // Acik kart penceresi (?card=<id>): "bu kart" baglami; cipteki X ile kapatilir
+  const [searchParams] = useSearchParams()
+  const rawCard = searchParams.get('card')
+  const openCardId = boardId !== null && rawCard && /^\d+$/.test(rawCard) ? Number(rawCard) : null
+  const [dismissedCard, setDismissedCard] = useState<number | null>(null)
+  const contextCardId = openCardId !== null && dismissedCard !== openCardId ? openCardId : null
+  const contextCard = useCard(contextCardId)
   const boards = useBoards()
   const board = boardId !== null ? boards.data?.find((b) => b.id === boardId) : undefined
   const list = models.data?.models ?? []
@@ -173,7 +180,7 @@ export default function AssistantPanel() {
     let convId = conversationId
     try {
       await streamChat(
-        { message, conversation_id: conversationId, model_id: manual, board_id: boardId },
+        { message, conversation_id: conversationId, model_id: manual, board_id: boardId, card_id: contextCardId },
         (e) => {
           setLive((t) => {
             if (!t) return t
@@ -311,6 +318,22 @@ export default function AssistantPanel() {
       </div>
 
       <form onSubmit={onSubmit} className="border-t border-slate-200 bg-white p-2">
+        {contextCardId !== null && (
+          <div className="mb-1.5 flex items-center gap-1 rounded-full bg-indigo-50 py-0.5 pl-2.5 pr-1 text-[11px] text-indigo-700">
+            <span className="min-w-0 flex-1 truncate">
+              BaÄŸlam: Â«{contextCard.data?.title ?? `#${contextCardId}`}Â»
+            </span>
+            <button
+              type="button"
+              aria-label="Kart baÄŸlamÄ±nÄ± gÃ¶nderme"
+              title="Bu mesajda kart baÄŸlamÄ±nÄ± gÃ¶nderme"
+              className="rounded-full p-0.5 hover:bg-indigo-100"
+              onClick={() => setDismissedCard(contextCardId)}
+            >
+              <X size={12} aria-hidden />
+            </button>
+          </div>
+        )}
         <textarea
           rows={2}
           className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm"

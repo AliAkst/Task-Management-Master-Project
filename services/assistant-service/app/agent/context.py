@@ -27,6 +27,7 @@ Kurallar:
   Sonuç "done" ise işlem yapıldı. Sonuç "rejected" ise kullanıcı reddetti; nedenine saygı göster.
 - Kullanıcı bir günü saat saat planlamanı isterse (iş, yol, spor, ayak işleri...) schedule_day aracını TEK çağrıyla kullan: blokları sırayla ver, sadece sabit saatli olanlara start yaz, diğerlerine minutes ver; saat hesaplamayı araca bırak. Yol/iş/yemek card=false, yapılacak işler card=true. Önce metinle plan yazıp onay isteme: araç zaten kullanıcıya onay kartı olarak gider; planı doğrudan araçla öner.
 - Kart silme isteğinde delete_cards (titles / board / all), bir günün planını iptal etme isteğinde cancel_day kullan; silinecekleri araç bulur ve onaya sunar. "Yetkim yok" deme.
+- Checklist ya da etiket değişikliği için önce get_card ile id'leri al; maddeyi metinle değil item_id ile işaretle. Kartın checklist'ine madde eklemek için add_checklist_items, etiket için set_card_labels kullan.
 - Tarih-saatleri ISO 8601 ve kullanıcının saat dilimi ofsetiyle yaz (örn. +03:00).
   "Yarın" gibi göreli ifadeleri aşağıdaki "Şu an" bilgisine göre hesapla.
 - Tarihleri kullanıcının saat dilimine göre düşün."""
@@ -49,6 +50,7 @@ async def build_system_prompt(
     model_label: str,
     is_local: bool,
     facts: list[UserFactEntity] | None = None,
+    focus: str | None = None,
 ) -> str:
     now = datetime.now(tz)
     lines = [
@@ -58,6 +60,9 @@ async def build_system_prompt(
     ]
     if user.get("full_name"):
         lines.append(f"Kullanıcının adı: {user['full_name']}.")
+
+    if focus:
+        lines.append(focus)
 
     boards = await toolbox.list_boards()
     if boards:
@@ -108,6 +113,38 @@ async def build_system_prompt(
         )
     lines.append(f"(Model: {model_label})")
     return "\n".join(lines)
+
+
+async def focus_line(
+    api: TaskApiClient,
+    toolbox: ToolBox,
+    board_id: int | None,
+    card_id: int | None,
+) -> str | None:
+    """"Bu kart / bu board" baglami. Kullanicinin kendi JWT'siyle okunur (sahiplik);
+    bulut modelde gizli (local_only) board/kart icin hicbir sey eklenmez."""
+    privacy = toolbox.privacy
+    card = None
+    if card_id is not None and not privacy.card_hidden(card_id):
+        card = await _safe(api, f"/cards/{card_id}")
+        if card and privacy.board_hidden(card.get("board_id")):
+            card = None
+    bid = card["board_id"] if card else board_id
+    board = None
+    if bid is not None and not privacy.board_hidden(bid):
+        detail = await _safe(api, f"/boards/{bid}")
+        board = detail["board"]["name"] if detail else None
+    if card and board:
+        return (
+            f"Kullanıcı şu an «{board}» board'unda, #{card['id']} «{card['title']}» "
+            "kartını açık tutuyor; 'bu kart' dediğinde bunu kastediyor."
+        )
+    if board:
+        return (
+            f"Kullanıcı şu an «{board}» board'unda (id {bid}); "
+            "'bu board' dediğinde bunu kastediyor."
+        )
+    return None
 
 
 MIN_FACTS_FOR_ACQUAINTED = 3
