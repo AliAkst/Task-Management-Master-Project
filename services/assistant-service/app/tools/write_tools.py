@@ -290,6 +290,11 @@ class WriteTools:
 
     # ---------------- hazirlik ----------------
     async def prepare(self, name: str, args: dict[str, Any]) -> PreparedAction:
+        if name == "tidy_facts":
+            if self.memory is None:
+                raise ValueError("Hafıza şu an kullanılamıyor")
+            body, summary = await self.memory.prepare_tidy(**args)
+            return PreparedAction(action_type_of(name), body, summary)
         if name in ("remember_fact", "forget_fact"):
             if self.memory is None:
                 raise ValueError("Hafıza şu an kullanılamıyor")

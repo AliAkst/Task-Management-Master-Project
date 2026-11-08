@@ -33,6 +33,17 @@ _PLAN = re.compile(
 _QUESTION = re.compile(r"(\?\s*$|\bneler\b|\bne var\b|göster|listele|nasıl geçti)")
 
 
+_TIDY = re.compile(
+    r"(profil|hafıza|hafiza|bilgi|hakkımda)\w*.{0,40}(temizle|düzelt|toparla|sadeleştir)"
+    r"|(temizle|toparla)\w*.{0,40}(profil|hafıza|hafiza|bilgi)"
+)
+
+
+def is_tidy_request(text: str) -> bool:
+    """'Profilimi temizle', 'hafızanı toparla' gibi istekler."""
+    return bool(_TIDY.search(text.casefold()))
+
+
 def is_schedule_request(text: str) -> bool:
     """Bir gunu saat saat planlama istegi mi? (soru/listeleme degil)"""
     t = text.casefold()
