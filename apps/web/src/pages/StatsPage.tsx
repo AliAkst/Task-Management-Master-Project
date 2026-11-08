@@ -1,0 +1,279 @@
+import { useState, type ReactNode } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import { localDay, shiftDay, useAnalytics } from '../api/dayPlans'
+import { formatDuration } from '../lib/format'
+
+// Dogrulanmis kategorik palet (dataviz referans paleti, ilk 4 slot, sabit sira)
+const C = { s1: '#2a78d6', s2: '#eb6834', s3: '#1baf7a', s4: '#eda100' }
+const SURFACE = '#ffffff'
+const GRID = '#e2e8f0'
+const AXIS = { fontSize: 11, fill: '#64748b' }
+const BAR_RADIUS: [number, number, number, number] = [4, 4, 0, 0]
+
+const RANGES = [
+  { days: 7, label: '7 gün' },
+  { days: 30, label: '30 gün' },
+  { days: 90, label: '90 gün' },
+]
+const WEEKDAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
+const short = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' })
+const dayLabel = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return short.format(new Date(y, m - 1, d))
+}
+
+function Tile({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
+  return (
+    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{value}</div>
+      {hint && <div className="mt-0.5 text-xs text-slate-500">{hint}</div>}
+    </div>
+  )
+}
+
+function Panel({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
+  return (
+    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-medium text-slate-700">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+// Lejant metni metin renginde; kimligi yanindaki renkli isaret tasir
+const legendText = (value: string) => <span style={{ color: '#475569' }}>{value}</span>
+
+const tooltipStyle = { fontSize: 12, borderRadius: 8, border: `1px solid ${GRID}` }
+
+export default function StatsPage() {
+  const [days, setDays] = useState(7)
+  const [showTable, setShowTable] = useState(false)
+  const end = localDay()
+  const start = shiftDay(end, -(days - 1))
+  const q = useAnalytics(start, end)
+  const s = q.data
+
+  const daily = (s?.days ?? []).map((d) => ({ ...d, label: dayLabel(d.date) }))
+  const hours = (s?.productive_hours ?? []).map((m, h) => ({ hour: `${String(h).padStart(2, '0')}`, minutes: m }))
+  const weekdays = (s?.weekdays ?? []).map((m, i) => ({ day: WEEKDAYS[i], minutes: m }))
+  const moods = daily.filter((d) => d.mood != null || d.energy != null)
+  const acc = s?.estimate_accuracy
+  const maxBoard = Math.max(1, ...(s?.boards ?? []).map((b) => Math.max(b.tracked_min, b.budget_min ?? 0)))
+
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-4 p-4 sm:p-6">
+      <header className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold">İstatistikler</h1>
+        <span className="text-sm text-slate-500">{dayLabel(start)} – {dayLabel(end)}</span>
+        <div className="ml-auto flex rounded-md bg-slate-200 p-0.5 text-sm">
+          {RANGES.map((r) => (
+            <button key={r.days} onClick={() => setDays(r.days)} className={`rounded px-3 py-1 ${days === r.days ? 'bg-white shadow-sm' : 'text-slate-600'}`}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {q.isLoading && <p className="text-slate-500">Yükleniyor…</p>}
+      {q.error && <p className="text-red-600">{q.error.message}</p>}
+
+      {s && (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Tile label="Çalışılan süre" value={formatDuration(s.totals.tracked_min * 60)} hint={`günde ort. ${formatDuration((s.totals.tracked_min / s.totals.days) * 60)}`} />
+            <Tile
+              label="Plana uyum"
+              value={s.totals.completion_rate == null ? '—' : `%${Math.round(s.totals.completion_rate * 100)}`}
+              hint={`${s.totals.done_items}/${s.totals.planned_items} planlı madde yapıldı`}
+            />
+            <Tile label="Değerlendirme serisi" value={`${s.totals.current_streak} gün`} hint={`${s.totals.reviewed_days}/${s.totals.days} gün değerlendirildi`} />
+            <Tile
+              label="Tahmin doğruluğu"
+              value={acc?.mean_ratio == null ? '—' : `×${acc.mean_ratio.toFixed(2)}`}
+              hint={
+                acc?.mean_ratio == null
+                  ? 'Tahminli + süresi tutulan kart tamamlayınca görünür'
+                  : acc.mean_ratio > 1.05
+                    ? `İşler tahminden ort. %${Math.round((acc.mean_ratio - 1) * 100)} uzun sürüyor (${acc.sample_size} kart)`
+                    : acc.mean_ratio < 0.95
+                      ? `İşler tahminden ort. %${Math.round((1 - acc.mean_ratio) * 100)} kısa sürüyor (${acc.sample_size} kart)`
+                      : `Tahminlerin isabetli (${acc.sample_size} kart)`
+              }
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel
+              title="Günlük plan sonuçları (madde sayısı)"
+              action={<button onClick={() => setShowTable((t) => !t)} className="text-xs text-blue-600 hover:underline">{showTable ? 'Grafik' : 'Tablo olarak göster'}</button>}
+            >
+              {showTable ? (
+                <div className="max-h-64 overflow-auto">
+                  <table className="w-full text-xs">
+                    <thead className="text-left text-slate-500">
+                      <tr><th className="py-1">Gün</th><th>Plan</th><th>Yapıldı</th><th>Kısmen</th><th>Yapılmadı</th><th>Ertelendi</th><th>Plansız</th><th>Süre</th></tr>
+                    </thead>
+                    <tbody className="tabular-nums">
+                      {daily.map((d) => (
+                        <tr key={d.date} className="border-t border-slate-100">
+                          <td className="py-1">{d.label}</td><td>{d.planned}</td><td>{d.done}</td><td>{d.partial}</td><td>{d.not_done}</td><td>{d.postponed}</td><td>{d.unplanned}</td><td>{formatDuration(d.tracked_min * 60)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={daily} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke={GRID} />
+                    <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                    <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#f1f5f9' }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" formatter={legendText} />
+                    <Bar dataKey="done" name="Yapıldı" stackId="o" fill={C.s1} stroke={SURFACE} strokeWidth={2} />
+                    <Bar dataKey="partial" name="Kısmen" stackId="o" fill={C.s2} stroke={SURFACE} strokeWidth={2} />
+                    <Bar dataKey="not_done" name="Yapılmadı" stackId="o" fill={C.s3} stroke={SURFACE} strokeWidth={2} />
+                    <Bar dataKey="postponed" name="Ertelendi" stackId="o" fill={C.s4} stroke={SURFACE} strokeWidth={2} radius={BAR_RADIUS} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </Panel>
+
+            <Panel title="Günlük çalışma süresi (dakika)">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={daily} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={GRID} />
+                  <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={AXIS} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#f1f5f9' }} formatter={(v: number) => [formatDuration(v * 60), 'Süre']} />
+                  <Bar dataKey="tracked_min" fill={C.s1} radius={BAR_RADIUS} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Panel>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel title="Board'lara göre süre ve haftalık hedef">
+              {s.boards.filter((b) => b.tracked_min > 0 || b.budget_min).length === 0 && (
+                <p className="text-sm text-slate-400">Bu aralıkta süre kaydı yok.</p>
+              )}
+              <ul className="space-y-2.5">
+                {s.boards
+                  .filter((b) => b.tracked_min > 0 || b.budget_min)
+                  .map((b) => {
+                    const over = b.budget_min != null && b.tracked_min >= b.budget_min
+                    return (
+                      <li key={b.board_id ?? 'none'} className="text-sm" title={`${b.name}: ${formatDuration(b.tracked_min * 60)}${b.budget_min ? ` / hedef ${formatDuration(b.budget_min * 60)}` : ''} · ${b.completed_cards} kart tamamlandı`}>
+                        <div className="mb-1 flex items-baseline justify-between gap-2">
+                          <span className="flex items-center gap-1.5 text-slate-800">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: b.color }} />
+                            {b.name}
+                          </span>
+                          <span className="text-xs text-slate-500 tabular-nums">
+                            {formatDuration(b.tracked_min * 60)}
+                            {b.budget_min != null && ` / ${formatDuration(b.budget_min * 60)} hedef`}
+                            {over && ' ✓'}
+                          </span>
+                        </div>
+                        <div className="relative h-2 rounded-full bg-slate-100">
+                          <div className="h-2 rounded-full" style={{ width: `${(b.tracked_min / maxBoard) * 100}%`, backgroundColor: b.color }} />
+                          {b.budget_min != null && (
+                            <div className="absolute -top-1 h-4 w-0.5 bg-slate-700" style={{ left: `${(b.budget_min / maxBoard) * 100}%` }} title="Hedef" />
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
+              </ul>
+            </Panel>
+
+            <Panel title="Ruh hâli ve enerji (1–5)">
+              {moods.length === 0 ? (
+                <p className="text-sm text-slate-400">Gün sonu değerlendirmelerinde ruh hâli/enerji girdikçe burada görünecek.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={daily} margin={{ top: 8, right: 16, left: -20, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke={GRID} />
+                    <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                    <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={AXIS} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" formatter={legendText} />
+                    <Line dataKey="mood" name="Ruh hâli" stroke={C.s1} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: SURFACE }} connectNulls />
+                    <Line dataKey="energy" name="Enerji" stroke={C.s2} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: SURFACE }} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </Panel>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel title="En verimli saatler (dakika)">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={hours} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={GRID} />
+                  <XAxis dataKey="hour" tick={AXIS} tickLine={false} axisLine={false} interval={2} />
+                  <YAxis tick={AXIS} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#f1f5f9' }} labelFormatter={(h) => `${h}:00–${h}:59`} formatter={(v: number) => [formatDuration(v * 60), 'Süre']} />
+                  <Bar dataKey="minutes" fill={C.s1} radius={BAR_RADIUS} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Panel>
+
+            <Panel title="Haftanın günleri (dakika)">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={weekdays} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={GRID} />
+                  <XAxis dataKey="day" tick={AXIS} tickLine={false} axisLine={false} />
+                  <YAxis tick={AXIS} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#f1f5f9' }} formatter={(v: number) => [formatDuration(v * 60), 'Süre']} />
+                  <Bar dataKey="minutes" fill={C.s1} radius={BAR_RADIUS} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Panel>
+
+            <Panel title="Dikkat çekenler">
+              <h3 className="mb-1 text-xs font-medium text-slate-500">En çok ertelenenler</h3>
+              {s.most_postponed.length === 0 ? (
+                <p className="mb-3 text-sm text-slate-400">Erteleme yok 👏</p>
+              ) : (
+                <ul className="mb-3 space-y-1 text-sm">
+                  {s.most_postponed.map((p) => (
+                    <li key={p.card_id} className="flex justify-between gap-2"><span className="truncate">{p.title}</span><span className="text-slate-500 tabular-nums">{p.count}×</span></li>
+                  ))}
+                </ul>
+              )}
+              <h3 className="mb-1 text-xs font-medium text-slate-500">Tahmini en çok aşanlar</h3>
+              {(acc?.biggest_overruns ?? []).length === 0 ? (
+                <p className="text-sm text-slate-400">Henüz veri yok.</p>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {acc!.biggest_overruns.map((o) => (
+                    <li key={o.card_id} className="flex justify-between gap-2" title={`${o.tracked_min} dk / ${o.estimated_min} dk tahmin`}>
+                      <span className="truncate">{o.title}</span>
+                      <span className="text-slate-500 tabular-nums">×{o.ratio.toFixed(1)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

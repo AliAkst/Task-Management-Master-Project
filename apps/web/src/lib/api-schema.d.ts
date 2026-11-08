@@ -455,6 +455,367 @@ export interface paths {
         patch: operations["update_checklist_item_api_v1_checklist__item_id__patch"];
         trace?: never;
     };
+    "/api/v1/cards/{card_id}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Dependency
+         * @description `depends_on_id` bitmeden bu kart baslayamaz. Dongu -> 409 DEPENDENCY_CYCLE.
+         */
+        post: operations["add_dependency_api_v1_cards__card_id__dependencies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cards/{card_id}/dependencies/{depends_on_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Dependency */
+        delete: operations["remove_dependency_api_v1_cards__card_id__dependencies__depends_on_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cards/{card_id}/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Split Card
+         * @description Karti alt kartlara boler; sureyi dagitir, `chain` ise sirali iple baglar.
+         */
+        post: operations["split_card_api_v1_cards__card_id__split_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/boards/{board_id}/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Board Graph
+         * @description Grafik gorunum: dugumler (kartlar) + kenarlar (bagimlilik / ust-alt).
+         */
+        get: operations["board_graph_api_v1_boards__board_id__graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Calendar
+         * @description Tum board'lardaki etkinlikler + kart son tarihleri, [start, end) araliginda.
+         *     `board_id` tekrarlanarak filtrelenebilir (?board_id=1&board_id=3).
+         *     Arsivlenmis board'larin ogeleri gosterilmez.
+         */
+        get: operations["calendar_api_v1_calendar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Event
+         * @description Etkinlik ya da (card_id ile) karta zaman blogu olusturur.
+         */
+        post: operations["create_event_api_v1_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{event_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Event */
+        get: operations["get_event_api_v1_events__event_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Event */
+        delete: operations["delete_event_api_v1_events__event_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Event */
+        patch: operations["update_event_api_v1_events__event_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/cards/{card_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Card Events
+         * @description Karta ayrilmis zaman bloklari.
+         */
+        get: operations["card_events_api_v1_cards__card_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active Session
+         * @description Calisan kronometre (yoksa session: null).
+         */
+        get: operations["active_session_api_v1_sessions_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Session
+         * @description Kronometreyi baslatir. Calisan varsa once onu durdurur.
+         */
+        post: operations["start_session_api_v1_sessions_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Session
+         * @description Calisan kronometreyi durdurur (yoksa 409 NO_ACTIVE_SESSION).
+         */
+        post: operations["stop_session_api_v1_sessions_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sessions
+         * @description Oturumlar (en yeni once). start/end araligiyla kesisenler; card_id filtresi.
+         */
+        get: operations["list_sessions_api_v1_sessions_get"];
+        put?: never;
+        /**
+         * Create Manual Session
+         * @description Sonradan calisma suresi girer (cakisma 409 SESSION_OVERLAP).
+         */
+        post: operations["create_manual_session_api_v1_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Session */
+        delete: operations["delete_session_api_v1_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Session */
+        patch: operations["update_session_api_v1_sessions__session_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/day-plans/{day}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Day Plan
+         * @description Gunun plani (yoksa exists=false) + o gun harcanan sureler.
+         */
+        get: operations["get_day_plan_api_v1_day_plans__day__get"];
+        /**
+         * Save Day Plan
+         * @description Planli maddeleri (yeniden) yazar. Degerlendirilmis gunde 409.
+         */
+        put: operations["save_day_plan_api_v1_day_plans__day__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/day-plans/{day}/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Suggestions
+         * @description Plan onerileri: takvim, ertelenen, son tarih, devam eden, calisilan.
+         */
+        get: operations["get_suggestions_api_v1_day_plans__day__suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/day-plans/{day}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review Day
+         * @description Gun sonu degerlendirmesi; tekrar gonderilebilir (guncelleme).
+         */
+        post: operations["review_day_api_v1_day_plans__day__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/day-plan-items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Plan Item */
+        delete: operations["delete_plan_item_api_v1_day_plan_items__item_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Analytics Summary
+         * @description [start, end] (dahil, yerel gunler) icin istatistik ozeti.
+         */
+        get: operations["analytics_summary_api_v1_analytics_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -536,6 +897,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * ActiveSession
+         * @description GET /sessions/active: calisan oturum yoksa session null.
+         */
+        ActiveSession: {
+            session: components["schemas"]["SessionResponse"] | null;
+        };
         /** ActivityResponse */
         ActivityResponse: {
             /** Id */
@@ -562,6 +930,55 @@ export interface components {
              */
             occurred_at: string;
         };
+        /** AnalyticsSummary */
+        AnalyticsSummary: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            totals: components["schemas"]["Totals"];
+            /** Days */
+            days: components["schemas"]["DayStat"][];
+            /** Boards */
+            boards: components["schemas"]["BoardStat"][];
+            estimate_accuracy: components["schemas"]["EstimateAccuracy"];
+            /** Productive Hours */
+            productive_hours: number[];
+            /** Weekdays */
+            weekdays: number[];
+            /** Most Postponed */
+            most_postponed: components["schemas"]["PostponedCard"][];
+        };
+        /** ApiResponse[ActiveSession] */
+        ApiResponse_ActiveSession_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["ActiveSession"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[AnalyticsSummary] */
+        ApiResponse_AnalyticsSummary_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["AnalyticsSummary"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[BoardDetail] */
         ApiResponse_BoardDetail_: {
             /** Success */
@@ -574,11 +991,35 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[BoardGraph] */
+        ApiResponse_BoardGraph_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["BoardGraph"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[BoardResponse] */
         ApiResponse_BoardResponse_: {
             /** Success */
             success: boolean;
             data?: components["schemas"]["BoardResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[CalendarResponse] */
+        ApiResponse_CalendarResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["CalendarResponse"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -603,6 +1044,42 @@ export interface components {
             /** Success */
             success: boolean;
             data?: components["schemas"]["ChecklistItemResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[DayPlanResponse] */
+        ApiResponse_DayPlanResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["DayPlanResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[DaySuggestions] */
+        ApiResponse_DaySuggestions_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["DaySuggestions"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[EventResponse] */
+        ApiResponse_EventResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["EventResponse"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -651,6 +1128,18 @@ export interface components {
             /** Success */
             success: boolean;
             data?: components["schemas"]["PaginatedResponse_TaskResponse_"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[SessionResponse] */
+        ApiResponse_SessionResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["SessionResponse"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -747,6 +1236,32 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[list[EventResponse]] */
+        ApiResponse_list_EventResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["EventResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[list[SessionResponse]] */
+        ApiResponse_list_SessionResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["SessionResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** BoardCreate */
         BoardCreate: {
             /** Name */
@@ -779,6 +1294,16 @@ export interface components {
             cards: components["schemas"]["CardSummary"][];
             /** Labels */
             labels: components["schemas"]["LabelResponse"][];
+        };
+        /**
+         * BoardGraph
+         * @description Grafik gorunum: board'un kartlari + baska board'lardan bagli kartlar.
+         */
+        BoardGraph: {
+            /** Nodes */
+            nodes: components["schemas"]["CardSummary"][];
+            /** Edges */
+            edges: components["schemas"]["GraphEdge"][];
         };
         /**
          * BoardPrivacy
@@ -815,6 +1340,27 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** BoardStat */
+        BoardStat: {
+            /** Board Id */
+            board_id: number | null;
+            /** Name */
+            name: string;
+            /** Color */
+            color: string;
+            /**
+             * Tracked Min
+             * @default 0
+             */
+            tracked_min: number;
+            /**
+             * Completed Cards
+             * @default 0
+             */
+            completed_cards: number;
+            /** Budget Min */
+            budget_min?: number | null;
         };
         /** BoardUpdate */
         BoardUpdate: {
@@ -869,10 +1415,57 @@ export interface components {
              */
             open_card_count: number;
         };
-        /** CardCreate */
+        /**
+         * CalendarItem
+         * @description Takvimde gosterilen tek oge. Iki tur:
+         *     - event: zaman blogu / bagimsiz etkinlik (EventEntity)
+         *     - deadline: kartin son tarihi (tum gun isareti)
+         */
+        CalendarItem: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "event" | "deadline";
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /** End */
+            end: string | null;
+            /** All Day */
+            all_day: boolean;
+            /** Board Id */
+            board_id: number | null;
+            /** Color */
+            color: string;
+            /** Event Id */
+            event_id?: number | null;
+            /** Card Id */
+            card_id?: number | null;
+            card_status?: components["schemas"]["TaskStatus"] | null;
+            /** Location */
+            location?: string | null;
+        };
+        /** CalendarResponse */
+        CalendarResponse: {
+            /** Items */
+            items: components["schemas"]["CalendarItem"][];
+        };
+        /**
+         * CardCreate
+         * @description list_id ya da parent_id verilmeli; alt kart default ust kartin listesine.
+         */
         CardCreate: {
             /** List Id */
-            list_id: number;
+            list_id?: number | null;
+            /** Parent Id */
+            parent_id?: number | null;
             /** Title */
             title: string;
             /** Description */
@@ -934,6 +1527,49 @@ export interface components {
              * @default 0
              */
             note_count: number;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Assigned To */
+            assigned_to?: number | null;
+            /** Graph X */
+            graph_x?: number | null;
+            /** Graph Y */
+            graph_y?: number | null;
+            /**
+             * Blocked
+             * @default false
+             */
+            blocked: boolean;
+            /**
+             * Blocked By Count
+             * @default 0
+             */
+            blocked_by_count: number;
+            /**
+             * Subtask Total
+             * @default 0
+             */
+            subtask_total: number;
+            /**
+             * Subtask Done
+             * @default 0
+             */
+            subtask_done: number;
+            /**
+             * Subtask Estimated Minutes
+             * @default 0
+             */
+            subtask_estimated_minutes: number;
+            /**
+             * Tracked Seconds
+             * @default 0
+             */
+            tracked_seconds: number;
+            /**
+             * Subtask Tracked Seconds
+             * @default 0
+             */
+            subtask_tracked_seconds: number;
             /** User Id */
             user_id: number;
             /** Description */
@@ -954,6 +1590,13 @@ export interface components {
             notes?: components["schemas"]["NoteResponse"][];
             /** Checklist */
             checklist?: components["schemas"]["ChecklistItemResponse"][];
+            parent?: components["schemas"]["CardRef"] | null;
+            /** Subtasks */
+            subtasks?: components["schemas"]["CardSummary"][];
+            /** Depends On */
+            depends_on?: components["schemas"]["CardRef"][];
+            /** Dependents */
+            dependents?: components["schemas"]["CardRef"][];
         };
         /**
          * CardMove
@@ -964,6 +1607,36 @@ export interface components {
             list_id: number;
             /** Index */
             index: number;
+        };
+        /**
+         * CardRef
+         * @description Baska bir karta kisa referans (bagimlilik / ust kart listeleri icin).
+         */
+        CardRef: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            status: components["schemas"]["TaskStatus"];
+            /** Board Id */
+            board_id: number | null;
+        };
+        /**
+         * CardSplit
+         * @description Karti alt kartlara boler. `titles` ya da `parts` verilmeli.
+         */
+        CardSplit: {
+            /** Titles */
+            titles?: string[] | null;
+            /** Parts */
+            parts?: number | null;
+            /** Total Minutes */
+            total_minutes?: number | null;
+            /**
+             * Chain
+             * @default true
+             */
+            chain: boolean;
         };
         /**
          * CardSummary
@@ -1014,6 +1687,49 @@ export interface components {
              * @default 0
              */
             note_count: number;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Assigned To */
+            assigned_to?: number | null;
+            /** Graph X */
+            graph_x?: number | null;
+            /** Graph Y */
+            graph_y?: number | null;
+            /**
+             * Blocked
+             * @default false
+             */
+            blocked: boolean;
+            /**
+             * Blocked By Count
+             * @default 0
+             */
+            blocked_by_count: number;
+            /**
+             * Subtask Total
+             * @default 0
+             */
+            subtask_total: number;
+            /**
+             * Subtask Done
+             * @default 0
+             */
+            subtask_done: number;
+            /**
+             * Subtask Estimated Minutes
+             * @default 0
+             */
+            subtask_estimated_minutes: number;
+            /**
+             * Tracked Seconds
+             * @default 0
+             */
+            tracked_seconds: number;
+            /**
+             * Subtask Tracked Seconds
+             * @default 0
+             */
+            subtask_tracked_seconds: number;
         };
         /** CardUpdate */
         CardUpdate: {
@@ -1033,6 +1749,14 @@ export interface components {
             is_archived?: boolean | null;
             /** Label Ids */
             label_ids?: number[] | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Graph X */
+            graph_x?: number | null;
+            /** Graph Y */
+            graph_y?: number | null;
+            /** Assigned To */
+            assigned_to?: number | null;
         };
         /** ChecklistItemCreate */
         ChecklistItemCreate: {
@@ -1059,6 +1783,159 @@ export interface components {
             /** Is Done */
             is_done?: boolean | null;
         };
+        /** DayPlanItemResponse */
+        DayPlanItemResponse: {
+            /** Id */
+            id: number;
+            /** Card Id */
+            card_id: number | null;
+            /** Event Id */
+            event_id: number | null;
+            /** Title */
+            title: string;
+            /** Board Id */
+            board_id: number | null;
+            /** Was Planned */
+            was_planned: boolean;
+            /** Planned Start */
+            planned_start: string | null;
+            /** Planned Minutes */
+            planned_minutes: number | null;
+            outcome: components["schemas"]["ItemOutcome"] | null;
+            /** Reason */
+            reason: string | null;
+            /** Tracked Sec */
+            tracked_sec: number;
+            /** Postponed To */
+            postponed_to: string | null;
+            card_status?: components["schemas"]["TaskStatus"] | null;
+            /**
+             * Tracked Today Sec
+             * @default 0
+             */
+            tracked_today_sec: number;
+        };
+        /** DayPlanResponse */
+        DayPlanResponse: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Exists */
+            exists: boolean;
+            status?: components["schemas"]["DayPlanStatus"] | null;
+            /** Mood */
+            mood?: number | null;
+            /** Energy */
+            energy?: number | null;
+            /** Reflection */
+            reflection?: string | null;
+            /** Planned At */
+            planned_at?: string | null;
+            /** Reviewed At */
+            reviewed_at?: string | null;
+            /** Items */
+            items?: components["schemas"]["DayPlanItemResponse"][];
+            /**
+             * Tracked Today Sec
+             * @default 0
+             */
+            tracked_today_sec: number;
+        };
+        /**
+         * DayPlanSave
+         * @description Gunun planli maddelerini (yeniden) yazar.
+         */
+        DayPlanSave: {
+            /** Items */
+            items?: components["schemas"]["PlanItemInput"][];
+        };
+        /**
+         * DayPlanStatus
+         * @enum {string}
+         */
+        DayPlanStatus: "planned" | "reviewed";
+        /** DayReview */
+        DayReview: {
+            /** Mood */
+            mood?: number | null;
+            /** Energy */
+            energy?: number | null;
+            /** Reflection */
+            reflection?: string | null;
+            /** Items */
+            items?: components["schemas"]["ItemReview"][];
+            /** Unplanned */
+            unplanned?: components["schemas"]["UnplannedInput"][];
+        };
+        /** DayStat */
+        DayStat: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Tracked Min
+             * @default 0
+             */
+            tracked_min: number;
+            /**
+             * Planned
+             * @default 0
+             */
+            planned: number;
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
+            /**
+             * Partial
+             * @default 0
+             */
+            partial: number;
+            /**
+             * Not Done
+             * @default 0
+             */
+            not_done: number;
+            /**
+             * Postponed
+             * @default 0
+             */
+            postponed: number;
+            /**
+             * Unplanned
+             * @default 0
+             */
+            unplanned: number;
+            /**
+             * Reviewed
+             * @default false
+             */
+            reviewed: boolean;
+            /** Mood */
+            mood?: number | null;
+            /** Energy */
+            energy?: number | null;
+        };
+        /** DaySuggestions */
+        DaySuggestions: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Items */
+            items: components["schemas"]["PlanSuggestion"][];
+        };
+        /** DependencyCreate */
+        DependencyCreate: {
+            /** Depends On Id */
+            depends_on_id: number;
+        };
         /** ErrorDetail */
         ErrorDetail: {
             /** Code */
@@ -1066,10 +1943,155 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * EstimateAccuracy
+         * @description Tamamlanan, tahmini ve suresi olan kartlarda gercek/tahmin orani.
+         */
+        EstimateAccuracy: {
+            /**
+             * Sample Size
+             * @default 0
+             */
+            sample_size: number;
+            /** Mean Ratio */
+            mean_ratio?: number | null;
+            /** Median Ratio */
+            median_ratio?: number | null;
+            /**
+             * Biggest Overruns
+             * @default []
+             */
+            biggest_overruns: components["schemas"]["EstimateSample"][];
+        };
+        /** EstimateSample */
+        EstimateSample: {
+            /** Card Id */
+            card_id: number;
+            /** Title */
+            title: string;
+            /** Estimated Min */
+            estimated_min: number;
+            /** Tracked Min */
+            tracked_min: number;
+            /** Ratio */
+            ratio: number;
+        };
+        /**
+         * EventCreate
+         * @description card_id verilirse etkinlik o karta ayrilmis zaman blogudur; board'u ve
+         *     (title verilmezse) basligi karttan alir.
+         */
+        EventCreate: {
+            /** Title */
+            title?: string | null;
+            /**
+             * Start At
+             * Format: date-time
+             */
+            start_at: string;
+            /**
+             * End At
+             * Format: date-time
+             */
+            end_at: string;
+            /**
+             * All Day
+             * @default false
+             */
+            all_day: boolean;
+            /** Board Id */
+            board_id?: number | null;
+            /** Card Id */
+            card_id?: number | null;
+            /** Location */
+            location?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** EventResponse */
+        EventResponse: {
+            /** Id */
+            id: number;
+            /** Board Id */
+            board_id: number | null;
+            /** Card Id */
+            card_id: number | null;
+            /** Title */
+            title: string;
+            /**
+             * Start At
+             * Format: date-time
+             */
+            start_at: string;
+            /**
+             * End At
+             * Format: date-time
+             */
+            end_at: string;
+            /** All Day */
+            all_day: boolean;
+            /** Location */
+            location: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** EventUpdate */
+        EventUpdate: {
+            /** Title */
+            title?: string | null;
+            /** Start At */
+            start_at?: string | null;
+            /** End At */
+            end_at?: string | null;
+            /** All Day */
+            all_day?: boolean | null;
+            /** Board Id */
+            board_id?: number | null;
+            /** Location */
+            location?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** GraphEdge */
+        GraphEdge: {
+            /** Source */
+            source: number;
+            /** Target */
+            target: number;
+            /** Type */
+            type: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * ItemOutcome
+         * @enum {string}
+         */
+        ItemOutcome: "done" | "partial" | "not_done" | "postponed";
+        /** ItemReview */
+        ItemReview: {
+            /** Id */
+            id: number;
+            outcome: components["schemas"]["ItemOutcome"];
+            /** Reason */
+            reason?: string | null;
+            /** Postponed To */
+            postponed_to?: string | null;
         };
         /** LabelCreate */
         LabelCreate: {
@@ -1180,12 +2202,150 @@ export interface components {
             total_pages: number;
         };
         /**
+         * PlanItemInput
+         * @description Karta, takvim etkinligine ya da sadece basliga dayali plan maddesi.
+         */
+        PlanItemInput: {
+            /** Card Id */
+            card_id?: number | null;
+            /** Event Id */
+            event_id?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Planned Minutes */
+            planned_minutes?: number | null;
+        };
+        /** PlanSuggestion */
+        PlanSuggestion: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "event" | "carry_over" | "due" | "overdue" | "in_progress" | "worked";
+            /** Card Id */
+            card_id?: number | null;
+            /** Event Id */
+            event_id?: number | null;
+            /** Title */
+            title: string;
+            /** Board Id */
+            board_id?: number | null;
+            /** Planned Start */
+            planned_start?: string | null;
+            /** Planned Minutes */
+            planned_minutes?: number | null;
+            /** Due Date */
+            due_date?: string | null;
+            /**
+             * Tracked Sec
+             * @default 0
+             */
+            tracked_sec: number;
+            /**
+             * Blocked
+             * @default false
+             */
+            blocked: boolean;
+            /**
+             * Already Planned
+             * @default false
+             */
+            already_planned: boolean;
+        };
+        /** PostponedCard */
+        PostponedCard: {
+            /** Card Id */
+            card_id: number;
+            /** Title */
+            title: string;
+            /** Count */
+            count: number;
+        };
+        /**
          * RefreshRequest
          * @description Token yenileme istegi icin basit sema
          */
         RefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /**
+         * SessionManualCreate
+         * @description Unutulan / sonradan girilen calisma suresi.
+         */
+        SessionManualCreate: {
+            /** Card Id */
+            card_id?: number | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Ended At
+             * Format: date-time
+             */
+            ended_at: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** SessionResponse */
+        SessionResponse: {
+            /** Id */
+            id: number;
+            /** Card Id */
+            card_id: number | null;
+            /** Board Id */
+            board_id: number | null;
+            /** Card Title */
+            card_title: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Duration Sec */
+            duration_sec: number | null;
+            /** Note */
+            note: string | null;
+            /** Source */
+            source: string;
+            /**
+             * Is Running
+             * @default false
+             */
+            is_running: boolean;
+        };
+        /**
+         * SessionStart
+         * @description card_id bos ise karta bagli olmayan "serbest" calisma.
+         */
+        SessionStart: {
+            /** Card Id */
+            card_id?: number | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** SessionStop */
+        SessionStop: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * SessionUpdate
+         * @description Duzeltme. Calisan oturumda sadece not/kart degisebilir.
+         */
+        SessionUpdate: {
+            /** Card Id */
+            card_id?: number | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Ended At */
+            ended_at?: string | null;
+            /** Note */
+            note?: string | null;
         };
         /** TaskCreate */
         TaskCreate: {
@@ -1260,6 +2420,57 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+        };
+        /** Totals */
+        Totals: {
+            /** Days */
+            days: number;
+            /**
+             * Tracked Min
+             * @default 0
+             */
+            tracked_min: number;
+            /**
+             * Planned Items
+             * @default 0
+             */
+            planned_items: number;
+            /**
+             * Done Items
+             * @default 0
+             */
+            done_items: number;
+            /** Completion Rate */
+            completion_rate?: number | null;
+            /**
+             * Reviewed Days
+             * @default 0
+             */
+            reviewed_days: number;
+            /**
+             * Current Streak
+             * @default 0
+             */
+            current_streak: number;
+            /**
+             * Completed Cards
+             * @default 0
+             */
+            completed_cards: number;
+        };
+        /**
+         * UnplannedInput
+         * @description Plan disi yapilan is.
+         */
+        UnplannedInput: {
+            /** Card Id */
+            card_id?: number | null;
+            /** Title */
+            title?: string | null;
+            /** @default done */
+            outcome: components["schemas"]["ItemOutcome"];
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * UserCreate
@@ -2466,6 +3677,740 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_ChecklistItemResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_dependency_api_v1_cards__card_id__dependencies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                card_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_CardDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_dependency_api_v1_cards__card_id__dependencies__depends_on_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                card_id: number;
+                depends_on_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_CardDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    split_card_api_v1_cards__card_id__split_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                card_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardSplit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_CardDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_graph_api_v1_boards__board_id__graph_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_BoardGraph_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calendar_api_v1_calendar_get: {
+        parameters: {
+            query: {
+                start: string;
+                end: string;
+                board_id?: number[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_CalendarResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_event_api_v1_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_EventResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_event_api_v1_events__event_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_EventResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_event_api_v1_events__event_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_event_api_v1_events__event_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_EventResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    card_events_api_v1_cards__card_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                card_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_EventResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    active_session_api_v1_sessions_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ActiveSession_"];
+                };
+            };
+        };
+    };
+    start_session_api_v1_sessions_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionStart"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_SessionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_session_api_v1_sessions_stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionStop"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_SessionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sessions_api_v1_sessions_get: {
+        parameters: {
+            query?: {
+                start?: string | null;
+                end?: string | null;
+                card_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_SessionResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_session_api_v1_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionManualCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_SessionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_session_api_v1_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_session_api_v1_sessions__session_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_SessionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_day_plan_api_v1_day_plans__day__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_day_plan_api_v1_day_plans__day__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayPlanSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_suggestions_api_v1_day_plans__day__suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DaySuggestions_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_day_api_v1_day_plans__day__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayReview"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_plan_item_api_v1_day_plan_items__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analytics_summary_api_v1_analytics_summary_get: {
+        parameters: {
+            query: {
+                start: string;
+                end: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_AnalyticsSummary_"];
                 };
             };
             /** @description Validation Error */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   closestCorners,
@@ -26,6 +26,9 @@ import KanbanList, { listKey } from '../components/KanbanList'
 import Modal from '../components/Modal'
 import type { CardSummary, Label } from '../lib/types'
 
+// React Flow + dagre buyuk; sadece grafik gorunumu acilinca yuklenir
+const GraphView = lazy(() => import('../components/GraphView'))
+
 type Columns = Record<number, number[]> // listId -> sirali kart id'leri
 
 const parseKey = (key: string | number) => {
@@ -38,6 +41,12 @@ export default function BoardPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const openCardId = params.get('card') ? Number(params.get('card')) : null
+  const view = params.get('view') === 'graph' ? 'graph' : 'kanban'
+  // Gorunum (kanban/grafik) URL'de kalir; kart acip kapatmak onu bozmaz
+  const viewParam: Record<string, string> = view === 'graph' ? { view: 'graph' } : {}
+  const openCard = (id: number) => setParams({ ...viewParam, card: String(id) })
+  const closeCard = () => setParams(viewParam)
+  const setView = (v: 'kanban' | 'graph') => setParams(v === 'graph' ? { view: 'graph' } : {})
 
   const board = useBoard(boardId)
   const m = useBoardMutations(boardId)
@@ -187,11 +196,27 @@ export default function BoardPage() {
         {b.scope_description && (
           <p className="hidden truncate text-sm text-slate-500 md:block">{b.scope_description}</p>
         )}
-        <button onClick={() => setEditing(true)} className="ml-auto rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">
+        <div className="ml-auto flex rounded-md bg-slate-100 p-0.5 text-sm">
+          {(['kanban', 'graph'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`rounded px-3 py-1 ${view === v ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+            >
+              {v === 'kanban' ? 'Kanban' : 'Grafik'}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setEditing(true)} className="rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">
           Düzenle
         </button>
       </div>
 
+      {view === 'graph' ? (
+        <Suspense fallback={<p className="p-6 text-slate-500">Grafik yükleniyor…</p>}>
+          <GraphView boardId={boardId} labels={labels} onOpenCard={openCard} />
+        </Suspense>
+      ) : (
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -214,7 +239,7 @@ export default function BoardPage() {
                   list={list}
                   cards={cards}
                   labels={labels}
-                  onOpenCard={(id) => setParams({ card: String(id) })}
+                  onOpenCard={openCard}
                   onAddCard={(list_id, title) => m.createCard.mutate({ list_id, title })}
                   onRename={(id, name) => m.updateList.mutate({ id, name })}
                   onToggleDone={(id, is_done_list) => m.updateList.mutate({ id, is_done_list })}
@@ -238,6 +263,7 @@ export default function BoardPage() {
           {activeCard ? <CardFace card={activeCard} labels={labels} dragging /> : null}
         </DragOverlay>
       </DndContext>
+      )}
 
       {(m.moveCard.error || m.deleteList.error || m.createCard.error) && (
         <p className="px-4 pb-2 text-sm text-red-600">
@@ -249,7 +275,8 @@ export default function BoardPage() {
         <CardModal
           cardId={openCardId}
           board={board.data}
-          onClose={() => setParams({})}
+          onClose={closeCard}
+          onOpenCard={openCard}
         />
       )}
 

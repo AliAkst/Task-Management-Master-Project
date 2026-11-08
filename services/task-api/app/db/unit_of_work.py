@@ -13,8 +13,16 @@ from app.db.repositories.card_content import (
     ActivityRepository,
     CardNoteRepository,
     ChecklistRepository,
+    DependencyRepository,
 )
+from app.db.repositories.day_plan import (
+    AnalyticsRepository,
+    DayPlanItemRepository,
+    DayPlanRepository,
+)
+from app.db.repositories.event import EventRepository
 from app.db.repositories.task import TaskRepository
+from app.db.repositories.time_session import TimeSessionRepository
 from app.db.repositories.user import UserRepository
 from app.db.repositories.user_settings import UserSettingsRepository
 from app.core.resilience import with_db_retry
@@ -70,6 +78,12 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.notes = CardNoteRepository(session)
         self.checklist = ChecklistRepository(session)
         self.activity = ActivityRepository(session)
+        self.events = EventRepository(session)
+        self.time_sessions = TimeSessionRepository(session)
+        self.day_plans = DayPlanRepository(session)
+        self.day_plan_items = DayPlanItemRepository(session)
+        self.analytics = AnalyticsRepository(session)
+        self.dependencies = DependencyRepository(session)
     
     @with_db_retry
     async def commit(self):

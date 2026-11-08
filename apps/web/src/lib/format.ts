@@ -43,6 +43,8 @@ export function fromDateInput(value: string): string | null {
 
 export const ACTION_LABEL: Record<string, string> = {
   created: 'oluşturuldu',
+  scheduled: 'takvime eklendi',
+  unscheduled: 'takvimden çıkarıldı',
   updated: 'güncellendi',
   moved: 'taşındı',
   completed: 'tamamlandı',
@@ -54,4 +56,46 @@ export const ACTION_LABEL: Record<string, string> = {
   deleted: 'silindi',
   checked: 'checklist maddesi işaretlendi',
   unchecked: 'checklist maddesi geri alındı',
+  split: 'parçalara bölündü',
+  dependency_added: 'ön koşul eklendi',
+  dependency_removed: 'ön koşul kaldırıldı',
+  unblocked: 'ön koşulları bitti, başlanabilir',
+}
+
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/** ISO -> <input type="datetime-local"> degeri (yerel saat). */
+export function toLocalInput(iso: string | Date): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** <input type="datetime-local"> degeri -> ISO (UTC). */
+export const fromLocalInput = (value: string) => new Date(value).toISOString()
+
+const timeFmt = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' })
+const dayFmt = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' })
+
+/** "Sal 11 Kas 19:00–21:00" */
+export function formatRange(startIso: string, endIso: string, allDay: boolean): string {
+  const s = new Date(startIso)
+  if (allDay) return `${dayFmt.format(s)} (tüm gün)`
+  return `${dayFmt.format(s)} ${timeFmt.format(s)}–${timeFmt.format(new Date(endIso))}`
+}
+
+/** 3725 sn -> "1 sa 2 dk" (kisa, kart yuzu icin). */
+export function formatDuration(sec: number): string {
+  if (sec > 0 && sec < 60) return '<1 dk'
+  const m = Math.round(sec / 60)
+  if (m < 60) return `${m} dk`
+  const h = Math.floor(m / 60)
+  return m % 60 ? `${h} sa ${m % 60} dk` : `${h} sa`
+}
+
+/** 3725 sn -> "01:02:05" (canli kronometre icin). */
+export function formatClock(sec: number): string {
+  const s = Math.max(0, Math.floor(sec))
+  return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
+    .map((n) => String(n).padStart(2, '0'))
+    .join(':')
 }

@@ -1,0 +1,192 @@
+import { useState, type FormEvent } from 'react'
+import { useCalendarMutations } from '../api/calendar'
+import { fromLocalInput, toLocalInput } from '../lib/format'
+import type { BoardWithCounts } from '../lib/types'
+import Modal from './Modal'
+
+export interface EventDraft {
+  id?: number // varsa duzenleme
+  title: string
+  start: string // ISO
+  end: string // ISO
+  allDay: boolean
+  boardId: number | null
+  cardId: number | null
+  location?: string | null
+  notes?: string | null
+}
+
+interface Props {
+  draft: EventDraft
+  boards: BoardWithCounts[]
+  onClose: () => void
+  onOpenCard?: (cardId: number) => void
+}
+
+const dateOnly = (iso: string) => toLocalInput(iso).slice(0, 10)
+/** Tum gun: yerel gece yarisi; bitis haric (exclusive) -> ertesi gun 00:00. */
+const dayStart = (d: string) => new Date(`${d}T00:00`).toISOString()
+const dayEndExclusive = (d: string) => {
+  const x = new Date(`${d}T00:00`)
+  x.setDate(x.getDate() + 1)
+  return x.toISOString()
+}
+
+export default function EventDialog({ draft, boards, onClose, onOpenCard }: Props) {
+  const m = useCalendarMutations()
+  const editing = draft.id !== undefined
+  const linked = draft.cardId !== null
+
+  const [title, setTitle] = useState(draft.title)
+  const [allDay, setAllDay] = useState(draft.allDay)
+  const [start, setStart] = useState(toLocalInput(draft.start))
+  const [end, setEnd] = useState(toLocalInput(draft.end))
+  // Tum gunde bitis gunu dahil gosterilir (kullanici icin dogal olan)
+  const [startDay, setStartDay] = useState(dateOnly(draft.start))
+  const [endDay, setEndDay] = useState(() => {
+    if (!draft.allDay) return dateOnly(draft.end)
+    const d = new Date(draft.end)
+    d.setDate(d.getDate() - 1)
+    return dateOnly(d.toISOString())
+  })
+  const [boardId, setBoardId] = useState(draft.boardId)
+  const [location, setLocation] = useState(draft.location ?? '')
+  const [notes, setNotes] = useState(draft.notes ?? '')
+
+  const error = (m.create.error ?? m.update.error ?? m.remove.error)?.message
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    const range = allDay
+      ? { start_at: dayStart(startDay), end_at: dayEndExclusive(endDay < startDay ? startDay : endDay) }
+      : { start_at: fromLocalInput(start), end_at: fromLocalInput(end) }
+    const common = {
+      title: title.trim() || undefined,
+      all_day: allDay,
+      location: location.trim() || null,
+      notes: notes.trim() || null,
+      ...range,
+    }
+    if (editing) {
+      m.update.mutate(
+        { id: draft.id!, ...common, ...(linked ? {} : { board_id: boardId }) },
+        { onSuccess: onClose },
+      )
+    } else {
+      m.create.mutate(
+        { ...common, board_id: linked ? null : boardId, card_id: draft.cardId },
+        { onSuccess: onClose },
+      )
+    }
+  }
+
+  return (
+    <Modal title={editing ? (linked ? 'Zaman bloğu' : 'Etkinlik') : 'Yeni etkinlik'} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3 text-sm">
+        <input
+          autoFocus
+          maxLength={200}
+          required={!linked}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-base"
+          placeholder={linked ? 'Başlık (boşsa kart başlığı)' : 'Başlık'}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
+          Tüm gün
+        </label>
+
+        {allDay ? (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">Başlangıç</span>
+              <input type="date" required className="w-full rounded-md border border-slate-300 px-2 py-1" value={startDay} onChange={(e) => setStartDay(e.target.value)} />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">Bitiş</span>
+              <input type="date" required className="w-full rounded-md border border-slate-300 px-2 py-1" value={endDay} onChange={(e) => setEndDay(e.target.value)} />
+            </label>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">Başlangıç</span>
+              <input type="datetime-local" required className="w-full rounded-md border border-slate-300 px-2 py-1" value={start} onChange={(e) => setStart(e.target.value)} />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">Bitiş</span>
+              <input type="datetime-local" required className="w-full rounded-md border border-slate-300 px-2 py-1" value={end} onChange={(e) => setEnd(e.target.value)} />
+            </label>
+          </div>
+        )}
+
+        {linked ? (
+          <p className="text-xs text-slate-500">
+            Bir karta ayrılmış zaman bloğu; board'u kartın board'udur.{' '}
+            {onOpenCard && (
+              <button type="button" className="text-blue-600 hover:underline" onClick={() => onOpenCard(draft.cardId!)}>
+                Kartı aç →
+              </button>
+            )}
+          </p>
+        ) : (
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-500">Board</span>
+            <select
+              className="w-full rounded-md border border-slate-300 px-2 py-1"
+              value={boardId ?? ''}
+              onChange={(e) => setBoardId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">— Board'suz —</option>
+              {boards.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <input
+          maxLength={200}
+          className="w-full rounded-md border border-slate-300 px-3 py-1.5"
+          placeholder="Konum"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+        />
+        <textarea
+          rows={2}
+          className="w-full rounded-md border border-slate-300 px-3 py-1.5"
+          placeholder="Not"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+
+        {error && <p className="text-red-600">{error}</p>}
+
+        <div className="flex items-center justify-between pt-2">
+          {editing ? (
+            <button
+              type="button"
+              className="text-red-600 hover:underline"
+              onClick={() => m.remove.mutate(draft.id!, { onSuccess: onClose })}
+            >
+              {linked ? 'Takvimden çıkar' : 'Sil'}
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-slate-600">Vazgeç</button>
+            <button
+              disabled={m.create.isPending || m.update.isPending}
+              className="rounded-md bg-slate-900 px-4 py-1.5 font-medium text-white disabled:opacity-50"
+            >
+              Kaydet
+            </button>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  )
+}

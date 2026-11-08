@@ -211,7 +211,13 @@ class TaskService:
             task_data=task_response.model_dump(mode='json')
         )
         # Eger status completed'a cekildiyse ekstra event
-        if old_status != TaskStatus.COMPLETED and updated_entity.status == TaskStatus.COMPLETED:
+        if (
+            old_status != TaskStatus.COMPLETED
+            and updated_entity.status == TaskStatus.COMPLETED
+        ):
+            from app.services.card import CardService
+
+            await CardService(self.uow).graph.handle_completion(user_id, updated_entity)
             await task_event_publisher.publish_task_completed(
                 task_id=updated_entity.id,
                 user_id=user_id,
@@ -240,6 +246,11 @@ class TaskService:
         await self.uow.card_labels.set_for_card(entity.id, [])
         await self.uow.notes.delete_for_card(entity.id)
         await self.uow.checklist.delete_for_card(entity.id)
+        await self.uow.dependencies.delete_for_card(entity.id)
+        await self.uow.day_plan_items.detach_card(entity.id)
+        await self.uow.events.delete_for_card(entity.id)
+        await self.uow.time_sessions.detach_card(entity.id)
+        await self.uow.tasks.detach_children(entity.id)
         await self.uow.tasks.delete(entity)
         await self.uow.commit()
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))

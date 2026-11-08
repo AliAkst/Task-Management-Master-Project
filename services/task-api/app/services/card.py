@@ -28,6 +28,7 @@ from app.models.card import (
     ActivityResponse,
     CardCreate,
     CardDetail,
+    CardRef,
     CardSummary,
     CardUpdate,
     ChecklistItemCreate,
@@ -51,6 +52,12 @@ class CardService:
         self.actor = actor
         self.activity = ActivityLogger(uow, actor)
         self.boards = BoardService(uow)
+
+    @property
+    def graph(self):
+        from app.services.card_graph import CardGraphService
+
+        return CardGraphService(self.uow, self, self.actor)
 
     # ---------------- yardimcilar ----------------
     async def get_owned_card(self, card_id: int, user_id: int) -> TaskEntity:
@@ -95,15 +102,48 @@ class CardService:
                 "actor": self.actor,
             },
         )
+        if event == "card.completed":
+            await self.graph.handle_completion(user_id, card)
 
     async def summaries(self, cards: list[TaskEntity]) -> list[CardSummary]:
         ids = [c.id for c in cards]
         labels = await self.uow.card_labels.label_ids_for_cards(ids)
         progress = await self.uow.checklist.progress_for_cards(ids)
         notes = await self.uow.notes.counts_for_cards(ids)
+
+        # Bagimliliklar: bitmemis on kosulu olan kart 'blocked'
+        edges = await self.uow.dependencies.edges_touching(ids)
+        prereq_ids = {d for c, d in edges}
+        prereq_status = {
+            t.id: t.status for t in await self.uow.tasks.get_many(list(prereq_ids))
+        }
+        open_prereqs: dict[int, int] = {}
+        for card_id, dep_id in edges:
+            if prereq_status.get(dep_id, TaskStatus.COMPLETED) != TaskStatus.COMPLETED:
+                open_prereqs[card_id] = open_prereqs.get(card_id, 0) + 1
+
+        # Alt kart roll-up
+        rollup: dict[int, list[int]] = {}  # parent -> [toplam, biten, dakika]
+        children = await self.uow.tasks.children_of(ids)
+        tracked = await self.uow.time_sessions.totals_for_cards(
+            ids + [ch.id for ch in children]
+        )
+        sub_tracked: dict[int, int] = {}
+        for child in children:
+            sub_tracked[child.parent_id] = sub_tracked.get(  # type: ignore[index]
+                child.parent_id,
+                0,  # type: ignore[arg-type]
+            ) + tracked.get(child.id, 0)
+        for child in children:
+            r = rollup.setdefault(child.parent_id, [0, 0, 0])  # type: ignore[arg-type]
+            r[0] += 1
+            r[1] += child.status == TaskStatus.COMPLETED
+            r[2] += child.estimated_minutes or 0
+
         result = []
         for c in cards:
             total, done = progress.get(c.id, (0, 0))
+            sub_total, sub_done, sub_minutes = rollup.get(c.id, [0, 0, 0])
             result.append(
                 CardSummary.model_validate(c).model_copy(
                     update={
@@ -112,6 +152,14 @@ class CardService:
                         "checklist_total": total,
                         "checklist_done": done,
                         "note_count": notes.get(c.id, 0),
+                        "blocked": open_prereqs.get(c.id, 0) > 0
+                        and c.status != TaskStatus.COMPLETED,
+                        "blocked_by_count": open_prereqs.get(c.id, 0),
+                        "tracked_seconds": tracked.get(c.id, 0),
+                        "subtask_tracked_seconds": sub_tracked.get(c.id, 0),
+                        "subtask_total": sub_total,
+                        "subtask_done": sub_done,
+                        "subtask_estimated_minutes": sub_minutes,
                     }
                 )
             )
@@ -131,7 +179,19 @@ class CardService:
 
     # ---------------- kart ----------------
     async def create(self, user_id: int, data: CardCreate) -> CardDetail:
-        lst = await self.boards.get_owned_list(data.list_id, user_id)
+        parent = None
+        if data.parent_id is not None:
+            parent = await self.graph.validate_parent(None, data.parent_id, user_id)
+        list_id = (
+            data.list_id
+            if data.list_id is not None
+            else (parent.list_id if parent else None)
+        )
+        if list_id is None:
+            raise ValidationException(
+                "list_id ya da listesi olan bir parent_id gerekli"
+            )
+        lst = await self.boards.get_owned_list(list_id, user_id)
         await self._validate_labels(lst.board_id, data.label_ids)
 
         card = TaskEntity(
@@ -169,6 +229,17 @@ class CardService:
         summary = (await self.summaries([card]))[0]
         notes = await self.uow.notes.list_for_card(card.id)
         checklist = await self.uow.checklist.list_for_card(card.id)
+        parent = (
+            await self.uow.tasks.get_by_id(card.parent_id) if card.parent_id else None
+        )
+        subtasks = await self.uow.tasks.children_of([card.id])
+        edges = await self.uow.dependencies.edges_touching([card.id])
+        related = {
+            t.id: t
+            for t in await self.uow.tasks.get_many([x for e in edges for x in e])
+        }
+        depends_on = [related[d] for c, d in edges if c == card.id and d in related]
+        dependents = [related[c] for c, d in edges if d == card.id and c in related]
         return CardDetail(
             **summary.model_dump(),
             user_id=card.user_id,
@@ -178,6 +249,10 @@ class CardService:
             updated_at=card.updated_at,
             notes=[NoteResponse.model_validate(n) for n in notes],
             checklist=[ChecklistItemResponse.model_validate(i) for i in checklist],
+            parent=CardRef.model_validate(parent) if parent else None,
+            subtasks=await self.summaries(subtasks),
+            depends_on=[CardRef.model_validate(t) for t in depends_on],
+            dependents=[CardRef.model_validate(t) for t in dependents],
         )
 
     @staticmethod
@@ -203,6 +278,13 @@ class CardService:
         label_ids = update.pop("label_ids", None)
         new_status = update.pop("status", None)
 
+        if update.get("parent_id") is not None:
+            await self.graph.validate_parent(card, update["parent_id"], user_id)
+        if update.get("assigned_to") not in (None, user_id):
+            raise ValidationException("Kart şimdilik sadece kendine atanabilir")
+        # Grafik konumu degisikligi gecmise yazilmaya degmez
+        layout_only = set(update) <= {"graph_x", "graph_y"} and not label_ids
+
         changes = diff(card, update)
         for key, value in update.items():
             setattr(card, key, value)
@@ -216,7 +298,7 @@ class CardService:
             await self.uow.card_labels.set_for_card(card.id, label_ids)
             changes["label_ids"] = [None, label_ids]
 
-        if changes:
+        if changes and not layout_only:
             await self.activity.log(
                 user_id,
                 "card",
@@ -306,6 +388,11 @@ class CardService:
         await self.uow.card_labels.set_for_card(card.id, [])
         await self.uow.notes.delete_for_card(card.id)
         await self.uow.checklist.delete_for_card(card.id)
+        await self.uow.dependencies.delete_for_card(card.id)
+        await self.uow.day_plan_items.detach_card(card.id)
+        await self.uow.events.delete_for_card(card.id)
+        await self.uow.time_sessions.detach_card(card.id)
+        await self.uow.tasks.detach_children(card.id)
         await self.uow.tasks.delete(card)
         await self.uow.commit()
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))
