@@ -492,6 +492,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cards/{card_id}/recurrence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Card Recurrence
+         * @description Karti tekrarlayan yapar (RRULE) ya da tekrari durdurur (rule=null).
+         *     Tamamlaninca bir sonraki kart kuralin bir sonraki tarihiyle acilir.
+         */
+        put: operations["set_card_recurrence_api_v1_cards__card_id__recurrence_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cards/{card_id}/split": {
         parameters: {
             query?: never;
@@ -611,6 +632,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Goals */
+        get: operations["list_goals_api_v1_goals_get"];
+        put?: never;
+        /** Create Goal */
+        post: operations["create_goal_api_v1_goals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/goals/{goal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Goal */
+        delete: operations["delete_goal_api_v1_goals__goal_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Goal */
+        patch: operations["update_goal_api_v1_goals__goal_id__patch"];
         trace?: never;
     };
     "/api/v1/sessions/active": {
@@ -779,6 +836,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/day-plans/{day}/ai-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Ai Summary
+         * @description Asistanin gun ozetini yazar (ya da None ile siler).
+         */
+        put: operations["set_ai_summary_api_v1_day_plans__day__ai_summary_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/day-plan-items/{item_id}": {
         parameters: {
             query?: never;
@@ -930,6 +1007,14 @@ export interface components {
              */
             occurred_at: string;
         };
+        /**
+         * AiSummaryInput
+         * @description Asistanin yazdigi gun ozeti; None ozeti siler.
+         */
+        AiSummaryInput: {
+            /** Ai Summary */
+            ai_summary?: string | null;
+        };
         /** AnalyticsSummary */
         AnalyticsSummary: {
             /**
@@ -1080,6 +1165,18 @@ export interface components {
             /** Success */
             success: boolean;
             data?: components["schemas"]["EventResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[GoalResponse] */
+        ApiResponse_GoalResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["GoalResponse"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -1249,6 +1346,19 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[list[GoalResponse]] */
+        ApiResponse_list_GoalResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["GoalResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[list[SessionResponse]] */
         ApiResponse_list_SessionResponse__: {
             /** Success */
@@ -1279,6 +1389,8 @@ export interface components {
             weekly_time_budget_min?: number | null;
             /** @default cloud_allowed */
             privacy: components["schemas"]["BoardPrivacy"];
+            /** Default Model Id */
+            default_model_id?: string | null;
             /** Lists */
             lists?: string[] | null;
         };
@@ -1328,6 +1440,8 @@ export interface components {
             /** Weekly Time Budget Min */
             weekly_time_budget_min: number | null;
             privacy: components["schemas"]["BoardPrivacy"];
+            /** Default Model Id */
+            default_model_id?: string | null;
             /** Is Archived */
             is_archived: boolean;
             /**
@@ -1375,6 +1489,8 @@ export interface components {
             /** Weekly Time Budget Min */
             weekly_time_budget_min?: number | null;
             privacy?: components["schemas"]["BoardPrivacy"] | null;
+            /** Default Model Id */
+            default_model_id?: string | null;
             /** Is Archived */
             is_archived?: boolean | null;
             /** Position */
@@ -1397,6 +1513,8 @@ export interface components {
             /** Weekly Time Budget Min */
             weekly_time_budget_min: number | null;
             privacy: components["schemas"]["BoardPrivacy"];
+            /** Default Model Id */
+            default_model_id?: string | null;
             /** Is Archived */
             is_archived: boolean;
             /**
@@ -1451,6 +1569,8 @@ export interface components {
             card_status?: components["schemas"]["TaskStatus"] | null;
             /** Location */
             location?: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
         };
         /** CalendarResponse */
         CalendarResponse: {
@@ -1570,6 +1690,17 @@ export interface components {
              * @default 0
              */
             subtask_tracked_seconds: number;
+            /** Series Id */
+            series_id?: number | null;
+            /** Series Index */
+            series_index?: number | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
+            /**
+             * Series Done Count
+             * @default 0
+             */
+            series_done_count: number;
             /** User Id */
             user_id: number;
             /** Description */
@@ -1607,6 +1738,14 @@ export interface components {
             list_id: number;
             /** Index */
             index: number;
+        };
+        /**
+         * CardRecurrence
+         * @description Karti tekrarlayan yapar (RRULE) ya da tekrari durdurur (null).
+         */
+        CardRecurrence: {
+            /** Rule */
+            rule?: string | null;
         };
         /**
          * CardRef
@@ -1730,6 +1869,17 @@ export interface components {
              * @default 0
              */
             subtask_tracked_seconds: number;
+            /** Series Id */
+            series_id?: number | null;
+            /** Series Index */
+            series_index?: number | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
+            /**
+             * Series Done Count
+             * @default 0
+             */
+            series_done_count: number;
         };
         /** CardUpdate */
         CardUpdate: {
@@ -1835,6 +1985,8 @@ export interface components {
             planned_at?: string | null;
             /** Reviewed At */
             reviewed_at?: string | null;
+            /** Ai Summary */
+            ai_summary?: string | null;
             /** Items */
             items?: components["schemas"]["DayPlanItemResponse"][];
             /**
@@ -2007,6 +2159,8 @@ export interface components {
             location?: string | null;
             /** Notes */
             notes?: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
         };
         /** EventResponse */
         EventResponse: {
@@ -2034,6 +2188,8 @@ export interface components {
             location: string | null;
             /** Notes */
             notes: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
             /** Created By */
             created_by: string;
             /**
@@ -2063,6 +2219,68 @@ export interface components {
             location?: string | null;
             /** Notes */
             notes?: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
+        };
+        /** GoalCreate */
+        GoalCreate: {
+            /** Title */
+            title: string;
+            /** Why */
+            why?: string | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Board Id */
+            board_id?: number | null;
+            /** Root Card Id */
+            root_card_id?: number | null;
+        };
+        /** GoalResponse */
+        GoalResponse: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Why */
+            why: string | null;
+            /** Target Date */
+            target_date: string | null;
+            /** Board Id */
+            board_id: number | null;
+            /** Root Card Id */
+            root_card_id: number | null;
+            status: components["schemas"]["GoalStatus"];
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * GoalStatus
+         * @enum {string}
+         */
+        GoalStatus: "active" | "achieved" | "dropped";
+        /** GoalUpdate */
+        GoalUpdate: {
+            /** Title */
+            title?: string | null;
+            /** Why */
+            why?: string | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Board Id */
+            board_id?: number | null;
+            /** Root Card Id */
+            root_card_id?: number | null;
+            status?: components["schemas"]["GoalStatus"] | null;
         };
         /** GraphEdge */
         GraphEdge: {
@@ -2221,7 +2439,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "event" | "carry_over" | "due" | "overdue" | "in_progress" | "worked";
+            kind: "event" | "carry_over" | "due" | "overdue" | "in_progress" | "next_in_chain" | "worked";
             /** Card Id */
             card_id?: number | null;
             /** Event Id */
@@ -3301,7 +3519,9 @@ export interface operations {
     create_card_api_v1_cards_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3334,7 +3554,9 @@ export interface operations {
     get_card_api_v1_cards__card_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -3365,7 +3587,9 @@ export interface operations {
     delete_card_api_v1_cards__card_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -3394,7 +3618,9 @@ export interface operations {
     update_card_api_v1_cards__card_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -3429,7 +3655,9 @@ export interface operations {
     move_card_api_v1_cards__card_id__move_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -3464,7 +3692,9 @@ export interface operations {
     card_activity_api_v1_cards__card_id__activity_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -3495,7 +3725,9 @@ export interface operations {
     add_note_api_v1_cards__card_id__notes_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -3530,7 +3762,9 @@ export interface operations {
     delete_note_api_v1_notes__note_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 note_id: number;
             };
@@ -3559,7 +3793,9 @@ export interface operations {
     update_note_api_v1_notes__note_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 note_id: number;
             };
@@ -3594,7 +3830,9 @@ export interface operations {
     add_checklist_item_api_v1_cards__card_id__checklist_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -3629,7 +3867,9 @@ export interface operations {
     delete_checklist_item_api_v1_checklist__item_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 item_id: number;
             };
@@ -3658,7 +3898,9 @@ export interface operations {
     update_checklist_item_api_v1_checklist__item_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 item_id: number;
             };
@@ -3693,7 +3935,9 @@ export interface operations {
     add_dependency_api_v1_cards__card_id__dependencies_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -3728,7 +3972,9 @@ export interface operations {
     remove_dependency_api_v1_cards__card_id__dependencies__depends_on_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
                 depends_on_id: number;
@@ -3757,10 +4003,49 @@ export interface operations {
             };
         };
     };
+    set_card_recurrence_api_v1_cards__card_id__recurrence_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                card_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardRecurrence"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_CardDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     split_card_api_v1_cards__card_id__split_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -3795,7 +4080,9 @@ export interface operations {
     board_graph_api_v1_boards__board_id__graph_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 board_id: number;
             };
@@ -3830,7 +4117,9 @@ export interface operations {
                 end: string;
                 board_id?: number[] | null;
             };
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3859,7 +4148,9 @@ export interface operations {
     create_event_api_v1_events_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3892,7 +4183,9 @@ export interface operations {
     get_event_api_v1_events__event_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 event_id: number;
             };
@@ -3923,7 +4216,9 @@ export interface operations {
     delete_event_api_v1_events__event_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 event_id: number;
             };
@@ -3952,7 +4247,9 @@ export interface operations {
     update_event_api_v1_events__event_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 event_id: number;
             };
@@ -3987,7 +4284,9 @@ export interface operations {
     card_events_api_v1_cards__card_id__events_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 card_id: number;
             };
@@ -4002,6 +4301,142 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_list_EventResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_goals_api_v1_goals_get: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["GoalStatus"] | null;
+            };
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_GoalResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_goal_api_v1_goals_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_GoalResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_goal_api_v1_goals__goal_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                goal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_goal_api_v1_goals__goal_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                goal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_GoalResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -4234,7 +4669,9 @@ export interface operations {
     get_day_plan_api_v1_day_plans__day__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 day: string;
             };
@@ -4265,7 +4702,9 @@ export interface operations {
     save_day_plan_api_v1_day_plans__day__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 day: string;
             };
@@ -4300,7 +4739,9 @@ export interface operations {
     get_suggestions_api_v1_day_plans__day__suggestions_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 day: string;
             };
@@ -4331,7 +4772,9 @@ export interface operations {
     review_day_api_v1_day_plans__day__review_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 day: string;
             };
@@ -4363,10 +4806,49 @@ export interface operations {
             };
         };
     };
+    set_ai_summary_api_v1_day_plans__day__ai_summary_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiSummaryInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_plan_item_api_v1_day_plan_items__item_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
             path: {
                 item_id: number;
             };

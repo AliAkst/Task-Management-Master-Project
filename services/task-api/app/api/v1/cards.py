@@ -9,6 +9,7 @@ from app.models.card import (
     CardCreate,
     CardDetail,
     CardMove,
+    CardRecurrence,
     CardSplit,
     CardUpdate,
     ChecklistItemCreate,
@@ -163,6 +164,17 @@ async def remove_dependency(
 ):
     await service.graph.remove_dependency(card_id, user.id, depends_on_id)
     return ApiResponse(success=True, data=await service.get_detail(card_id, user.id))
+
+
+@cards_router.put("/cards/{card_id}/recurrence", response_model=ApiResponse[CardDetail])
+async def set_card_recurrence(
+    card_id: int, data: CardRecurrence, service: CardServiceDep, user: CurrentUserDep
+):
+    """Karti tekrarlayan yapar (RRULE) ya da tekrari durdurur (rule=null).
+    Tamamlaninca bir sonraki kart kuralin bir sonraki tarihiyle acilir."""
+    return ApiResponse(
+        success=True, data=await service.set_recurrence(card_id, user.id, data)
+    )
 
 
 @cards_router.post("/cards/{card_id}/split", response_model=ApiResponse[CardDetail])

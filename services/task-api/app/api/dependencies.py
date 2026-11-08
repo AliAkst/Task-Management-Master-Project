@@ -5,7 +5,7 @@ Servislerin olusturulmasi ve mevcut kullanicinin dogrulanmasi burada yapilir.
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from app.services.card import CardService
 from app.services.analytics import AnalyticsService
 from app.services.day_plan import DayPlanService
 from app.services.event import EventService
+from app.services.goal import GoalService
 from app.services.time_session import TimeSessionService
 from app.services.task import TaskService
 from app.services.user_settings import UserSettingsService
@@ -55,6 +56,15 @@ async def get_user_settings_service(
     return UserSettingsService(uow)
 
 
+def get_actor(x_actor: str | None = Header(None)) -> str:
+    """
+    Islemi kimin yaptigi: asistan servisi istekleri `X-Actor: ai` ile gonderir.
+    Sadece etiket (created_by / activity_log.actor); yetki vermez - kullanici
+    zaten sadece kendi kayitlarina erisebilir.
+    """
+    return "ai" if (x_actor or "").lower() == "ai" else "user"
+
+
 async def get_board_service(
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
 ) -> BoardService:
@@ -63,14 +73,16 @@ async def get_board_service(
 
 async def get_card_service(
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
+    actor: str = Depends(get_actor),
 ) -> CardService:
-    return CardService(uow)
+    return CardService(uow, actor)
 
 
 async def get_event_service(
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
+    actor: str = Depends(get_actor),
 ) -> EventService:
-    return EventService(uow)
+    return EventService(uow, actor)
 
 
 async def get_time_session_service(
@@ -81,14 +93,22 @@ async def get_time_session_service(
 
 async def get_day_plan_service(
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
+    actor: str = Depends(get_actor),
 ) -> DayPlanService:
-    return DayPlanService(uow)
+    return DayPlanService(uow, actor)
 
 
 async def get_analytics_service(
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
 ) -> AnalyticsService:
     return AnalyticsService(uow)
+
+
+async def get_goal_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+    actor: str = Depends(get_actor),
+) -> GoalService:
+    return GoalService(uow, actor)
 
 
 async def get_auth_service(uow: TaskUnitOfWork = Depends(get_unit_of_work)):
@@ -156,3 +176,4 @@ TimeSessionServiceDep = Annotated[
 ]
 DayPlanServiceDep = Annotated[DayPlanService, Depends(get_day_plan_service)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
+GoalServiceDep = Annotated[GoalService, Depends(get_goal_service)]

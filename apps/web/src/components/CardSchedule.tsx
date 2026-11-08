@@ -1,3 +1,4 @@
+import { CalendarDays } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useCalendarMutations, useCardEvents } from '../api/calendar'
 import { formatRange, fromLocalInput, toLocalInput } from '../lib/format'
@@ -35,11 +36,11 @@ export default function CardSchedule({
   }
 
   return (
-    <div className="mt-6">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-700">Takvimde</h3>
-        <button onClick={() => setAdding((a) => !a)} className="text-xs text-blue-600 hover:underline">
-          + Zaman ayır
+    <div className="mt-7">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h3 className="text-[15px] font-semibold text-slate-900">Takvimde</h3>
+        <button onClick={() => setAdding((a) => !a)} aria-expanded={adding} className="shrink-0 text-[13px] text-blue-700 hover:underline">
+          Zaman ayır
         </button>
       </div>
       {adding && (
@@ -56,7 +57,7 @@ export default function CardSchedule({
       <ul className="space-y-1 text-sm">
         {upcoming.map((e) => (
           <li key={e.id} className="group flex items-center gap-2">
-            <span className="text-slate-400">🗓</span>
+            <CalendarDays size={13} className="shrink-0 text-slate-400" aria-hidden />
             <span className="flex-1">{formatRange(e.start_at, e.end_at, e.all_day)}</span>
             <button
               onClick={() => m.remove.mutate(e.id)}
@@ -68,9 +69,9 @@ export default function CardSchedule({
         ))}
       </ul>
       {upcoming.length === 0 && !adding && (
-        <p className="text-xs text-slate-400">Planlanmış zaman yok. Takvim sayfasında sürükleyerek de ekleyebilirsin.</p>
+        <p className="text-[13px] text-slate-500">Planlanmış zaman yok. Takvim sayfasında kartı sürükleyerek de ayırabilirsin.</p>
       )}
-      {past > 0 && <p className="mt-1 text-xs text-slate-400">+ {past} geçmiş zaman bloğu</p>}
+      {past > 0 && <p className="mt-1 text-[13px] text-slate-500">Geçmişte {past} zaman bloğu</p>}
     </div>
   )
 }

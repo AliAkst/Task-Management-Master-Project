@@ -7,7 +7,13 @@ from fastapi import APIRouter, Response, status
 from app.api.dependencies import AnalyticsServiceDep, CurrentUserDep, DayPlanServiceDep
 from app.models.analytics import AnalyticsSummary
 from app.models.common import ApiResponse
-from app.models.day_plan import DayPlanResponse, DayPlanSave, DayReview, DaySuggestions
+from app.models.day_plan import (
+    AiSummaryInput,
+    DayPlanResponse,
+    DayPlanSave,
+    DayReview,
+    DaySuggestions,
+)
 
 day_plans_router = APIRouter(tags=["Day planning"])
 
@@ -42,6 +48,18 @@ async def review_day(
 ):
     """Gun sonu degerlendirmesi; tekrar gonderilebilir (guncelleme)."""
     return ApiResponse(success=True, data=await service.review(user.id, day, data))
+
+
+@day_plans_router.put(
+    "/day-plans/{day}/ai-summary", response_model=ApiResponse[DayPlanResponse]
+)
+async def set_ai_summary(
+    day: date, data: AiSummaryInput, service: DayPlanServiceDep, user: CurrentUserDep
+):
+    """Asistanin gun ozetini yazar (ya da None ile siler)."""
+    return ApiResponse(
+        success=True, data=await service.set_ai_summary(user.id, day, data)
+    )
 
 
 @day_plans_router.delete(

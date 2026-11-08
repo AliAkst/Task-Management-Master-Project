@@ -50,3 +50,9 @@ class TaskEntity(Base, TimestampMixin):
     )
     graph_x: Mapped[float | None] = mapped_column(Float, nullable=True)
     graph_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # --- Tekrarlayan isler (Faz 6c): serinin kacinci karti ---
+    series_id: Mapped[int | None] = mapped_column(
+        ForeignKey("card_series.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    series_index: Mapped[int | None] = mapped_column(Integer, nullable=True)

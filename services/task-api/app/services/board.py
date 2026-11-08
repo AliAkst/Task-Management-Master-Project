@@ -1,7 +1,12 @@
 from app.core.events import domain_event_publisher
-from app.core.exceptions import ConflictException, NotFoundException
+from app.core.exceptions import (
+    ConflictException,
+    NotFoundException,
+    ValidationException,
+)
 from app.core.logging import get_logger
 from app.db.entities import BoardEntity, BoardListEntity, LabelEntity
+from app.db.entities.board import BoardPrivacy
 from app.db.unit_of_work import TaskUnitOfWork
 from app.models.board import (
     BoardCreate,
@@ -15,6 +20,7 @@ from app.models.board import (
     ListCreate,
     ListResponse,
     ListUpdate,
+    is_local_model,
 )
 from app.services.activity import ActivityLogger, diff
 from app.services.ordering import STEP, place_at
@@ -122,6 +128,7 @@ class BoardService:
         ]
 
     async def create_board(self, user_id: int, data: BoardCreate) -> BoardResponse:
+        _check_model_privacy(data.privacy, data.default_model_id)
         board, _ = await self._create_board_entity(user_id, data)
         await self.uow.commit()
         await domain_event_publisher.publish(
@@ -151,6 +158,14 @@ class BoardService:
     ) -> BoardResponse:
         board = await self.get_owned_board(board_id, user_id)
         update = data.model_dump(exclude_unset=True)
+        privacy = update.get("privacy", board.privacy)
+        if "default_model_id" in update:
+            _check_model_privacy(privacy, update["default_model_id"])
+        elif not is_local_model(board.default_model_id) and privacy == (
+            BoardPrivacy.LOCAL_ONLY
+        ):
+            # Board "sadece local"e cekildi: bulut varsayilani birakilamaz
+            update["default_model_id"] = None
         changes = diff(board, update)
         for key, value in update.items():
             setattr(board, key, value)
@@ -175,6 +190,9 @@ class BoardService:
             changes={"name": board.name},
         )
         await self.uow.day_plan_items.detach_board(board.id)
+        from app.services.goal import detach_goals
+
+        await detach_goals(self.uow.session, board_id=board.id)
         await self.uow.events.delete_for_board(board.id)
         await self.uow.time_sessions.detach_board_cards(board.id)
         await self.uow.boards.delete_cascade(board)
@@ -280,3 +298,10 @@ class BoardService:
         await self.uow.card_labels.delete_for_label(label.id)
         await self.uow.labels.delete(label)
         await self.uow.commit()
+
+
+def _check_model_privacy(privacy: BoardPrivacy, model_id: str | None) -> None:
+    if privacy == BoardPrivacy.LOCAL_ONLY and not is_local_model(model_id):
+        raise ValidationException(
+            "“Sadece local” board'un varsayılan modeli bulut modeli olamaz"
+        )

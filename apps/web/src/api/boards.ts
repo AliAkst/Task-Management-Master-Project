@@ -176,6 +176,15 @@ export function useCardMutations(cardId: number, boardId: number) {
         refresh()
       },
     }),
+    /** Tekrar kurali (RRULE) ya da null: tekrari durdur. */
+    recurrence: useMutation({
+      mutationFn: (rule: string | null) =>
+        api<CardDetail>(`/cards/${cardId}/recurrence`, { method: 'PUT', ...json({ rule }) }),
+      onSuccess: (card) => {
+        qc.setQueryData(keys.card(cardId), card)
+        refresh()
+      },
+    }),
     remove: useMutation({
       mutationFn: () => api<void>(`/cards/${cardId}`, { method: 'DELETE' }),
       onSuccess: () => {

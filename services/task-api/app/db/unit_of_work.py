@@ -21,6 +21,7 @@ from app.db.repositories.day_plan import (
     DayPlanRepository,
 )
 from app.db.repositories.event import EventRepository
+from app.db.repositories.series import SeriesRepository
 from app.db.repositories.task import TaskRepository
 from app.db.repositories.time_session import TimeSessionRepository
 from app.db.repositories.user import UserRepository
@@ -84,6 +85,7 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.day_plan_items = DayPlanItemRepository(session)
         self.analytics = AnalyticsRepository(session)
         self.dependencies = DependencyRepository(session)
+        self.series = SeriesRepository(session)
     
     @with_db_retry
     async def commit(self):

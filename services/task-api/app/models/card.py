@@ -79,6 +79,17 @@ class CardSummary(BaseModel):
     # --- zaman takibi (Faz 3a): bitmis oturumlarin toplami (calisan haric) ---
     tracked_seconds: int = 0
     subtask_tracked_seconds: int = 0
+    # --- tekrarlayan isler (Faz 6c) ---
+    series_id: int | None = None
+    series_index: int | None = None  # serinin kacinci karti
+    recurrence_rule: str | None = None  # seri aktifse kural
+    series_done_count: int = 0  # seride tamamlanan kart sayisi
+
+
+class CardRecurrence(BaseModel):
+    """Karti tekrarlayan yapar (RRULE) ya da tekrari durdurur (null)."""
+
+    rule: str | None = Field(None, max_length=500)
 
 
 class CardRef(BaseModel):

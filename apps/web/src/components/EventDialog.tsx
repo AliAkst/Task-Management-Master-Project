@@ -3,6 +3,8 @@ import { useCalendarMutations } from '../api/calendar'
 import { fromLocalInput, toLocalInput } from '../lib/format'
 import type { BoardWithCounts } from '../lib/types'
 import Modal from './Modal'
+import RecurrencePicker from './RecurrencePicker'
+import { dayCodeOf } from '../lib/rrule'
 
 export interface EventDraft {
   id?: number // varsa duzenleme
@@ -14,6 +16,7 @@ export interface EventDraft {
   cardId: number | null
   location?: string | null
   notes?: string | null
+  recurrenceRule?: string | null
 }
 
 interface Props {
@@ -52,6 +55,7 @@ export default function EventDialog({ draft, boards, onClose, onOpenCard }: Prop
   const [boardId, setBoardId] = useState(draft.boardId)
   const [location, setLocation] = useState(draft.location ?? '')
   const [notes, setNotes] = useState(draft.notes ?? '')
+  const [rule, setRule] = useState<string | null>(draft.recurrenceRule ?? null)
 
   const error = (m.create.error ?? m.update.error ?? m.remove.error)?.message
 
@@ -65,6 +69,7 @@ export default function EventDialog({ draft, boards, onClose, onOpenCard }: Prop
       all_day: allDay,
       location: location.trim() || null,
       notes: notes.trim() || null,
+      recurrence_rule: rule,
       ...range,
     }
     if (editing) {
@@ -122,6 +127,18 @@ export default function EventDialog({ draft, boards, onClose, onOpenCard }: Prop
           </div>
         )}
 
+        <RecurrencePicker
+          value={rule}
+          onChange={setRule}
+          startDay={dayCodeOf(new Date(allDay ? `${startDay}T12:00` : start))}
+          inputClass="w-full rounded-md border border-slate-300 px-2 py-1"
+        />
+        {editing && draft.recurrenceRule && (
+          <p className="text-xs text-slate-500">
+            Değişiklikler serinin tümüne uygulanır; tarih alanları serinin ilk tekrarını gösterir.
+          </p>
+        )}
+
         {linked ? (
           <p className="text-xs text-slate-500">
             Bir karta ayrılmış zaman bloğu; board'u kartın board'udur.{' '}
@@ -171,7 +188,7 @@ export default function EventDialog({ draft, boards, onClose, onOpenCard }: Prop
               className="text-red-600 hover:underline"
               onClick={() => m.remove.mutate(draft.id!, { onSuccess: onClose })}
             >
-              {linked ? 'Takvimden çıkar' : 'Sil'}
+              {draft.recurrenceRule ? 'Seriyi sil' : linked ? 'Takvimden çıkar' : 'Sil'}
             </button>
           ) : (
             <span />

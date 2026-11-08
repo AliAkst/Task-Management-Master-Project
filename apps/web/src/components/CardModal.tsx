@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Markdown from 'react-markdown'
+import { Check, Circle, CornerLeftUp, Hourglass, X } from 'lucide-react'
 import { useCard, useCardActivity, useCardMutations } from '../api/boards'
 import {
   ACTION_LABEL,
@@ -12,6 +13,8 @@ import type { BoardDetail, TaskPriority } from '../lib/types'
 import CardSchedule from './CardSchedule'
 import CardTime, { CardTimerButton } from './CardTime'
 import Modal from './Modal'
+import RecurrencePicker from './RecurrencePicker'
+import { dayCodeOf } from '../lib/rrule'
 
 interface Props {
   cardId: number
@@ -20,8 +23,17 @@ interface Props {
   onOpenCard: (id: number) => void
 }
 
-const section = 'mt-6'
-const sectionTitle = 'mb-2 text-sm font-medium text-slate-700'
+const section = 'mt-7'
+const sectionTitle = 'mb-2 text-[15px] font-semibold text-slate-900'
+const fieldLabel = 'block text-[13px] text-slate-600'
+const input = 'w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[14px]'
+
+/** Alt kart / on kosul durumu: ikon + erisilebilir ad (renk tek basina anlam tasimaz). */
+function StatusMark({ status, blocked }: { status: string; blocked?: boolean }) {
+  if (status === 'completed') return <Check size={15} className="shrink-0 text-green-700" aria-label="Tamamlandı" />
+  if (blocked) return <Hourglass size={14} className="shrink-0 text-amber-700" aria-label="Bekliyor" />
+  return <Circle size={14} className="shrink-0 text-slate-400" aria-label="Açık" />
+}
 
 export default function CardModal({ cardId, board, onClose, onOpenCard }: Props) {
   const card = useCard(cardId)
@@ -107,320 +119,346 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
     if (item.trim()) m.addItem.mutate(item.trim(), { onSuccess: () => setItem('') })
   }
 
+  const meta = [
+    list ? `“${list.name}” listesinde` : 'Listesiz',
+    c.created_by === 'ai' ? 'asistan oluşturdu' : null,
+    c.completed_at ? `${formatDateTime(c.completed_at)} tarihinde tamamlandı` : null,
+  ].filter(Boolean)
+
   return (
-    <Modal wide onClose={onClose}>
+    <Modal size="xl" onClose={onClose} label={c.title}>
       {/* Baslik */}
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
         <button
           title={done ? 'Yeniden aç' : 'Tamamla'}
+          aria-label={done ? 'Yeniden aç' : 'Tamamla'}
           onClick={() => m.update.mutate({ status: done ? 'pending' : 'completed' })}
-          className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-            done ? 'border-green-600 bg-green-600 text-white' : 'border-slate-300 hover:border-green-600'
+          className={`mt-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
+            done ? 'border-green-700 bg-green-700 text-white' : 'border-slate-300 hover:border-green-700'
           }`}
         >
-          {done && '✓'}
+          {done && <Check size={14} strokeWidth={3} aria-hidden />}
         </button>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <input
-            className="w-full rounded px-1 text-xl font-semibold focus:outline-slate-300"
+            className="font-display w-full rounded px-1 text-[26px] leading-tight font-[650] focus:outline-slate-300"
             value={title}
             maxLength={200}
+            aria-label="Kart başlığı"
             onChange={(e) => setTitle(e.target.value)}
             onBlur={saveTitle}
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
           />
-          <p className="px-1 text-xs text-slate-500">
-            {list ? `“${list.name}” listesinde` : 'Listesiz'}
+          <p className="flex flex-wrap items-center gap-x-3 px-1 text-[13px] text-slate-600">
             {c.parent && (
-              <>
-                {' · '}
-                <button className="text-blue-600 hover:underline" onClick={() => onOpenCard(c.parent!.id)}>
-                  ↑ {c.parent.title}
-                </button>
-              </>
+              <button className="inline-flex items-center gap-1 text-blue-700 hover:underline" onClick={() => onOpenCard(c.parent!.id)}>
+                <CornerLeftUp size={13} aria-hidden /> {c.parent.title}
+              </button>
             )}
-            {c.created_by === 'ai' && ' · AI tarafından oluşturuldu'}
-            {c.completed_at && ` · ${formatDateTime(c.completed_at)} tarihinde tamamlandı`}
+            <span>{meta.join(', ')}</span>
           </p>
         </div>
         <CardTimerButton cardId={c.id} />
-        <button onClick={onClose} aria-label="Kapat" className="text-xl text-slate-400 hover:text-slate-700">
-          ×
+        <button onClick={onClose} aria-label="Kapat" className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-800">
+          <X size={20} aria-hidden />
         </button>
       </div>
 
-      {/* Ozellikler */}
-      <div className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <label className="space-y-1">
-          <span className="text-xs text-slate-500">Öncelik</span>
-          <select
-            className="w-full rounded-md border border-slate-300 px-2 py-1"
-            value={c.priority}
-            onChange={(e) => m.update.mutate({ priority: e.target.value as TaskPriority })}
-          >
-            {(Object.keys(PRIORITY_LABEL) as TaskPriority[]).map((p) => (
-              <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>
-            ))}
-          </select>
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-slate-500">Son tarih</span>
-          <input
-            type="date"
-            className="w-full rounded-md border border-slate-300 px-2 py-1"
-            value={toDateInput(c.due_date)}
-            onChange={(e) => m.update.mutate({ due_date: fromDateInput(e.target.value) })}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-slate-500">Tahmini süre (dk)</span>
-          <input
-            type="number"
-            min={0}
-            className="w-full rounded-md border border-slate-300 px-2 py-1"
-            defaultValue={c.estimated_minutes ?? ''}
-            key={c.estimated_minutes ?? 'empty'}
-            onBlur={(e) => {
-              const v = e.target.value === '' ? null : Number(e.target.value)
-              if (v !== c.estimated_minutes) m.update.mutate({ estimated_minutes: v })
-            }}
-          />
-        </label>
-        <div className="space-y-1">
-          <span className="text-xs text-slate-500">Etiketler</span>
-          <div className="flex flex-wrap gap-1">
-            {board.labels.length === 0 && <span className="text-xs text-slate-400">Board ayarlarından ekle</span>}
-            {board.labels.map((l) => {
-              const on = c.label_ids.includes(l.id)
-              return (
-                <button
-                  key={l.id}
-                  onClick={() => toggleLabel(l.id)}
-                  className={`rounded px-1.5 py-0.5 text-xs ${on ? 'text-white' : 'text-slate-600 ring-1 ring-slate-300'}`}
-                  style={on ? { backgroundColor: l.color } : undefined}
-                >
-                  {l.name}
-                </button>
-              )
-            })}
+      <div className="grid gap-x-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {/* ---------- sol: kartin icerigi ---------- */}
+        <div className="min-w-0">
+          {/* Aciklama */}
+          <div className="mt-5">
+            <h3 className={sectionTitle}>Açıklama</h3>
+            {editingDesc ? (
+              <div className="space-y-2">
+                <textarea
+                  autoFocus
+                  rows={8}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm"
+                  placeholder="Markdown destekli…"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <button onClick={saveDescription} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Kaydet</button>
+                  <button onClick={() => { setDescription(c.description ?? ''); setEditingDesc(false) }} className="text-sm text-slate-600">Vazgeç</button>
+                </div>
+              </div>
+            ) : (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setEditingDesc(true)}
+                onKeyDown={(e) => e.key === 'Enter' && setEditingDesc(true)}
+                className="min-h-14 cursor-text rounded-md border border-transparent bg-slate-50 px-3 py-2 text-[15px] hover:border-slate-200 [&_a]:text-blue-700 [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc"
+              >
+                {c.description ? <Markdown>{c.description}</Markdown> : <span className="text-slate-500">Açıklama eklemek için tıkla</span>}
+              </div>
+            )}
+          </div>
+
+          {/* Checklist */}
+          <div className={section}>
+            <h3 className={sectionTitle}>
+              Yapılacaklar {c.checklist_total > 0 && <span className="font-normal text-slate-500 tabular-nums">{c.checklist_done}/{c.checklist_total}</span>}
+            </h3>
+            {c.checklist_total > 0 && (
+              <div className="mb-2 h-1.5 rounded-full bg-slate-200" aria-hidden>
+                <div className="h-1.5 rounded-full bg-green-700" style={{ width: `${(c.checklist_done / c.checklist_total) * 100}%` }} />
+              </div>
+            )}
+            <ul className="space-y-1">
+              {c.checklist.map((i) => (
+                <li key={i.id} className="group flex items-center gap-2 text-[15px]">
+                  <input type="checkbox" checked={i.is_done} onChange={() => m.updateItem.mutate({ id: i.id, is_done: !i.is_done })} aria-label={i.text} />
+                  <span className={`flex-1 ${i.is_done ? 'text-slate-500 line-through' : ''}`}>{i.text}</span>
+                  <button onClick={() => m.deleteItem.mutate(i.id)} className="rounded p-0.5 text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-700" aria-label={`${i.text} maddesini sil`}>
+                    <X size={14} aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <form onSubmit={addItem} className="mt-2">
+              <input className={input} placeholder="Madde ekle ve Enter'a bas" maxLength={500} value={item} onChange={(e) => setItem(e.target.value)} />
+            </form>
+          </div>
+
+          {/* Alt kartlar */}
+          <div className={section}>
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <h3 className="text-[15px] font-semibold text-slate-900">
+                Alt kartlar{' '}
+                {c.subtask_total > 0 && (
+                  <span className="font-normal text-slate-500 tabular-nums">
+                    {c.subtask_done}/{c.subtask_total}
+                    {c.subtask_estimated_minutes > 0 && `, toplam ${hours(c.subtask_estimated_minutes)} saat`}
+                  </span>
+                )}
+              </h3>
+              <button onClick={() => setSplitOpen((o) => !o)} aria-expanded={splitOpen} className="text-[13px] text-blue-700 hover:underline">
+                Parçalara böl
+              </button>
+            </div>
+            {splitOpen && (
+              <form onSubmit={submitSplit} className="mb-3 flex flex-wrap items-end gap-3 rounded-md border border-dashed border-slate-300 p-3 text-sm">
+                <label className="space-y-1">
+                  <span className={fieldLabel}>Parça sayısı</span>
+                  <input type="number" min={1} max={50} required className="w-20 rounded border border-slate-300 px-2 py-1" value={splitParts} onChange={(e) => setSplitParts(e.target.value)} />
+                </label>
+                <label className="space-y-1">
+                  <span className={fieldLabel}>Toplam süre (saat)</span>
+                  <input inputMode="decimal" className="w-24 rounded border border-slate-300 px-2 py-1" placeholder={c.estimated_minutes ? String(hours(c.estimated_minutes)) : 'ör. 20'} value={splitHours} onChange={(e) => setSplitHours(e.target.value)} />
+                </label>
+                <label className="flex items-center gap-1.5 pb-1">
+                  <input type="checkbox" checked={splitChain} onChange={(e) => setSplitChain(e.target.checked)} />
+                  Sırayla bağla
+                </label>
+                <button disabled={m.split.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-white disabled:opacity-50">Böl</button>
+                {m.split.error && <span className="text-red-700">{m.split.error.message}</span>}
+              </form>
+            )}
+            <ul className="divide-y divide-slate-100">
+              {c.subtasks.map((st) => (
+                <li key={st.id} className="flex items-center gap-2 py-1 text-[15px]">
+                  <StatusMark status={st.status} blocked={st.blocked} />
+                  <button onClick={() => onOpenCard(st.id)} className={`flex-1 text-left hover:underline ${st.status === 'completed' ? 'text-slate-500 line-through' : ''}`}>
+                    {st.title}
+                  </button>
+                  {st.estimated_minutes != null && <span className="text-[13px] text-slate-500 tabular-nums">{st.estimated_minutes} dk</span>}
+                </li>
+              ))}
+            </ul>
+            <form onSubmit={addSubtask} className="mt-2">
+              <input className={input} placeholder="Alt kart ekle ve Enter'a bas" maxLength={200} value={subtask} onChange={(e) => setSubtask(e.target.value)} />
+            </form>
+          </div>
+
+          {/* Notlar */}
+          <div className={section}>
+            <h3 className={sectionTitle}>Notlar</h3>
+            <form onSubmit={addNote} className="space-y-2">
+              <textarea
+                rows={2}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-[15px]"
+                placeholder="Not ekle (Ctrl+Enter ile kaydet)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && e.ctrlKey && addNote(e)}
+              />
+              {note.trim() && <button className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Notu kaydet</button>}
+            </form>
+            <ul className="mt-3 space-y-3">
+              {c.notes.map((n) => (
+                <li key={n.id} className="group border-l-2 border-slate-300 pl-3 text-[15px]">
+                  <div className="mb-0.5 flex justify-between text-[12px] text-slate-500">
+                    <span>{formatDateTime(n.created_at)}</span>
+                    <button onClick={() => m.deleteNote.mutate(n.id)} className="opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-700">Sil</button>
+                  </div>
+                  <div className="[&_li]:ml-4 [&_ul]:list-disc"><Markdown>{n.content}</Markdown></div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Gecmis */}
+          <div className={section}>
+            <button onClick={() => setShowHistory((s) => !s)} aria-expanded={showHistory} className="text-[14px] text-slate-600 hover:underline">
+              {showHistory ? 'Geçmişi gizle' : 'Geçmişi göster'}
+            </button>
+            {showHistory && (
+              <ul className="mt-2 space-y-1 text-[13px] text-slate-600">
+                {activity.data?.map((a) => (
+                  <li key={a.id} className="flex gap-3">
+                    <span className="shrink-0 text-slate-500 tabular-nums">{formatDateTime(a.occurred_at)}</span>
+                    <span>
+                      {a.entity_type === 'note' ? 'not eklendi' : ACTION_LABEL[a.action] ?? a.action}
+                      {a.actor !== 'user' && ` (${a.actor === 'ai' ? 'asistan' : a.actor})`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Aciklama */}
-      <div className={section}>
-        <h3 className={sectionTitle}>Açıklama</h3>
-        {editingDesc ? (
-          <div className="space-y-2">
-            <textarea
-              autoFocus
-              rows={8}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm"
-              placeholder="Markdown destekli…"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <button onClick={saveDescription} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Kaydet</button>
-              <button onClick={() => { setDescription(c.description ?? ''); setEditingDesc(false) }} className="text-sm text-slate-500">Vazgeç</button>
+        {/* ---------- sag: kunye ---------- */}
+        <aside className="min-w-0 lg:border-l lg:border-slate-200 lg:pl-6">
+          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-1">
+            <label className="space-y-1">
+              <span className={fieldLabel}>Öncelik</span>
+              <select className={input} value={c.priority} onChange={(e) => m.update.mutate({ priority: e.target.value as TaskPriority })}>
+                {(Object.keys(PRIORITY_LABEL) as TaskPriority[]).map((p) => (
+                  <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className={fieldLabel}>Son tarih</span>
+              <input type="date" className={input} value={toDateInput(c.due_date)} onChange={(e) => m.update.mutate({ due_date: fromDateInput(e.target.value) })} />
+            </label>
+            <label className="space-y-1">
+              <span className={fieldLabel}>Tahmini süre (dakika)</span>
+              <input
+                type="number"
+                min={0}
+                className={input}
+                defaultValue={c.estimated_minutes ?? ''}
+                key={c.estimated_minutes ?? 'empty'}
+                onBlur={(e) => {
+                  const v = e.target.value === '' ? null : Number(e.target.value)
+                  if (v !== c.estimated_minutes) m.update.mutate({ estimated_minutes: v })
+                }}
+              />
+            </label>
+            <div className="col-span-2 space-y-1 lg:col-span-1">
+              <RecurrencePicker
+                key={`${c.id}-${c.recurrence_rule ?? ''}`}
+                value={c.recurrence_rule}
+                onChange={(rule) => rule !== c.recurrence_rule && m.recurrence.mutate(rule)}
+                startDay={dayCodeOf(c.due_date ? new Date(c.due_date) : new Date())}
+                inputClass={input}
+              />
+              {c.series_id != null && (
+                <p className="text-[13px] text-slate-600">
+                  Serinin {c.series_index}. kartı; seri {c.series_done_count} kez tamamlandı.
+                  {c.recurrence_rule &&
+                    (c.status === 'completed' ? ' Sıradaki kart açıldı.' : ' Bitince sıradaki kart kendiliğinden açılır.')}
+                </p>
+              )}
+              {m.recurrence.error && <p className="text-[13px] text-red-700">{m.recurrence.error.message}</p>}
+            </div>
+            <div className="space-y-1">
+              <span className={fieldLabel}>Etiketler</span>
+              <div className="flex flex-wrap gap-1">
+                {board.labels.length === 0 && <span className="text-[13px] text-slate-500">Board ayarlarından eklenir</span>}
+                {board.labels.map((l) => {
+                  const on = c.label_ids.includes(l.id)
+                  return (
+                    <button
+                      key={l.id}
+                      aria-pressed={on}
+                      onClick={() => toggleLabel(l.id)}
+                      className={`rounded px-2 py-0.5 text-[13px] ${on ? 'text-white' : 'text-slate-700 ring-1 ring-slate-300'}`}
+                      style={on ? { backgroundColor: l.color } : undefined}
+                    >
+                      {l.name}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
-        ) : (
-          <div
-            onClick={() => setEditingDesc(true)}
-            className="prose-sm min-h-12 cursor-text rounded-md bg-slate-50 px-3 py-2 text-sm hover:bg-slate-100 [&_a]:text-blue-600 [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc"
-          >
-            {c.description ? <Markdown>{c.description}</Markdown> : <span className="text-slate-400">Açıklama eklemek için tıkla…</span>}
-          </div>
-        )}
-      </div>
 
-      {/* Checklist */}
-      <div className={section}>
-        <h3 className={sectionTitle}>
-          Checklist {c.checklist_total > 0 && <span className="font-normal text-slate-400">({c.checklist_done}/{c.checklist_total})</span>}
-        </h3>
-        {c.checklist_total > 0 && (
-          <div className="mb-2 h-1.5 rounded-full bg-slate-200">
-            <div className="h-1.5 rounded-full bg-green-500" style={{ width: `${(c.checklist_done / c.checklist_total) * 100}%` }} />
-          </div>
-        )}
-        <ul className="space-y-1">
-          {c.checklist.map((i) => (
-            <li key={i.id} className="group flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={i.is_done} onChange={() => m.updateItem.mutate({ id: i.id, is_done: !i.is_done })} />
-              <span className={`flex-1 ${i.is_done ? 'text-slate-400 line-through' : ''}`}>{i.text}</span>
-              <button onClick={() => m.deleteItem.mutate(i.id)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-600" aria-label="Sil">×</button>
-            </li>
-          ))}
-        </ul>
-        <form onSubmit={addItem} className="mt-2">
-          <input className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm" placeholder="+ Madde ekle" maxLength={500} value={item} onChange={(e) => setItem(e.target.value)} />
-        </form>
-      </div>
+          <CardTime card={c} />
 
-      <CardTime card={c} />
+          <CardSchedule cardId={c.id} estimatedMinutes={c.estimated_minutes} />
 
-      <CardSchedule cardId={c.id} estimatedMinutes={c.estimated_minutes} />
-
-      {/* Alt kartlar */}
-      <div className={section}>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-slate-700">
-            Alt kartlar{' '}
-            {c.subtask_total > 0 && (
-              <span className="font-normal text-slate-400">
-                ({c.subtask_done}/{c.subtask_total}
-                {c.subtask_estimated_minutes > 0 && ` · ${hours(c.subtask_estimated_minutes)} saat`})
-              </span>
+          {/* Bagimliliklar */}
+          <div className={section}>
+            <h3 className={sectionTitle}>Önce bitmesi gerekenler</h3>
+            {c.blocked && (
+              <p className="-mt-1 mb-2 inline-flex items-center gap-1 text-[13px] text-amber-800">
+                <Hourglass size={13} aria-hidden /> Bu kart bekliyor
+              </p>
             )}
-          </h3>
-          <button onClick={() => setSplitOpen((o) => !o)} className="text-xs text-blue-600 hover:underline">
-            Parçalara böl
-          </button>
-        </div>
-        {splitOpen && (
-          <form onSubmit={submitSplit} className="mb-3 flex flex-wrap items-end gap-3 rounded-md bg-slate-50 p-3 text-sm">
-            <label className="space-y-1">
-              <span className="block text-xs text-slate-500">Parça sayısı</span>
-              <input type="number" min={1} max={50} required className="w-20 rounded border border-slate-300 px-2 py-1" value={splitParts} onChange={(e) => setSplitParts(e.target.value)} />
-            </label>
-            <label className="space-y-1">
-              <span className="block text-xs text-slate-500">Toplam süre (saat)</span>
-              <input inputMode="decimal" className="w-24 rounded border border-slate-300 px-2 py-1" placeholder={c.estimated_minutes ? String(hours(c.estimated_minutes)) : 'ör. 20'} value={splitHours} onChange={(e) => setSplitHours(e.target.value)} />
-            </label>
-            <label className="flex items-center gap-1.5 pb-1">
-              <input type="checkbox" checked={splitChain} onChange={(e) => setSplitChain(e.target.checked)} />
-              Sırayla bağla
-            </label>
-            <button disabled={m.split.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-white disabled:opacity-50">Böl</button>
-            {m.split.error && <span className="text-red-600">{m.split.error.message}</span>}
-          </form>
-        )}
-        <ul className="space-y-1">
-          {c.subtasks.map((st) => (
-            <li key={st.id} className="flex items-center gap-2 text-sm">
-              <span className={st.status === 'completed' ? 'text-green-600' : st.blocked ? 'text-amber-500' : 'text-slate-300'}>
-                {st.status === 'completed' ? '✓' : st.blocked ? '⛓' : '○'}
-              </span>
-              <button onClick={() => onOpenCard(st.id)} className={`flex-1 text-left hover:underline ${st.status === 'completed' ? 'text-slate-400 line-through' : ''}`}>
-                {st.title}
-              </button>
-              {st.estimated_minutes != null && <span className="text-xs text-slate-400">{st.estimated_minutes} dk</span>}
-            </li>
-          ))}
-        </ul>
-        <form onSubmit={addSubtask} className="mt-2">
-          <input className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm" placeholder="+ Alt kart ekle" maxLength={200} value={subtask} onChange={(e) => setSubtask(e.target.value)} />
-        </form>
-      </div>
-
-      {/* Bagimliliklar */}
-      <div className={section}>
-        <h3 className={sectionTitle}>
-          Önce bitmesi gerekenler{' '}
-          {c.blocked && <span className="font-normal text-amber-600">· bu kart bekliyor</span>}
-        </h3>
-        <ul className="space-y-1 text-sm">
-          {c.depends_on.map((d) => (
-            <li key={d.id} className="group flex items-center gap-2">
-              <span className={d.status === 'completed' ? 'text-green-600' : 'text-amber-500'}>
-                {d.status === 'completed' ? '✓' : '⛓'}
-              </span>
-              <button onClick={() => onOpenCard(d.id)} className="flex-1 text-left hover:underline">{d.title}</button>
-              <button onClick={() => m.removeDependency.mutate(d.id)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-600" aria-label="Bağı kaldır">×</button>
-            </li>
-          ))}
-        </ul>
-        {depCandidates.length > 0 && (
-          <div className="mt-2 flex gap-2">
-            <select className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm" value={depChoice} onChange={(e) => setDepChoice(e.target.value)}>
-              <option value="">Ön koşul seç…</option>
-              {depCandidates.map((x) => (
-                <option key={x.id} value={x.id}>{x.title}</option>
+            <ul className="space-y-1 text-[14px]">
+              {c.depends_on.map((d) => (
+                <li key={d.id} className="group flex items-center gap-2">
+                  <StatusMark status={d.status} blocked={d.status !== 'completed'} />
+                  <button onClick={() => onOpenCard(d.id)} className="flex-1 text-left hover:underline">{d.title}</button>
+                  <button onClick={() => m.removeDependency.mutate(d.id)} className="rounded p-0.5 text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-700" aria-label={`${d.title} bağını kaldır`}>
+                    <X size={14} aria-hidden />
+                  </button>
+                </li>
               ))}
-            </select>
+            </ul>
+            {depCandidates.length > 0 && (
+              <div className="mt-2 flex gap-2">
+                <select className={`${input} min-w-0 flex-1`} value={depChoice} onChange={(e) => setDepChoice(e.target.value)} aria-label="Ön koşul seç">
+                  <option value="">Ön koşul seç</option>
+                  {depCandidates.map((x) => (
+                    <option key={x.id} value={x.id}>{x.title}</option>
+                  ))}
+                </select>
+                <button
+                  disabled={!depChoice}
+                  onClick={() => m.addDependency.mutate(Number(depChoice), { onSuccess: () => setDepChoice('') })}
+                  className="rounded-md border border-slate-300 px-3 text-sm disabled:opacity-40"
+                >
+                  Bağla
+                </button>
+              </div>
+            )}
+            {m.addDependency.error && <p className="mt-1 text-sm text-red-700">{m.addDependency.error.message}</p>}
+            {c.dependents.length > 0 && (
+              <p className="mt-2 text-[13px] text-slate-600">
+                Bu kartı bekleyenler:{' '}
+                {c.dependents.map((d, i) => (
+                  <span key={d.id}>
+                    {i > 0 && ', '}
+                    <button onClick={() => onOpenCard(d.id)} className="hover:underline">{d.title}</button>
+                  </span>
+                ))}
+              </p>
+            )}
+          </div>
+
+          {/* Eylemler */}
+          <div className="mt-8 flex justify-between border-t border-slate-200 pt-4 text-sm">
+            <button onClick={() => m.update.mutate({ is_archived: true }, { onSuccess: onClose })} className="text-slate-700 hover:underline">
+              Arşivle
+            </button>
             <button
-              disabled={!depChoice}
-              onClick={() => m.addDependency.mutate(Number(depChoice), { onSuccess: () => setDepChoice('') })}
-              className="rounded-md bg-slate-200 px-3 py-1 text-sm disabled:opacity-50"
+              onClick={() => confirm('Kart kalıcı olarak silinsin mi?') && m.remove.mutate(undefined, { onSuccess: onClose })}
+              className="text-red-700 hover:underline"
             >
-              Bağla
+              Kalıcı olarak sil
             </button>
           </div>
-        )}
-        {m.addDependency.error && <p className="mt-1 text-sm text-red-600">{m.addDependency.error.message}</p>}
-        {c.dependents.length > 0 && (
-          <p className="mt-2 text-xs text-slate-500">
-            Bu kartı bekleyenler:{' '}
-            {c.dependents.map((d, i) => (
-              <span key={d.id}>
-                {i > 0 && ', '}
-                <button onClick={() => onOpenCard(d.id)} className="hover:underline">{d.title}</button>
-              </span>
-            ))}
-          </p>
-        )}
+          {m.update.error && <p className="mt-2 text-sm text-red-700">{m.update.error.message}</p>}
+        </aside>
       </div>
-
-      {/* Notlar */}
-      <div className={section}>
-        <h3 className={sectionTitle}>Notlar</h3>
-        <form onSubmit={addNote} className="space-y-2">
-          <textarea
-            rows={2}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Not ekle… (Ctrl+Enter ile kaydet)"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && e.ctrlKey && addNote(e)}
-          />
-          {note.trim() && <button className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Kaydet</button>}
-        </form>
-        <ul className="mt-3 space-y-3">
-          {c.notes.map((n) => (
-            <li key={n.id} className="group rounded-md bg-slate-50 px-3 py-2 text-sm">
-              <div className="mb-1 flex justify-between text-xs text-slate-400">
-                <span>{formatDateTime(n.created_at)}</span>
-                <button onClick={() => m.deleteNote.mutate(n.id)} className="opacity-0 group-hover:opacity-100 hover:text-red-600">Sil</button>
-              </div>
-              <div className="[&_li]:ml-4 [&_ul]:list-disc"><Markdown>{n.content}</Markdown></div>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Gecmis */}
-      <div className={section}>
-        <button onClick={() => setShowHistory((s) => !s)} className="text-sm text-slate-500 hover:underline">
-          {showHistory ? 'Geçmişi gizle' : 'Geçmişi göster'}
-        </button>
-        {showHistory && (
-          <ul className="mt-2 space-y-1 text-xs text-slate-500">
-            {activity.data?.map((a) => (
-              <li key={a.id}>
-                <span className="text-slate-400">{formatDateTime(a.occurred_at)}</span> ·{' '}
-                {a.entity_type === 'note' ? 'not eklendi' : ACTION_LABEL[a.action] ?? a.action}
-                {a.actor !== 'user' && ` (${a.actor})`}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Eylemler */}
-      <div className="mt-6 flex justify-between border-t border-slate-200 pt-4 text-sm">
-        <button onClick={() => m.update.mutate({ is_archived: true }, { onSuccess: onClose })} className="text-slate-600 hover:underline">
-          Arşivle
-        </button>
-        <button
-          onClick={() => confirm('Kart kalıcı olarak silinsin mi?') && m.remove.mutate(undefined, { onSuccess: onClose })}
-          className="text-red-600 hover:underline"
-        >
-          Sil
-        </button>
-      </div>
-      {m.update.error && <p className="mt-2 text-sm text-red-600">{m.update.error.message}</p>}
     </Modal>
   )
 }

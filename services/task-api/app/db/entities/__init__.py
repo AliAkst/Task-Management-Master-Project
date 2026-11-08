@@ -14,6 +14,8 @@ from .card_content import (
 )
 from .day_plan import DayPlanEntity, DayPlanItemEntity
 from .event import EventEntity
+from .goal import GoalEntity
+from .series import CardSeriesEntity
 from .task import TaskEntity
 from .time_session import TimeSessionEntity
 from .user import UserEntity
@@ -26,12 +28,14 @@ __all__ = [
     "BoardListEntity",
     "BoardPrivacy",
     "CardDependencyEntity",
+    "CardSeriesEntity",
     "CardLabelEntity",
     "CardNoteEntity",
     "ChecklistItemEntity",
     "DayPlanEntity",
     "DayPlanItemEntity",
     "EventEntity",
+    "GoalEntity",
     "LabelEntity",
     "TaskEntity",
     "TimeSessionEntity",

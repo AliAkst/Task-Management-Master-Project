@@ -6,6 +6,12 @@ from app.db.entities.board import BoardPrivacy
 from app.models.card import CardSummary
 
 HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
+MODEL_ID = r"^[a-z_]+:[\w.\-:/@]{1,150}$"
+LOCAL_MODEL_PREFIX = "ollama:"
+
+
+def is_local_model(model_id: str | None) -> bool:
+    return model_id is None or model_id.startswith(LOCAL_MODEL_PREFIX)
 
 
 # ---------------- Board ----------------
@@ -16,6 +22,7 @@ class BoardCreate(BaseModel):
     icon: str | None = Field(None, max_length=50)
     weekly_time_budget_min: int | None = Field(None, ge=0, le=10080)
     privacy: BoardPrivacy = BoardPrivacy.CLOUD_ALLOWED
+    default_model_id: str | None = Field(None, pattern=MODEL_ID)
     # Bos birakilirsa varsayilan listeler: Yapilacak, Yapiliyor, Tamamlandi
     lists: list[str] | None = Field(None, max_length=20)
 
@@ -27,6 +34,7 @@ class BoardUpdate(BaseModel):
     icon: str | None = Field(None, max_length=50)
     weekly_time_budget_min: int | None = Field(None, ge=0, le=10080)
     privacy: BoardPrivacy | None = None
+    default_model_id: str | None = Field(None, pattern=MODEL_ID)
     is_archived: bool | None = None
     position: float | None = None
 
@@ -42,6 +50,7 @@ class BoardResponse(BaseModel):
     position: float
     weekly_time_budget_min: int | None
     privacy: BoardPrivacy
+    default_model_id: str | None = None
     is_archived: bool
     created_at: datetime
     updated_at: datetime

@@ -20,6 +20,7 @@ from app.core.logging import get_logger
 from app.db.entities import (
     BoardListEntity,
     CardNoteEntity,
+    CardSeriesEntity,
     ChecklistItemEntity,
     TaskEntity,
 )
@@ -28,6 +29,7 @@ from app.models.card import (
     ActivityResponse,
     CardCreate,
     CardDetail,
+    CardRecurrence,
     CardRef,
     CardSummary,
     CardUpdate,
@@ -42,6 +44,8 @@ from app.models.task import TaskStatus
 from app.services.activity import ActivityLogger, diff
 from app.services.board import BoardService
 from app.services.ordering import STEP, place_at
+from app.services.recurrence import next_occurrence, normalize_rule
+from app.services.timeutil import user_tz
 
 logger = get_logger(__name__)
 
@@ -104,6 +108,7 @@ class CardService:
         )
         if event == "card.completed":
             await self.graph.handle_completion(user_id, card)
+            await self.recur(user_id, card)
 
     async def summaries(self, cards: list[TaskEntity]) -> list[CardSummary]:
         ids = [c.id for c in cards]
@@ -121,6 +126,11 @@ class CardService:
         for card_id, dep_id in edges:
             if prereq_status.get(dep_id, TaskStatus.COMPLETED) != TaskStatus.COMPLETED:
                 open_prereqs[card_id] = open_prereqs.get(card_id, 0) + 1
+
+        # Seriler (tekrarlayan isler)
+        series_ids = list({c.series_id for c in cards if c.series_id is not None})
+        series = {s.id: s for s in await self.uow.series.get_many(series_ids)}
+        series_done = await self.uow.series.done_counts(series_ids)
 
         # Alt kart roll-up
         rollup: dict[int, list[int]] = {}  # parent -> [toplam, biten, dakika]
@@ -160,6 +170,12 @@ class CardService:
                         "subtask_total": sub_total,
                         "subtask_done": sub_done,
                         "subtask_estimated_minutes": sub_minutes,
+                        "recurrence_rule": series[c.series_id].recurrence_rule
+                        if c.series_id in series and series[c.series_id].is_active
+                        else None,
+                        "series_done_count": series_done.get(c.series_id, 0)  # type: ignore[arg-type]
+                        if c.series_id is not None
+                        else 0,
                     }
                 )
             )
@@ -317,6 +333,145 @@ class CardService:
         await self._after_change(user_id, event, card)
         return await self.get_detail(card.id, user_id)
 
+    # ---------------- tekrar (Faz 6c) ----------------
+    async def set_recurrence(
+        self, card_id: int, user_id: int, data: CardRecurrence
+    ) -> CardDetail:
+        """Karti tekrarlayan yapar / kurali degistirir / tekrari durdurur."""
+        card = await self.get_owned_card(card_id, user_id)
+        rule = normalize_rule(data.rule)
+        series = (
+            await self.uow.series.get_by_id(card.series_id) if card.series_id else None
+        )
+        if rule is None:
+            if series is not None and series.is_active:
+                series.is_active = False
+                await self.activity.log(
+                    user_id,
+                    "card",
+                    card.id,
+                    "recurrence_stopped",
+                    board_id=card.board_id,
+                    card_id=card.id,
+                    changes={"series_id": series.id},
+                )
+        else:
+            if series is None:
+                series = CardSeriesEntity(
+                    user_id=user_id,
+                    board_id=card.board_id,
+                    title=card.title,
+                    recurrence_rule=rule,
+                )
+                await self.uow.series.create(series)
+                await self.uow.flush()
+                card.series_id = series.id
+                card.series_index = 1
+            series.recurrence_rule = rule
+            series.is_active = True
+            await self.activity.log(
+                user_id,
+                "card",
+                card.id,
+                "recurrence_set",
+                board_id=card.board_id,
+                card_id=card.id,
+                changes={"series_id": series.id, "rule": rule},
+            )
+        await self.uow.commit()
+        # Zaten tamamlanmis bir karta kural verildiyse siradaki hemen acilir
+        if rule is not None and card.status == TaskStatus.COMPLETED:
+            await self.recur(user_id, card)
+        return await self.get_detail(card.id, user_id)
+
+    async def recur(self, user_id: int, card: TaskEntity) -> TaskEntity | None:
+        """
+        Tamamlanan seri kartinin siradakini acar (bir kez: kart yeniden acilip
+        tamamlansa da ikinci kopya olusmaz). Son tarih: kuralin, eski son
+        tarihin saatini koruyan ve simdiden sonraki ilk tekrari.
+        """
+        if card.series_id is None or card.is_archived:
+            return None
+        series = await self.uow.series.get_by_id(card.series_id)
+        if series is None or not series.is_active:
+            return None
+        index = (card.series_index or 1) + 1
+        if await self.uow.series.has_index(series.id, index):
+            return None
+        tz = await user_tz(self.uow, user_id)
+        now = datetime.now(UTC)
+        base = card.due_date or card.completed_at or now
+        after = max(base, now)
+        due = next_occurrence(series.recurrence_rule, base, after, tz)
+        if due is None:  # kural bitti (UNTIL / COUNT)
+            series.is_active = False
+            await self.uow.commit()
+            return None
+        lists = (
+            await self.uow.lists.list_for_board(card.board_id) if card.board_id else []
+        )
+        target = next((lst for lst in lists if not lst.is_done_list), None)
+        if target is None:
+            return None
+        nxt = TaskEntity(
+            user_id=user_id,
+            board_id=target.board_id,
+            list_id=target.id,
+            position=await self.uow.tasks.max_position_in_list(target.id) + STEP,
+            status=TaskStatus.PENDING,
+            title=card.title,
+            description=card.description,
+            priority=card.priority,
+            estimated_minutes=card.estimated_minutes,
+            due_date=due,
+            parent_id=card.parent_id,
+            series_id=series.id,
+            series_index=index,
+            created_by=self.actor,
+        )
+        await self.uow.tasks.create(nxt)
+        await self.uow.flush()
+        labels = await self.uow.card_labels.label_ids_for_cards([card.id])
+        await self.uow.card_labels.set_for_card(nxt.id, labels.get(card.id, []))
+        for item in await self.uow.checklist.list_for_card(card.id):
+            await self.uow.checklist.create(
+                ChecklistItemEntity(
+                    user_id=user_id,
+                    card_id=nxt.id,
+                    text=item.text,
+                    is_done=False,
+                    position=item.position,
+                )
+            )
+        await self.activity.log(
+            user_id,
+            "card",
+            nxt.id,
+            "created",
+            board_id=nxt.board_id,
+            card_id=nxt.id,
+            changes={
+                "title": nxt.title,
+                "recurred_from": card.id,
+                "series_id": series.id,
+                "series_index": index,
+                "due_date": due,
+            },
+        )
+        await self.uow.commit()
+        await redis_cache.delete_pattern(get_task_user_pattern(user_id))
+        await domain_event_publisher.publish(
+            "card.created",
+            {
+                "card_id": nxt.id,
+                "user_id": user_id,
+                "board_id": nxt.board_id,
+                "series_id": series.id,
+                "actor": self.actor,
+            },
+        )
+        return nxt
+
     async def _apply_status(self, card: TaskEntity, status: TaskStatus) -> None:
         """status alanini degistirir; gerekirse karti done/normal listeye tasir."""
         lists = (
@@ -390,6 +545,9 @@ class CardService:
         await self.uow.checklist.delete_for_card(card.id)
         await self.uow.dependencies.delete_for_card(card.id)
         await self.uow.day_plan_items.detach_card(card.id)
+        from app.services.goal import detach_goals
+
+        await detach_goals(self.uow.session, card_id=card.id)
         await self.uow.events.delete_for_card(card.id)
         await self.uow.time_sessions.detach_card(card.id)
         await self.uow.tasks.detach_children(card.id)

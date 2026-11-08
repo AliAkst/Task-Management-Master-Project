@@ -25,6 +25,7 @@ from app.db.entities.day_plan import (
 )
 from app.db.unit_of_work import TaskUnitOfWork
 from app.models.day_plan import (
+    AiSummaryInput,
     DayPlanItemResponse,
     DayPlanResponse,
     DayPlanSave,
@@ -35,6 +36,7 @@ from app.models.day_plan import (
 from app.models.task import TaskStatus
 from app.services.activity import ActivityLogger
 from app.services.ordering import STEP
+from app.services.recurrence import events_in_range, occurrences
 from app.services.timeutil import day_bounds, local_today, session_span, user_tz
 
 OUTCOME_ACTION = {
@@ -43,6 +45,9 @@ OUTCOME_ACTION = {
     ItemOutcome.NOT_DONE: "skipped",
     ItemOutcome.PARTIAL: "partially_done",
 }
+
+
+UNBLOCK_WINDOW = timedelta(days=14)
 
 
 def _now() -> datetime:
@@ -117,6 +122,7 @@ class DayPlanService:
             reflection=plan.reflection,
             planned_at=plan.planned_at,
             reviewed_at=plan.reviewed_at,
+            ai_summary=plan.ai_summary,
             tracked_today_sec=total_today,
             items=[
                 DayPlanItemResponse.model_validate(i).model_copy(
@@ -174,14 +180,14 @@ class DayPlanService:
             result.append(s)
 
         # 1) O gunun takvim bloklari / etkinlikleri
-        events = await self.uow.events.in_range(user_id, start, end)
+        events = await events_in_range(self.uow, user_id, start, end, tz)
         event_cards = {
             c.id: c
             for c in await self.uow.tasks.get_many(
-                [e.card_id for e in events if e.card_id is not None]
+                [e.card_id for e, _, _ in events if e.card_id is not None]
             )
         }
-        for e in events:
+        for e, occ_start, occ_end in events:
             card = event_cards.get(e.card_id) if e.card_id is not None else None
             if card is not None and card.status == TaskStatus.COMPLETED:
                 continue
@@ -192,10 +198,10 @@ class DayPlanService:
                     event_id=e.id,
                     title=e.title,
                     board_id=card.board_id if card else e.board_id,
-                    planned_start=None if e.all_day else e.start_at,
+                    planned_start=None if e.all_day else occ_start,
                     planned_minutes=None
                     if e.all_day
-                    else int((e.end_at - e.start_at).total_seconds() // 60),
+                    else int((occ_end - occ_start).total_seconds() // 60),
                 )
             )
 
@@ -233,6 +239,9 @@ class DayPlanService:
             and not any(ch.parent_id == c.id for ch in cards)  # parcalanmis ana kart
         ]
         blocked = await self._blocked_ids([c.id for c in open_cards])
+        recently_unblocked = await self._recently_unblocked(
+            [c.id for c in open_cards if c.id not in blocked], start
+        )
         for c in sorted(open_cards, key=lambda c: c.due_date or end):
             if c.due_date is not None and start <= c.due_date < end:
                 kind = "due"
@@ -240,6 +249,8 @@ class DayPlanService:
                 kind = "overdue"
             elif c.status == TaskStatus.IN_PROGRESS:
                 kind = "in_progress"
+            elif c.id in recently_unblocked:
+                kind = "next_in_chain"  # zincirde onceki is bitti, sira bunda
             else:
                 continue
             add(
@@ -281,6 +292,32 @@ class DayPlanService:
                 s.tracked_sec = tracked.get(s.card_id, 0)
         return DaySuggestions(date=day, items=result)
 
+    async def _recently_unblocked(
+        self, card_ids: list[int], start: datetime
+    ) -> set[int]:
+        """
+        On kosullarinin hepsi bitmis ve sonuncusu son UNBLOCK_WINDOW icinde
+        bitmis kartlar: zincirde "siradaki" is (orn. 9 parcalik egitimin 2. parcasi).
+        """
+        edges = [
+            (c, d)
+            for c, d in await self.uow.dependencies.edges_touching(card_ids)
+            if c in card_ids
+        ]
+        if not edges:
+            return set()
+        prereqs = {
+            t.id: t for t in await self.uow.tasks.get_many(list({d for _, d in edges}))
+        }
+        latest: dict[int, datetime] = {}
+        for c, d in edges:
+            p = prereqs.get(d)
+            if p is None or p.completed_at is None:
+                continue
+            if c not in latest or p.completed_at > latest[c]:
+                latest[c] = p.completed_at
+        return {c for c, t in latest.items() if t >= start - UNBLOCK_WINDOW}
+
     async def _blocked_ids(self, card_ids: list[int]) -> set[int]:
         edges = await self.uow.dependencies.edges_touching(card_ids)
         prereqs = {
@@ -321,6 +358,8 @@ class DayPlanService:
             if item.was_planned:
                 await self.uow.day_plan_items.delete(item)
 
+        tz = await user_tz(self.uow, user_id)
+        bounds = day_bounds(day, tz)
         newly_planned: list[TaskEntity] = []
         for idx, (it, (card, event)) in enumerate(
             zip(data.items, resolved, strict=True), start=1
@@ -331,6 +370,17 @@ class DayPlanService:
             if minutes is None and card is not None:
                 minutes = card.estimated_minutes
 
+            planned_start = event.start_at if event and not event.all_day else None
+            if event is not None and event.recurrence_rule and planned_start:
+                # Tekrarlayan etkinlik: o gunku tekrarin saati
+                occ = occurrences(
+                    event.recurrence_rule,
+                    event.start_at,
+                    event.end_at - event.start_at,
+                    bounds,
+                    tz,
+                )
+                planned_start = occ[0][0] if occ else None
             await self.uow.day_plan_items.create(
                 DayPlanItemEntity(
                     user_id=user_id,
@@ -344,9 +394,7 @@ class DayPlanService:
                     if card
                     else (event.board_id if event else None),
                     was_planned=True,
-                    planned_start=event.start_at
-                    if event and not event.all_day
-                    else None,
+                    planned_start=planned_start,
                     planned_minutes=minutes,
                     position=idx * STEP,
                 )
@@ -378,6 +426,17 @@ class DayPlanService:
             raise NotFoundException("DayPlanItem", item_id)
         await self.uow.day_plan_items.delete(item)
         await self.uow.commit()
+
+    async def set_ai_summary(
+        self, user_id: int, day: date, data: AiSummaryInput
+    ) -> DayPlanResponse:
+        """Asistanin gun ozeti. Plan maddelerine dokunmaz; degerlendirilmis
+        gunde de yazilabilir (ozet zaten degerlendirmeden sonra uretilir)."""
+        plan = await self._get_or_create(user_id, day)
+        text = (data.ai_summary or "").strip()
+        plan.ai_summary = text or None
+        await self.uow.commit()
+        return await self.get(user_id, day)
 
     # ---------------- degerlendirme ----------------
     async def review(self, user_id: int, day: date, data: DayReview) -> DayPlanResponse:
