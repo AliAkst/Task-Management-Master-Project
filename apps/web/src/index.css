@@ -31,8 +31,62 @@
   /* Kayit kirmizisi: sadece calisan kronometre */
   --color-rec: #d93a4a;
 
+  /* Yuzey / koyu dugme ustu yazi (8g'de dark mode'da degisir) */
+  --color-surface: #ffffff;
+  --color-on-ink: #ffffff;
+
   --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bricolage Grotesque", "Atkinson Hyperlegible Next", ui-sans-serif, sans-serif;
+}
+
+/* Kod vurgulama renkleri (highlight.js hazir CSS'i kullanilmaz) */
+:root {
+  --code-bg: var(--color-slate-100);
+  --code-fg: var(--color-slate-900);
+  --code-comment: var(--color-slate-500);
+  --code-keyword: #7a3fc4;
+  --code-string: #1f7a4a;
+  --code-number: #b05a00;
+  --code-title: var(--color-blue-700);
+  --code-attr: #a1356b;
+  --code-meta: var(--color-slate-600);
+}
+.hljs {
+  color: var(--code-fg);
+}
+.hljs-keyword,
+.hljs-built_in,
+.hljs-type,
+.hljs-literal {
+  color: var(--code-keyword);
+}
+.hljs-number {
+  color: var(--code-number);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--code-string);
+}
+.hljs-comment {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.hljs-title,
+.hljs-function {
+  color: var(--code-title);
+}
+.hljs-attr,
+.hljs-attribute {
+  color: var(--code-attr);
+}
+.hljs-meta,
+.hljs-variable,
+.hljs-symbol {
+  color: var(--code-meta);
+}
+.hljs-deletion {
+  color: var(--color-rec);
 }
 
 @layer base {

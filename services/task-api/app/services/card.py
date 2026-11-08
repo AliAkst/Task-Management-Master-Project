@@ -630,12 +630,20 @@ class CardService:
     ) -> NoteResponse:
         note = await self._owned_note(note_id, user_id)
         note.content = data.content
+        card = await self.get_owned_card(note.card_id, user_id)
+        await self.activity.log(
+            user_id, "note", note.id, "updated", board_id=card.board_id, card_id=card.id
+        )
         await self.uow.commit()
         return NoteResponse.model_validate(note)
 
     async def delete_note(self, note_id: int, user_id: int) -> None:
         note = await self._owned_note(note_id, user_id)
+        card = await self.get_owned_card(note.card_id, user_id)
         await self.uow.notes.delete(note)
+        await self.activity.log(
+            user_id, "note", note.id, "deleted", board_id=card.board_id, card_id=card.id
+        )
         await self.uow.commit()
 
     # ---------------- checklist ----------------

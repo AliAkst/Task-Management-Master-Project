@@ -198,6 +198,11 @@ export function useCardMutations(cardId: number, boardId: number) {
         api<Note>(`/cards/${cardId}/notes`, { method: 'POST', ...json({ content }) }),
       onSuccess: refresh,
     }),
+    updateNote: useMutation({
+      mutationFn: ({ id, content }: { id: number; content: string }) =>
+        api<Note>(`/notes/${id}`, { method: 'PATCH', ...json({ content }) }),
+      onSuccess: refresh,
+    }),
     deleteNote: useMutation({
       mutationFn: (id: number) => api<void>(`/notes/${id}`, { method: 'DELETE' }),
       onSuccess: refresh,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import Markdown from 'react-markdown'
+import MarkdownView from './MarkdownView'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMatch, useSearchParams } from 'react-router-dom'
 import { useBoards, useCard } from '../api/boards'
@@ -77,7 +77,7 @@ function Bubble({
       <ToolChips names={m.tools ?? []} />
       {m.content && (
         <div className="rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_p+p]:mt-2 [&_ul]:list-disc">
-          <Markdown>{m.content}</Markdown>
+          <MarkdownView content={m.content} />
         </div>
       )}
       <Actions items={m.actions ?? []} />
@@ -304,7 +304,7 @@ export default function AssistantPanel() {
               )}
               {live.text ? (
                 <div className="rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc">
-                  <Markdown>{live.text}</Markdown>
+                  <MarkdownView content={live.text} />
                 </div>
               ) : (
                 !live.error && <p className="text-xs text-slate-400">{current?.is_local ? 'Local model düşünüyor… (ilk mesajda model belleğe yükleniyor)' : 'Düşünüyor…'}</p>
