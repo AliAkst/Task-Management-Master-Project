@@ -186,6 +186,7 @@ class FakeTaskApi:
     def __init__(self) -> None:
         self.writes: list[dict[str, Any]] = []
         self.plans: dict[str, list[dict[str, Any]]] = {}
+        self.goals: dict[int, dict[str, Any]] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path.removeprefix("/api/v1")
@@ -221,6 +222,10 @@ class FakeTaskApi:
                     "tracked_today_sec": 0,
                 }
             )
+        if method == "GET" and path == "/goals":
+            goals = list(self.goals.values())
+            status = request.url.params.get("status")
+            return ok([g for g in goals if not status or g["status"] == status])
         if method == "GET":
             return fake_task_api(request)
 
@@ -233,6 +238,14 @@ class FakeTaskApi:
                 "actor": request.headers.get("X-Actor"),
             }
         )
+        if method == "POST" and path == "/goals":
+            gid = len(self.goals) + 1
+            self.goals[gid] = {"id": gid, "status": "active", "board_id": None, **body}
+            return ok(self.goals[gid])
+        if method == "PATCH" and path.startswith("/goals/"):
+            g = self.goals[int(path.split("/")[2])]
+            g.update(body)
+            return ok(g)
         if method == "POST" and path == "/cards":
             return ok({"id": 100, "title": body["title"]})
         if method == "POST" and path == "/events":
@@ -321,3 +334,11 @@ async def db_session_maker(tmp_path):
         await conn.run_sync(Base.metadata.create_all)
     yield async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _no_memory_extraction(monkeypatch):
+    """Varsayilan: hafiza cikarimi kapali (FakeProvider senaryolarini tuketmesin)."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "memory_extraction", False)

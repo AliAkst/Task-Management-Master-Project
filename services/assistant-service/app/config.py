@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     default_model: str = "ollama:qwen3.5:4b"
     max_tool_rounds: int = 6
+    # Sohbetten sonra ayri, odakli hafiza cikarimi (bkz. app/agent/memory_extractor.py)
+    memory_extraction: bool = True
     llm_timeout_seconds: float = 300.0
 
 

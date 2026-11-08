@@ -150,3 +150,40 @@ class TestHistorySanitize:
             ("tool", "1"),
             ("assistant", None),
         ]
+
+
+async def test_ollama_tool_call_ids_are_unique(monkeypatch):
+    """Ollama id vermediginde 'call_0' tekrarlanmamali (turlar arasi cakisma)."""
+    import httpx
+
+    from app.llm.ollama_provider import OllamaProvider
+    from app.llm.types import ModelInfo
+
+    line = json.dumps(
+        {
+            "message": {
+                "tool_calls": [{"function": {"name": "list_boards", "arguments": {}}}]
+            },
+            "done": True,
+        }
+    )
+
+    def handler(request):
+        return httpx.Response(200, text=line + "\n")
+
+    real_client = httpx.AsyncClient
+
+    def fake_client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr("app.llm.ollama_provider.httpx.AsyncClient", fake_client)
+    p = OllamaProvider(
+        ModelInfo("ollama:x", "ollama", "x", "x", True), base_url="http://o"
+    )
+    ids = []
+    for _ in range(2):
+        async for c in p.stream([Msg("user", "x")]):
+            if c.type == "tool_call":
+                ids.append(c.tool_call.id)
+    assert len(ids) == 2 and ids[0] != ids[1]

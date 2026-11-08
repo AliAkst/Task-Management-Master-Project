@@ -1,5 +1,78 @@
 @import "tailwindcss";
 
-body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+/*
+ * Tasarim sistemi: "kagit uzerine murekkep" + ajanda sekmeleri.
+ *
+ * Tailwind'in slate (gri) paleti murekkep tonlariyla yeniden tanimlanir: tum
+ * uygulama tek yerden tutarli renge gecer. Kimligi hayat alanlarinin (board)
+ * renkleri tasir; geri kalan her sey sakin murekkep tonlarindadir.
+ */
+@theme {
+  /* Murekkep skalasi (soguk, laciverte calan; krem/kil degil) */
+  --color-slate-50: #f2f4f8; /* kagit: sayfa zemini */
+  --color-slate-100: #e8ebf2;
+  --color-slate-200: #d9deea; /* cizgi */
+  --color-slate-300: #c2c9da;
+  --color-slate-400: #949db7;
+  --color-slate-500: #6b7493;
+  --color-slate-600: #525b78; /* soluk murekkep */
+  --color-slate-700: #3b4461;
+  --color-slate-800: #283049;
+  --color-slate-900: #172038; /* murekkep */
+  --color-slate-950: #0e1426;
+
+  /* Dolma kalem mavisi: baglantilar, "simdi", odak */
+  --color-blue-50: #eef1fd;
+  --color-blue-100: #dde3fb;
+  --color-blue-500: #4660e0;
+  --color-blue-600: #2b44c9;
+  --color-blue-700: #2236a3;
+
+  /* Kayit kirmizisi: sadece calisan kronometre */
+  --color-rec: #d93a4a;
+
+  --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", "Atkinson Hyperlegible Next", ui-sans-serif, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-feature-settings: "tnum" 0;
+  }
+
+  /* Sayfa ve bolum basliklari kimligi tasir */
+  h1,
+  h2 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.012em;
+  }
+  h1 {
+    font-weight: 750;
+  }
+  h2 {
+    font-weight: 650;
+  }
+
+  /* Klavye odagi her zaman gorunur */
+  :focus-visible {
+    outline: 2px solid var(--color-blue-600);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--color-blue-100);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

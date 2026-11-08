@@ -18,6 +18,7 @@ from app.agent.actions import (
 )
 from app.api.deps import current_user, ok
 from app.db.models import AiActionEntity, get_session
+from app.tools.memory_tools import MemoryTools
 from app.tools.privacy import PrivacyFilter
 from app.tools.task_api import TaskApiError
 from app.tools.write_tools import ACTION_TYPES, WriteTools
@@ -83,7 +84,8 @@ async def approve(
         settings = await api.get("/settings/")
         tz = ZoneInfo(settings.get("timezone") or chat_module.DEFAULT_TZ)
         # Gizlilik kontrolu oneri aninda yapildi; argumanlar zaten cozuldu
-        writer = WriteTools(api, PrivacyFilter(active=False), tz)
+        memory = MemoryTools(chat_module.session_maker, user["id"], cloud=False)
+        writer = WriteTools(api, PrivacyFilter(active=False), tz, memory=memory)
         try:
             action.result = await writer.execute(action.action_type, action.args)
             action.status = "executed"

@@ -15,6 +15,13 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.llm.types import ToolSpec
+from app.tools.memory_tools import (
+    MEMORY_ACTION_TYPES,
+    MEMORY_SPECS,
+    TOOL_TO_ACTION,
+    MemoryTools,
+    validate_goal_args,
+)
 from app.tools.privacy import HIDDEN_MESSAGE, PrivacyFilter
 from app.tools.task_api import TaskApiClient
 
@@ -27,6 +34,7 @@ ACTION_TYPES: dict[str, str] = {
     "split_card": "Kartı parçalara bölme",
     "link_cards": "Kartları ön koşulla bağlama",
     "plan_day": "Gün planına madde ekleme",
+    **MEMORY_ACTION_TYPES,
 }
 
 PRIORITIES = ("low", "medium", "high")
@@ -153,7 +161,14 @@ WRITE_SPECS: list[ToolSpec] = [
     ),
 ]
 
+WRITE_SPECS += MEMORY_SPECS
 WRITE_TOOL_NAMES = {s.name for s in WRITE_SPECS}
+
+
+def action_type_of(tool_name: str) -> str:
+    """Arac adi -> izin turu (orn. save_goal -> manage_goal)."""
+    return TOOL_TO_ACTION.get(tool_name, tool_name)
+
 
 _DAY_FMT = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
 _MONTHS = [
@@ -222,10 +237,18 @@ class PreparedAction:
 
 
 class WriteTools:
-    def __init__(self, api: TaskApiClient, privacy: PrivacyFilter, tz: ZoneInfo):
+    def __init__(
+        self,
+        api: TaskApiClient,
+        privacy: PrivacyFilter,
+        tz: ZoneInfo,
+        memory: MemoryTools | None = None,
+    ):
         self.api = api
         self.privacy = privacy
         self.tz = tz
+        # Hafiza islemleri (asistan DB'si); yoksa hafiza araclari kapali
+        self.memory = memory
 
     # ---------------- yardimcilar ----------------
     async def _card(self, card_id: Any) -> dict[str, Any]:
@@ -258,6 +281,14 @@ class WriteTools:
 
     # ---------------- hazirlik ----------------
     async def prepare(self, name: str, args: dict[str, Any]) -> PreparedAction:
+        if name in ("remember_fact", "forget_fact"):
+            if self.memory is None:
+                raise ValueError("Hafıza şu an kullanılamıyor")
+            if name == "remember_fact":
+                body, summary = await self.memory.prepare_remember(**args)
+            else:
+                body, summary = await self.memory.prepare_forget(**args)
+            return PreparedAction(action_type_of(name), body, summary)
         handler = getattr(self, f"_prepare_{name}", None)
         if handler is None:
             raise ValueError(f"Bilinmeyen araç: {name}")
@@ -503,9 +534,62 @@ class WriteTools:
             "plan_day", {"date": day.isoformat(), "items": new}, summary
         )
 
+    async def _prepare_save_goal(
+        self, goal_id: Any = None, **fields: Any
+    ) -> PreparedAction:
+        body = validate_goal_args({"goal_id": goal_id, **fields})
+        if body.get("board_id") is not None:
+            board = await self._board(body["board_id"])
+            board_name = board["board"]["name"]
+        else:
+            board_name = None
+        details = []
+        if body.get("target_date"):
+            details.append(
+                f"hedef tarih {_fmt_day(date.fromisoformat(body['target_date']))}"
+            )
+        if board_name:
+            details.append(board_name)
+        if goal_id is not None:
+            goals = {g["id"]: g for g in await self.api.get("/goals")}
+            gid = _int(goal_id, "goal_id")
+            if gid not in goals:
+                raise ValueError(f"{gid} numaralı hedef bulunamadı")
+            if self.privacy.board_hidden(goals[gid].get("board_id")):
+                raise ValueError(HIDDEN_MESSAGE)
+            status = {
+                "achieved": "ulaşıldı olarak işaretlenir",
+                "dropped": "bırakıldı olarak işaretlenir",
+                "active": "yeniden aktif",
+            }
+            if "status" in body:
+                details.insert(0, status[body["status"]])
+            summary = f"🎯 Hedef güncellenir: '{_clip(goals[gid]['title'])}'"
+            return PreparedAction(
+                "manage_goal",
+                {"goal_id": gid, "body": body},
+                summary + (" (" + ", ".join(details) + ")" if details else ""),
+            )
+        summary = f"🎯 Yeni hedef: '{_clip(body['title'])}'" + (
+            " (" + ", ".join(details) + ")" if details else ""
+        )
+        if body.get("why"):
+            summary += f" — neden: «{_clip(body['why'], 60)}»"
+        return PreparedAction("manage_goal", {"goal_id": None, "body": body}, summary)
+
     # ---------------- calistirma ----------------
     async def execute(self, action_type: str, args: dict[str, Any]) -> dict[str, Any]:
         api = self.api
+        if action_type in ("remember_fact", "forget_fact"):
+            if self.memory is None:
+                raise ValueError("Hafıza şu an kullanılamıyor")
+            return await self.memory.execute(action_type, args)
+        if action_type == "manage_goal":
+            if args.get("goal_id") is None:
+                g = await api.write("POST", "/goals", args["body"])
+            else:
+                g = await api.write("PATCH", f"/goals/{args['goal_id']}", args["body"])
+            return {"goal_id": g["id"], "title": g["title"], "status": g["status"]}
         if action_type == "create_card":
             c = await api.write("POST", "/cards", args)
             return {"card_id": c["id"], "title": c["title"]}

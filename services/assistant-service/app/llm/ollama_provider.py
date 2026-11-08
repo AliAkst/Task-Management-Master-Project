@@ -8,6 +8,7 @@ Native API ile num_ctx=16K -> ayni model 3.6 GB, %100 GPU.
 """
 
 import json
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -124,7 +125,9 @@ class OllamaProvider:
                         yield ChatChunk(
                             type="tool_call",
                             tool_call=ToolCall(
-                                id=tc.get("id") or f"call_{n_calls}",
+                                # Ollama id vermezse benzersiz uret: "call_0" gibi
+                                # tekrarlanan id'ler farkli turlarda cakisir
+                                id=tc.get("id") or f"call_{uuid.uuid4().hex[:12]}",
                                 name=fn.get("name", ""),
                                 arguments=args if valid else {},
                                 raw_arguments=None if valid else json.dumps(args),

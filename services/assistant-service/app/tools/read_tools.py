@@ -15,7 +15,12 @@ from zoneinfo import ZoneInfo
 from app.llm.types import ToolCall, ToolSpec
 from app.tools.privacy import HIDDEN_MESSAGE, PrivacyFilter
 from app.tools.task_api import TaskApiClient, TaskApiError
-from app.tools.write_tools import WRITE_SPECS, WRITE_TOOL_NAMES, WriteTools
+from app.tools.write_tools import (
+    WRITE_SPECS,
+    WRITE_TOOL_NAMES,
+    WriteTools,
+    action_type_of,
+)
 
 if TYPE_CHECKING:
     from app.agent.actions import ActionGate, ToolResult
@@ -71,6 +76,7 @@ class ToolBox:
             "get_calendar": self.get_calendar,
             "get_day_plan": self.get_day_plan,
             "get_stats_summary": self.get_stats_summary,
+            "list_goals": self.list_goals,
         }
 
     # ---------------- kurulum ----------------
@@ -97,7 +103,9 @@ class ToolBox:
     def specs(self) -> list[ToolSpec]:
         """Okuma araclari + (izin kapisi varsa) kullanicinin 'asla' demedigi yazma araclari."""
         writes = (
-            [s for s in WRITE_SPECS if self.gate.allowed(s.name)] if self.gate else []
+            [s for s in WRITE_SPECS if self.gate.allowed(action_type_of(s.name))]
+            if self.gate
+            else []
         )
         return self.read_specs() + writes
 
@@ -160,6 +168,10 @@ class ToolBox:
                     "properties": {"start_date": _DATE, "end_date": _DATE},
                 },
             ),
+            ToolSpec(
+                "list_goals",
+                "Kullanıcının hayat hedefleri (aktif, ulaşılmış, bırakılmış): başlık, neden, hedef tarih, ilgili board.",
+            ),
         ]
 
     # ---------------- calistirma ----------------
@@ -173,7 +185,7 @@ class ToolBox:
         if not call.valid:
             return fail("Argümanlar geçerli JSON değil")
         if call.name in WRITE_TOOL_NAMES:
-            if self.gate is None or not self.gate.allowed(call.name):
+            if self.gate is None or not self.gate.allowed(action_type_of(call.name)):
                 return fail("Bu işlem şu an kapalı.")
             try:
                 prepared = await self.writer.prepare(call.name, call.arguments)
@@ -398,3 +410,19 @@ class ToolBox:
                 if d["tracked_min"] or d["planned"] or d["mood"]
             ],
         }
+
+    async def list_goals(self) -> Any:
+        goals = await self.api.get("/goals")
+        names = {b["id"]: b["name"] for b in await self.boards()}
+        return [
+            {
+                "id": g["id"],
+                "title": g["title"],
+                "why": _clip(g.get("why"), 300),
+                "target_date": g.get("target_date"),
+                "status": g["status"],
+                "board": names.get(g.get("board_id")),
+            }
+            for g in goals
+            if not self.privacy.board_hidden(g.get("board_id"))
+        ] or {"result": "Henüz hedef yok"}

@@ -12,6 +12,7 @@ import {
   type AiAction,
   type ChatMessage,
 } from '../api/assistant'
+import { AlertTriangle, ChevronDown, Loader2, Lock, Search, Sparkles } from 'lucide-react'
 import ActionCard from './ActionCard'
 import { useAssistantUi } from '../stores/assistant'
 
@@ -37,7 +38,8 @@ function ToolChips({ names }: { names: string[] }) {
     <div className="mb-1 flex flex-wrap gap-1">
       {names.map((n, i) => (
         <span key={i} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
-          🔎 {TOOL_LABEL[n] ?? n}
+          <Search size={11} className="mr-1 inline align-[-1px]" aria-hidden />
+          {TOOL_LABEL[n] ?? n}
         </span>
       ))}
     </div>
@@ -126,6 +128,18 @@ export default function AssistantPanel() {
     bottom.current?.scrollIntoView({ block: 'end' })
   }, [history.data, live])
 
+  // Profil sayfasindaki "Tanışma sohbetini başlat" gibi disaridan baslatilan sohbet
+  const pending = useAssistantUi((s) => s.pendingMessage)
+  useEffect(() => {
+    if (!open || !pending || busy || !effectiveModel) return
+    const message = useAssistantUi.getState().takePendingMessage()
+    if (message) {
+      setLive(null)
+      void send(message)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pending, effectiveModel])
+
   if (!open) return null
 
   async function send(text: string) {
@@ -198,7 +212,9 @@ export default function AssistantPanel() {
     <aside className="flex w-full max-w-md shrink-0 flex-col border-l border-slate-200 bg-slate-50">
       <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
         <button onClick={() => setShowList((s) => !s)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline" title="Sohbetler">
-          ✨ {conversations.data?.find((c) => c.id === conversationId)?.title ?? 'Yeni sohbet'} ▾
+          <Sparkles size={15} className="mr-1.5 inline align-[-2px]" aria-hidden />
+          {conversations.data?.find((c) => c.id === conversationId)?.title ?? 'Yeni sohbet'}
+          <ChevronDown size={14} className="ml-1 inline align-[-2px] text-slate-400" aria-hidden />
         </button>
         <button onClick={() => { setConversation(null); setLive(null); setShowList(false) }} className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100" title="Yeni sohbet">
           + Yeni
@@ -243,13 +259,18 @@ export default function AssistantPanel() {
         {live && (
           <>
             <Bubble m={{ role: 'user', content: live.user }} />
-            {live.notice && <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">🔒 {live.notice}</p>}
+            {live.notice && <p className="flex gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800"><Lock size={12} className="mt-0.5 shrink-0" aria-hidden />{live.notice}</p>}
             <div className="mr-6">
               {live.tools.length > 0 && (
                 <div className="mb-1 flex flex-wrap gap-1">
                   {live.tools.map((t) => (
                     <span key={t.id} className={`rounded-full px-2 py-0.5 text-[11px] ${t.done ? (t.ok ? 'bg-slate-100 text-slate-500' : 'bg-red-50 text-red-600') : 'animate-pulse bg-blue-50 text-blue-700'}`}>
-                      {t.done ? (t.ok ? '🔎' : '⚠️') : '⏳'} {TOOL_LABEL[t.name] ?? t.name}
+                      {t.done ? (
+                        t.ok ? <Search size={11} className="mr-1 inline align-[-1px]" aria-hidden /> : <AlertTriangle size={11} className="mr-1 inline align-[-1px]" aria-hidden />
+                      ) : (
+                        <Loader2 size={11} className="mr-1 inline animate-spin align-[-1px]" aria-hidden />
+                      )}
+                      {TOOL_LABEL[t.name] ?? t.name}
                     </span>
                   ))}
                 </div>
@@ -291,7 +312,7 @@ export default function AssistantPanel() {
             title="Bu mesaj için model"
           >
             {models.data?.models.map((m) => (
-              <option key={m.id} value={m.id}>{m.is_local ? '🔒 ' : '☁️ '}{m.label}</option>
+              <option key={m.id} value={m.id}>{m.label}{m.is_local ? '' : ' — bulut'}</option>
             ))}
             {models.data && models.data.models.length === 0 && <option value="">Model yok (Ollama çalışıyor mu?)</option>}
           </select>
@@ -302,7 +323,7 @@ export default function AssistantPanel() {
           )}
         </div>
         {current && !current.is_local && (
-          <p className="mt-1 text-[11px] text-slate-500">☁️ Bulut modeli: "sadece local" board'ların verisi gönderilmez.</p>
+          <p className="mt-1 text-[11px] text-slate-500">Bulut modeli: “sadece local” alanların verisi gönderilmez.</p>
         )}
       </form>
     </aside>
