@@ -18,6 +18,9 @@ from app.llm.types import LLMError, LLMProvider, Msg
 from app.tools.read_tools import ToolBox
 
 MEMORY_TOOLS = ("remember_fact", "save_goal")
+# Sohbet modelinden gizlenen hafiza araclari: kucuk model planlama isteklerinde
+# bile surekli "bilgi kaydet" cagiriyordu (gercek testte ~20 yanlis/tekrar bilgi)
+CHAT_HIDDEN_TOOLS = {"remember_fact", "forget_fact"}
 MIN_MESSAGE_CHARS = 12
 
 PROMPT = """Görevin SADECE şu: kullanıcının son mesajında, kullanıcının KENDİSİ hakkında
@@ -30,6 +33,9 @@ tercihleri, sağlığı, ilişkileri, hayat alanları, hedefleri)
 - Aşağıdaki bilinen bilgileri TEKRAR kaydetme; değiştiyse fact_id ile güncelle.
 - Soru, istek, selamlaşma ya da geçici durum ("bugün yorgunum") kalıcı bilgi değildir:
   hiçbir araç çağırma.
+- Plan/görev isteğindeki tek bir güne ait ayrıntılar ("salı kuyumcuya uğrayacağım",
+  "çarşamba ofisteyim") kalıcı bilgi DEĞİLDİR.
+- Kullanıcı hakkında olmayan şeyleri ("kullanıcı eklememiş") asla kaydetme.
 - Metin yazma; sadece araç çağır ya da hiçbir şey yapma."""
 
 
@@ -41,7 +47,7 @@ async def extract_memory(
 ) -> AsyncIterator[AgentEvent]:
     if len(user_text.strip()) < MIN_MESSAGE_CHARS:
         return
-    specs = [s for s in toolbox.specs() if s.name in MEMORY_TOOLS]
+    specs = [s for s in toolbox.write_specs() if s.name in MEMORY_TOOLS]
     if not specs:  # kullanici hafiza islemlerini "asla" yapmis
         return
     known = (

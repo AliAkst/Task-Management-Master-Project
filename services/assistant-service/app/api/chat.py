@@ -9,17 +9,23 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.actions import ActionGate, action_payload, load_modes
 from app.agent.context import build_system_prompt
+from app.agent.day_planner import is_schedule_request, plan_day
 from app.agent.loop import run_agent
-from app.agent.memory_extractor import MEMORY_TOOLS, extract_memory
+from app.agent.memory_extractor import (
+    CHAT_HIDDEN_TOOLS,
+    MEMORY_TOOLS,
+    extract_memory,
+)
 from app.api.deps import current_user, ok
 from app.api.providers import (
     enabled_cloud_models,
     load_cloud_config,
+    user_background_model,
     user_default_model,
 )
 from app.config import settings
@@ -234,6 +240,13 @@ async def remove(
     await session.execute(
         delete(MessageEntity).where(MessageEntity.conversation_id == conv.id)
     )
+    # SQLite'ta FK kapali: islemler silinmez ama sohbetten kopar; aksi halde ayni
+    # numarayi alan yeni sohbete karisiyorlardi
+    await session.execute(
+        update(AiActionEntity)
+        .where(AiActionEntity.conversation_id == conv.id)
+        .values(conversation_id=None)
+    )
     await session.delete(conv)
     await session.commit()
     return Response(status_code=204)
@@ -313,6 +326,7 @@ async def _stream(
             settings_data = await api.get("/settings/")
             tz = ZoneInfo(settings_data.get("timezone") or DEFAULT_TZ)
             toolbox = await ToolBox.create(api, cloud=not is_local, tz=tz)
+            toolbox.hidden = set(CHAT_HIDDEN_TOOLS)
             toolbox.writer.memory = MemoryTools(
                 session_maker, user["id"], cloud=not is_local
             )
@@ -350,8 +364,48 @@ async def _stream(
                 },
             )
 
+            # Gunu saat saat planlama istegi: odakli planlama adimi (tek arac)
+            if is_schedule_request(text) and toolbox.gate.allowed("schedule_day"):
+                planner = (
+                    provider
+                    if model_source == "message"
+                    else await _planning_provider(session, user["id"], provider)
+                )
+                planned = None
+                toolbox.gate.model_id = planner.info.id  # oneriyi yapan model
+                async for ev in plan_day(planner, toolbox, text):
+                    if ev.type == "planned":
+                        planned = ev.data
+                    elif ev.type != "failed":
+                        yield sse(ev.type, ev.data)
+                toolbox.gate.model_id = model_id  # normal sohbete donulurse
+                if planned is not None:
+                    reply = (
+                        f"Planı hazırladım ({planner.info.label}). Onay kartından "
+                        "saatleri kontrol et: onaylarsan yapılacak işler kart olarak "
+                        "açılır, hepsi takvime ve kartlar günün planına eklenir. Bir "
+                        "şey yanlışsa nedenini yazarak reddet, düzelteyim."
+                    )
+                    yield sse("token", {"text": reply})
+                    session.add(
+                        MessageEntity(
+                            conversation_id=conversation_id,
+                            role="assistant",
+                            content=reply,
+                            model_id=planner.info.id,
+                            is_local=planner.info.is_local,
+                        )
+                    )
+                    conv = await session.get(ConversationEntity, conversation_id)
+                    if conv is not None:
+                        conv.updated_at = datetime.now(UTC)
+                    await session.commit()
+                    yield sse("done", {"conversation_id": conversation_id})
+                    return
+
             msgs = [Msg("system", system), *map(to_msg, history), Msg("user", text)]
             used_memory_tool = False
+            used_action_tool = False  # komut turu (kart/plan...) -> hafiza adimi yok
             async for ev in run_agent(
                 provider, msgs, toolbox, max_rounds=settings.max_tool_rounds
             ):
@@ -383,10 +437,16 @@ async def _stream(
                 else:
                     if ev.type == "tool_start" and ev.data.get("name") in MEMORY_TOOLS:
                         used_memory_tool = True
+                    if ev.type == "action":
+                        used_action_tool = True
                     yield sse(ev.type, ev.data)
 
             # Sohbet modeli hafizaya dokunmadiysa: ayri, odakli hafiza cikarimi
-            if settings.memory_extraction and not used_memory_tool:
+            if (
+                settings.memory_extraction
+                and not used_memory_tool
+                and not used_action_tool
+            ):
                 async for ev in extract_memory(provider, toolbox, text, facts):
                     yield sse(ev.type, ev.data)
 
@@ -399,3 +459,18 @@ async def _stream(
         yield sse("error", {"message": e.message})
     finally:
         await api.close()
+
+
+async def _planning_provider(session: AsyncSession, user_id: int, fallback):
+    """
+    Planlama icin arka plan modeli (varsayilan gemma4:26b): yavas ama gunu dogru
+    kuruyor. Sadece LOCAL ve kuruluysa; degilse sohbet modeli. Bulut arka plan
+    modeli sohbet turunda kendiliginden kullanilmaz (ucret: kullanici secmeli).
+    """
+    installed = {m.id for m in await list_local_models()}
+    model_id = await user_background_model(session, user_id, installed)
+    if model_id == fallback.info.id or not is_local_model(model_id):
+        return fallback
+    if model_id not in installed:
+        return fallback
+    return build_provider(model_id, None, timeout=settings.background_timeout_seconds)

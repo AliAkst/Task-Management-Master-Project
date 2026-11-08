@@ -25,6 +25,7 @@ Kurallar:
 - Yazma aracının sonucu "pending_approval" ise işlem YAPILMADI: kullanıcı sohbetteki
   kartla onaylayacak. "Ekledim/yaptım" deme; "önerdim, onaylarsan eklenecek" de.
   Sonuç "done" ise işlem yapıldı. Sonuç "rejected" ise kullanıcı reddetti; nedenine saygı göster.
+- Kullanıcı bir günü saat saat planlamanı isterse (iş, yol, spor, ayak işleri...) schedule_day aracını TEK çağrıyla kullan: blokları sırayla ver, sadece sabit saatli olanlara start yaz, diğerlerine minutes ver; saat hesaplamayı araca bırak. Yol/iş/yemek card=false, yapılacak işler card=true. Önce metinle plan yazıp onay isteme: araç zaten kullanıcıya onay kartı olarak gider; planı doğrudan araçla öner.
 - Tarih-saatleri ISO 8601 ve kullanıcının saat dilimi ofsetiyle yaz (örn. +03:00).
   "Yarın" gibi göreli ifadeleri aşağıdaki "Şu an" bilgisine göre hesapla.
 - Tarihleri kullanıcının saat dilimine göre düşün."""

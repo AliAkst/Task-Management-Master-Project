@@ -23,7 +23,15 @@ from app.tools.memory_tools import (
     validate_goal_args,
 )
 from app.tools.privacy import HIDDEN_MESSAGE, PrivacyFilter
-from app.tools.task_api import TaskApiClient
+from app.tools.schedule_day import (
+    SCHEDULE_SPEC,
+    build_timeline,
+    find_board,
+    hhmm,
+    resolve_day,
+    to_datetime,
+)
+from app.tools.task_api import TaskApiClient, TaskApiError
 
 # Islem turleri (izin ayarlari bu anahtarlarla tutulur)
 ACTION_TYPES: dict[str, str] = {
@@ -34,6 +42,7 @@ ACTION_TYPES: dict[str, str] = {
     "split_card": "Kartı parçalara bölme",
     "link_cards": "Kartları ön koşulla bağlama",
     "plan_day": "Gün planına madde ekleme",
+    "schedule_day": "Günü saat saat planlama (kartlar + takvim blokları)",
     **MEMORY_ACTION_TYPES,
 }
 
@@ -161,7 +170,7 @@ WRITE_SPECS: list[ToolSpec] = [
     ),
 ]
 
-WRITE_SPECS += MEMORY_SPECS
+WRITE_SPECS += [SCHEDULE_SPEC, *MEMORY_SPECS]
 WRITE_TOOL_NAMES = {s.name for s in WRITE_SPECS}
 
 
@@ -541,6 +550,59 @@ class WriteTools:
             "plan_day", {"date": day.isoformat(), "items": new}, summary
         )
 
+    async def _prepare_schedule_day(
+        self, day: Any, blocks: list[dict[str, Any]]
+    ) -> PreparedAction:
+        target = resolve_day(day, datetime.now(self.tz).date())
+        if target < datetime.now(self.tz).date():
+            raise ValueError(f"{_fmt_day(target)} geçmişte kaldı; ileri bir gün ver")
+        timeline = build_timeline(blocks if isinstance(blocks, list) else [])
+        boards = [
+            b
+            for b in await self.api.get("/boards")
+            if not self.privacy.board_hidden(b["id"])
+        ]
+        default = boards[0] if boards else None
+        out: list[dict[str, Any]] = []
+        lines = []
+        lists: dict[int, dict[str, Any]] = {}
+        for blk in timeline:
+            item: dict[str, Any] = {
+                "title": blk.title,
+                "start_at": to_datetime(target, blk.start, self.tz).isoformat(),
+                "end_at": to_datetime(target, blk.end, self.tz).isoformat(),
+                "minutes": blk.end - blk.start,
+                "card": blk.card,
+            }
+            board = find_board(boards, blk.board)
+            if blk.board not in (None, "") and board is None:
+                names = ", ".join(b["name"] for b in boards)
+                raise ValueError(
+                    f"'{blk.title}' için board '{blk.board}' bulunamadı. Mevcut: {names}"
+                )
+            if blk.card:
+                board = board or default
+                if board is None:
+                    raise ValueError("Kart için önce bir board oluşturulmalı")
+                if board["id"] not in lists:
+                    lists[board["id"]] = self._find_list(
+                        await self._board(board["id"]), None
+                    )
+                item["list_id"] = lists[board["id"]]["id"]
+            if board is not None:
+                item["board_id"] = board["id"]
+            kind = f"kart, {board['name']}" if blk.card and board else "etkinlik"
+            lines.append(f"{hhmm(blk.start)}–{hhmm(blk.end)} {blk.title} ({kind})")
+            out.append(item)
+        cards = sum(1 for i in out if i["card"])
+        summary = (
+            f"🗓 {_fmt_day(target)} planı: {cards} kart, "
+            f"{len(out) - cards} sabit etkinlik, hepsi takvime\n" + "\n".join(lines)
+        )
+        return PreparedAction(
+            "schedule_day", {"date": target.isoformat(), "blocks": out}, summary
+        )
+
     async def _prepare_save_goal(
         self, goal_id: Any = None, **fields: Any
     ) -> PreparedAction:
@@ -635,6 +697,8 @@ class WriteTools:
                 {"depends_on_id": args["depends_on_id"]},
             )
             return {"linked": True}
+        if action_type == "schedule_day":
+            return await self._execute_schedule(api, args)
         if action_type == "plan_day":
             # Onay aninda mevcut planla yeniden birlestir (arada elle degismis olabilir)
             plan = await api.get(f"/day-plans/{args['date']}")
@@ -663,3 +727,67 @@ class WriteTools:
             p = await api.write("PUT", f"/day-plans/{args['date']}", {"items": merged})
             return {"date": p["date"], "items": len(p["items"])}
         raise ValueError(f"Bilinmeyen işlem: {action_type}")
+
+    async def _execute_schedule(
+        self, api: TaskApiClient, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Kartlar + takvim bloklari; kartlar gun planina eklenir. Bir blok
+        basarisiz olsa da digerleri yazilir, sonuc neyin yapildigini soyler."""
+        day = args["date"]
+        due = _due_iso(day, self.tz)
+        done: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
+        card_ids: list[int] = []
+        for b in args["blocks"]:
+            try:
+                event: dict[str, Any] = {
+                    "start_at": b["start_at"],
+                    "end_at": b["end_at"],
+                }
+                if b["card"]:
+                    c = await api.write(
+                        "POST",
+                        "/cards",
+                        {
+                            "list_id": b["list_id"],
+                            "title": b["title"],
+                            "due_date": due,
+                            "estimated_minutes": b["minutes"],
+                        },
+                    )
+                    card_ids.append(c["id"])
+                    event["card_id"] = c["id"]
+                else:
+                    event["title"] = b["title"]
+                    if b.get("board_id"):
+                        event["board_id"] = b["board_id"]
+                e = await api.write("POST", "/events", event)
+                done.append(
+                    {
+                        "title": b["title"],
+                        "event_id": e["id"],
+                        "card_id": event.get("card_id"),
+                    }
+                )
+            except TaskApiError as err:
+                failed.append({"title": b["title"], "error": err.message})
+        if not done:
+            raise TaskApiError(
+                422, failed[0]["error"] if failed else "Hiçbir blok yazılamadı"
+            )
+        planned = False
+        if card_ids:
+            try:
+                await self.execute(
+                    "plan_day",
+                    {"date": day, "items": [{"card_id": c} for c in card_ids]},
+                )
+                planned = True
+            except TaskApiError:
+                planned = False  # gun degerlendirilmis olabilir; takvim yine de yazildi
+        return {
+            "date": day,
+            "created": done,
+            "failed": failed,
+            "added_to_plan": planned,
+        }

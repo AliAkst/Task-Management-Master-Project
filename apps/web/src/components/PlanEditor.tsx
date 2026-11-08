@@ -1,8 +1,27 @@
-import { Check, Hourglass, Plus, X } from 'lucide-react'
+import { Check, Hourglass, Play, Plus, Square, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useDayPlanMutations } from '../api/dayPlans'
+import { useActiveSession, useSessionMutations } from '../api/sessions'
 import { formatDuration } from '../lib/format'
 import type { BoardWithCounts, DayPlan, PlanSuggestion } from '../lib/types'
+
+/** Plan maddesindeki kart icin kronometre: istedigin an basla / durdur. */
+function PlayButton({ cardId, title }: { cardId: number; title: string }) {
+  const active = useActiveSession()
+  const m = useSessionMutations()
+  const running = active.data?.card_id === cardId
+  return (
+    <button
+      onClick={() => (running ? m.stop.mutate() : m.start.mutate(cardId))}
+      disabled={m.start.isPending || m.stop.isPending}
+      aria-label={running ? `${title} için kronometreyi durdur` : `${title} için çalışmaya başla`}
+      title={running ? 'Durdur' : active.data ? 'Çalışan süre durur, bu kart başlar' : 'Çalışmaya başla'}
+      className={`rounded p-1 ${running ? 'text-[var(--color-rec)]' : 'text-slate-400 hover:text-slate-900'} disabled:opacity-50`}
+    >
+      {running ? <Square size={13} fill="currentColor" aria-hidden /> : <Play size={14} aria-hidden />}
+    </button>
+  )
+}
 
 /** Plandaki bir madde (kaydedilmeden onceki taslak). */
 interface Draft {
@@ -157,6 +176,7 @@ export default function PlanEditor({
             <li key={d.key} className="group flex items-center gap-2 py-2 text-[15px]">
               <span aria-hidden className="h-5 w-1 shrink-0 rounded-full" style={{ backgroundColor: d.board_id != null ? boards.get(d.board_id)?.color : 'var(--color-slate-300)' }} />
               <span className="flex-1">{d.title}</span>
+              {d.card_id != null && <PlayButton cardId={d.card_id} title={d.title} />}
               {d.hint && <span className="text-[13px] text-slate-500">{d.hint}</span>}
               <input
                 type="number"
