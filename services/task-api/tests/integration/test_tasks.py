@@ -68,7 +68,8 @@ class TestGetTasks:
         data = response.json()
 
         assert data["success"] is True
-        assert data["data"] == []
+        assert data["data"]["items"] == []
+        assert data["data"]["total"] == 0
 
     async def test_get_all_tasks_returns_own_tasks(
         self, client: AsyncClient, auth_headers
@@ -92,8 +93,8 @@ class TestGetTasks:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data["data"]) == 2
-        titles = [task["title"] for task in data["data"]]
+        assert data["data"]["total"] == 2
+        titles = [task["title"] for task in data["data"]["items"]]
         assert "My Task 1" in titles
         assert "My Task 2" in titles
 

@@ -3,8 +3,28 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.repositories.board import (
+    BoardListRepository,
+    BoardRepository,
+    CardLabelRepository,
+    LabelRepository,
+)
+from app.db.repositories.card_content import (
+    ActivityRepository,
+    CardNoteRepository,
+    ChecklistRepository,
+    DependencyRepository,
+)
+from app.db.repositories.day_plan import (
+    AnalyticsRepository,
+    DayPlanItemRepository,
+    DayPlanRepository,
+)
+from app.db.repositories.event import EventRepository
 from app.db.repositories.task import TaskRepository
+from app.db.repositories.time_session import TimeSessionRepository
 from app.db.repositories.user import UserRepository
+from app.db.repositories.user_settings import UserSettingsRepository
 from app.core.resilience import with_db_retry
 
 class BaseUnitOfWork(ABC):
@@ -21,6 +41,10 @@ class BaseUnitOfWork(ABC):
         await self.session.commit()
         pass
     
+    async def flush(self):
+        """Commit etmeden SQL'i gonderir (yeni kayitlarin ID'lerini almak icin)."""
+        await self.session.flush()
+
     async def rollback(self):
         """Hata Durumunda yapilan degisiklikleri geri alir."""
         await self.session.rollback()
@@ -46,6 +70,20 @@ class TaskUnitOfWork(BaseUnitOfWork):
         super().__init__(session)
         self.tasks = TaskRepository(session)
         self.users = UserRepository(session)
+        self.user_settings = UserSettingsRepository(session)
+        self.boards = BoardRepository(session)
+        self.lists = BoardListRepository(session)
+        self.labels = LabelRepository(session)
+        self.card_labels = CardLabelRepository(session)
+        self.notes = CardNoteRepository(session)
+        self.checklist = ChecklistRepository(session)
+        self.activity = ActivityRepository(session)
+        self.events = EventRepository(session)
+        self.time_sessions = TimeSessionRepository(session)
+        self.day_plans = DayPlanRepository(session)
+        self.day_plan_items = DayPlanItemRepository(session)
+        self.analytics = AnalyticsRepository(session)
+        self.dependencies = DependencyRepository(session)
     
     @with_db_retry
     async def commit(self):

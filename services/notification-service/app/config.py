@@ -11,7 +11,7 @@ class Settings:
     rabbitmq_host: str = os.getenv("RABBITMQ_HOST","localhost")
     rabbitmq_port: int = int(os.getenv("RABBITMQ_PORT","5672"))
     rabbitmq_user: str = os.getenv("RABBITMQ_USER", "taskuser")
-    rabbitmq_password: int = os.getenv("RABBITMQ_PASSWORD","taskpass")
+    rabbitmq_password: str = os.getenv("RABBITMQ_PASSWORD","taskpass")
     rabbitmq_vhost: str = os.getenv("RABBITMQ_VHOST","taskhost")
 
     @property

@@ -1,6 +1,7 @@
 
 # --- CACHE IMPORTLARI ---
-from asyncio import create_task
+from datetime import UTC, datetime
+
 from app.core.cache import redis_cache
 from app.core.cache_keys import (
     get_task_detail_cache_key,
@@ -8,7 +9,6 @@ from app.core.cache_keys import (
     get_task_user_pattern,
 )
 from app.core.events import task_event_publisher
-from app.models.task import TaskStatus
 from app.core.exceptions import TaskNotFoundException
 from app.core.logging import get_logger
 from app.db.entities import TaskEntity
@@ -24,7 +24,9 @@ from app.db.repositories.specifications import (
 #--- UNIT OF PATTERN IMPORTLARI
 from app.db.unit_of_work import TaskUnitOfWork
 from app.models.common import PaginationParams
-from app.models.task import TaskCreate, TaskFilter, TaskResponse, TaskUpdate
+from app.models.task import TaskCreate, TaskFilter, TaskResponse, TaskStatus, TaskUpdate
+from app.services.activity import ActivityLogger, diff
+from app.services.ordering import STEP
 
 logger = get_logger(__name__)
 
@@ -32,13 +34,32 @@ logger = get_logger(__name__)
 class TaskService:
     def __init__(self, uow: TaskUnitOfWork):
         self.uow = uow
+        self.activity = ActivityLogger(uow)
 
     async def create(self, task_in: TaskCreate, user_id: int) -> TaskResponse:
         """Yeni task olusturur ve user_id'yi otomatik atar"""
         logger.info(f"Creating task for user{user_id}: {task_in.title}")
         # pydantic modeli veritabani nesnesine donusturdugumuz asama
-        new_task = TaskEntity(**task_in.model_dump(), user_id=user_id)
+        # Board'suz kart olmasin: eski API ile gelenler 'Genel' board'a duser
+        from app.services.board import BoardService
+
+        board, first_list = await BoardService(self.uow).get_or_create_default(user_id)
+        new_task = TaskEntity(
+            **task_in.model_dump(),
+            user_id=user_id,
+            board_id=board.id,
+            list_id=first_list.id,
+            position=await self.uow.tasks.max_position_in_list(first_list.id) + STEP,
+        )
+        if new_task.status == TaskStatus.COMPLETED:
+            new_task.completed_at = datetime.now(UTC)
         created_task = await self.uow.tasks.create(new_task)
+        await self.uow.flush()
+        await self.activity.log(
+            user_id, "card", created_task.id, "created",
+            board_id=board.id, card_id=created_task.id,
+            changes={"title": created_task.title, "via": "tasks_api"},
+        )
         await self.uow.commit()
         # ---CACHE INVALIDATION---
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))
@@ -156,8 +177,27 @@ class TaskService:
         old_status = entity.status
 
         update_data = task_in.model_dump(exclude_unset=True)
+        changes = diff(entity, update_data)
         for key, value in update_data.items():
             setattr(entity, key, value)
+
+        # Tamamlanma zamani senkronu
+        if entity.status == TaskStatus.COMPLETED and entity.completed_at is None:
+            entity.completed_at = datetime.now(UTC)
+        elif entity.status != TaskStatus.COMPLETED:
+            entity.completed_at = None
+
+        if changes:
+            if "status" in changes and entity.status == TaskStatus.COMPLETED:
+                action = "completed"
+            elif "status" in changes and old_status == TaskStatus.COMPLETED:
+                action = "reopened"
+            else:
+                action = "updated"
+            await self.activity.log(
+                user_id, "card", entity.id, action,
+                board_id=entity.board_id, card_id=entity.id, changes=changes,
+            )
 
         updated_entity = await self.uow.tasks.update(entity)
         await self.uow.commit()
@@ -171,7 +211,13 @@ class TaskService:
             task_data=task_response.model_dump(mode='json')
         )
         # Eger status completed'a cekildiyse ekstra event
-        if old_status != TaskStatus.COMPLETED and updated_entity.status == TaskStatus.COMPLETED:
+        if (
+            old_status != TaskStatus.COMPLETED
+            and updated_entity.status == TaskStatus.COMPLETED
+        ):
+            from app.services.card import CardService
+
+            await CardService(self.uow).graph.handle_completion(user_id, updated_entity)
             await task_event_publisher.publish_task_completed(
                 task_id=updated_entity.id,
                 user_id=user_id,
@@ -192,6 +238,19 @@ class TaskService:
             logger.warning(f"User {user_id} tried to access task {task_id}")
             raise TaskNotFoundException(task_id=task_id)
 
+        await self.activity.log(
+            user_id, "card", entity.id, "deleted",
+            board_id=entity.board_id, card_id=entity.id,
+            changes={"title": entity.title},
+        )
+        await self.uow.card_labels.set_for_card(entity.id, [])
+        await self.uow.notes.delete_for_card(entity.id)
+        await self.uow.checklist.delete_for_card(entity.id)
+        await self.uow.dependencies.delete_for_card(entity.id)
+        await self.uow.day_plan_items.detach_card(entity.id)
+        await self.uow.events.delete_for_card(entity.id)
+        await self.uow.time_sessions.detach_card(entity.id)
+        await self.uow.tasks.detach_children(entity.id)
         await self.uow.tasks.delete(entity)
         await self.uow.commit()
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))

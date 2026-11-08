@@ -21,7 +21,7 @@ class DateTimeEncoder(json.JSONEncoder):
         if isinstance(obj,datetime):
             return obj.isoformat()
         if isinstance(obj,date):
-            return obj.isoformat
+            return obj.isoformat()
         return super().default(obj)
 
 class RedisCache:
@@ -34,7 +34,7 @@ class RedisCache:
         try:
             redis_url = f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
             if settings.redis_password:
-                redis_url=f"redis://{settings.redis_password}@{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
+                redis_url=f"redis://:{settings.redis_password}@{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
             self.redis = from_url(redis_url,encoding="utf-8",decode_responses= True)
 
             #Baglanti testi

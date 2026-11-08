@@ -128,3 +128,19 @@ class BulkheadFullError(ResilienceException):
         self.service_name=service_name
         self.active= active
         self.max_concurrent= max_concurrent
+
+class NotFoundException(AppException):
+    """Genel 'bulunamadi'. Baska kullaniciya ait kayitlar icin de kullanilir
+    (kaydin var oldugunu sizdirmamak icin 403 yerine 404)."""
+
+    def __init__(self, resource: str, resource_id: int):
+        super().__init__(
+            status_code=404,
+            error_code=f"{resource.upper()}_NOT_FOUND",
+            message=f"{resource} with id {resource_id} not found",
+        )
+
+
+class ConflictException(AppException):
+    def __init__(self, error_code: str, message: str):
+        super().__init__(status_code=409, error_code=error_code, message=message)

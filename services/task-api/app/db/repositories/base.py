@@ -75,3 +75,11 @@ class BaseRepository[T: Base]:
         
         result = await self.session.execute(query)
         return result.scalar() or 0
+
+    @with_db_retry
+    async def get_owned(self, id: int, user_id: int) -> T | None:
+        """Kayit varsa VE kullaniciya aitse doner; aksi halde None."""
+        entity = await self.get_by_id(id)
+        if entity is None or getattr(entity, "user_id", None) != user_id:
+            return None
+        return entity

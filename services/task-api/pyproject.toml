@@ -16,9 +16,9 @@ dependencies = [
     "redis>=7.1.0",
     "sqlalchemy[asyncio]>=2.0.45",
     "uvicorn[standard]>=0.40.0",
-    "redis>=7.1.0",
     "tenacity>=8.2.0",
     "aio-pika>=9.4.0",
+    "tzdata>=2026.6",
 ]
 
 [dependency-groups]
