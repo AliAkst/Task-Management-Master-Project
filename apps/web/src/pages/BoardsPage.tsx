@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useBoards, useCreateBoard } from '../api/boards'
-import { Lock, Plus, Sparkles, Target } from 'lucide-react'
+import { Inbox, Lock, Plus, Sparkles, Target } from 'lucide-react'
 import { useModels } from '../api/assistant'
 import BoardForm from '../components/BoardForm'
 import Modal from '../components/Modal'
@@ -51,7 +51,10 @@ export default function BoardsPage() {
             className="group relative overflow-hidden rounded-lg border border-slate-200 bg-white py-4 pr-4 pl-7 hover:border-slate-400"
           >
             <span aria-hidden className="absolute inset-y-0 left-0 w-2.5" style={{ backgroundColor: b.color }} />
-            <h2 className="text-[20px] group-hover:underline">{b.name}</h2>
+            <h2 className="flex items-center gap-2 text-[20px] group-hover:underline">
+              {b.system_kind === 'inbox' && <Inbox size={18} aria-label="Gelen Kutusu" className="shrink-0 text-slate-500" />}
+              {b.name}
+            </h2>
             {b.scope_description && (
               <p className="mt-1 line-clamp-2 text-[14px] text-slate-600">{b.scope_description}</p>
             )}

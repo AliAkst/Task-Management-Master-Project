@@ -33,6 +33,9 @@ DEFAULT_LISTS: list[tuple[str, bool]] = [
     ("Tamamlandı", True),
 ]
 DEFAULT_BOARD_NAME = "Genel"
+INBOX_KIND = "inbox"
+INBOX_BOARD_NAME = "Gelen Kutusu"
+INBOX_LIST_NAME = "Gelen"
 
 
 class BoardService:
@@ -113,6 +116,42 @@ class BoardService:
         )
         return board, lists[0]
 
+    async def get_or_create_inbox(
+        self, user_id: int
+    ) -> tuple[BoardEntity, BoardListEntity]:
+        """
+        Entegrasyonlardan gelen islerin dustugu "Gelen Kutusu" board'u ve tek
+        listesi. Gizlilik varsayilani local_only. Commit etmez.
+        """
+        board = await self.uow.boards.find_inbox(user_id)
+        if board is not None:
+            lists = await self.uow.lists.list_for_board(board.id)
+            if lists:
+                return board, lists[0]
+            lst = BoardListEntity(
+                user_id=user_id, board_id=board.id, name=INBOX_LIST_NAME, position=STEP
+            )
+            await self.uow.lists.create(lst)
+            await self.uow.flush()
+            return board, lst
+        board, lists = await self._create_board_entity(
+            user_id,
+            BoardCreate(
+                name=INBOX_BOARD_NAME,
+                privacy=BoardPrivacy.LOCAL_ONLY,
+                color="#6366f1",
+                icon="inbox",
+                scope_description=(
+                    "Dış kaynaklardan (Trello, Microsoft To Do…) gelen, henüz "
+                    "bir alana yerleştirilmemiş işler."
+                ),
+                lists=[INBOX_LIST_NAME],
+            ),
+        )
+        board.system_kind = INBOX_KIND
+        await self.uow.flush()
+        return board, lists[0]
+
     # ---------------- board ----------------
     async def list_boards(
         self, user_id: int, include_archived: bool = False
@@ -181,6 +220,10 @@ class BoardService:
 
     async def delete_board(self, board_id: int, user_id: int) -> None:
         board = await self.get_owned_board(board_id, user_id)
+        if board.system_kind == INBOX_KIND:
+            raise ConflictException(
+                "INBOX_PROTECTED", "Gelen Kutusu silinemez; yeniden adlandırabilirsiniz."
+            )
         await self.activity.log(
             user_id,
             "board",

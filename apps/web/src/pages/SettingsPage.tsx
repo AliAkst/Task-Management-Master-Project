@@ -1,11 +1,12 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check } from 'lucide-react'
 import { api } from '../lib/api'
 import type { UserSettings, UserSettingsUpdate } from '../lib/types'
 import { usePermissions, useSetPermission, type Permission } from '../api/assistant'
+import IntegrationsSettings from '../components/IntegrationsSettings'
 import ModelSettings from '../components/ModelSettings'
-import { PageHeader, Segmented } from '../components/Page'
+import { PageHeader, Row, Segmented } from '../components/Page'
 
 const MODE_LABEL: Record<Permission['mode'], string> = {
   ask: 'Bana sor',
@@ -17,20 +18,8 @@ const SECTIONS = [
   { id: 'ritim', label: 'Günün ritmi' },
   { id: 'model', label: 'Asistan modeli' },
   { id: 'izinler', label: 'Asistan izinleri' },
+  { id: 'baglantilar', label: 'Bağlantılar' },
 ]
-
-/** Ayar satiri: solda ne oldugu, sagda kontrol. Kutu yok, satirlar cizgiyle ayrilir. */
-function Row({ title, hint, children }: { title: ReactNode; hint?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3.5">
-      <div className="max-w-prose min-w-0">
-        <p className="font-semibold">{title}</p>
-        {hint && <p className="text-[14px] text-slate-600">{hint}</p>}
-      </div>
-      <div className="flex items-center gap-3">{children}</div>
-    </div>
-  )
-}
 
 /** AI'in hangi islemleri sormadan yapabilecegi: kullanici karar verir. */
 function AssistantPermissions() {
@@ -161,6 +150,7 @@ export default function SettingsPage() {
           <DayRhythm />
           <div id="model" className="scroll-mt-6"><ModelSettings /></div>
           <AssistantPermissions />
+          <IntegrationsSettings />
         </div>
       </div>
     </div>

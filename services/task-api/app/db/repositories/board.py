@@ -62,6 +62,16 @@ class BoardRepository(BaseRepository[BoardEntity]):
         )
         return result.scalar_one_or_none()
 
+    @with_db_retry
+    async def find_inbox(self, user_id: int) -> BoardEntity | None:
+        result = await self.session.execute(
+            select(BoardEntity)
+            .where(BoardEntity.user_id == user_id, BoardEntity.system_kind == "inbox")
+            .order_by(BoardEntity.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def delete_cascade(self, board: BoardEntity) -> None:
         """
         Board'u ve icerigini siler. SQLite FK cascade'i varsayilan olarak kapali

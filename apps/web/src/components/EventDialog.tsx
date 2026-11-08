@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useCalendarMutations } from '../api/calendar'
-import { fromLocalInput, toLocalInput } from '../lib/format'
+import { formatRange, fromLocalInput, toLocalInput } from '../lib/format'
 import type { BoardWithCounts } from '../lib/types'
 import Modal from './Modal'
 import RecurrencePicker from './RecurrencePicker'
@@ -17,6 +17,8 @@ export interface EventDraft {
   location?: string | null
   notes?: string | null
   recurrenceRule?: string | null
+  // Dis takvimden gelen etkinlik: salt okunur gosterilir
+  external?: { provider: string; url?: string | null } | null
 }
 
 interface Props {
@@ -35,7 +37,7 @@ const dayEndExclusive = (d: string) => {
   return x.toISOString()
 }
 
-export default function EventDialog({ draft, boards, onClose, onOpenCard }: Props) {
+function EventForm({ draft, boards, onClose, onOpenCard }: Props) {
   const m = useCalendarMutations()
   const editing = draft.id !== undefined
   const linked = draft.cardId !== null
@@ -206,4 +208,40 @@ export default function EventDialog({ draft, boards, onClose, onOpenCard }: Prop
       </form>
     </Modal>
   )
+}
+
+const PROVIDER_NAME: Record<string, string> = { google: 'Google Takvim' }
+
+/** Dis takvimden gelen etkinlik: duzenlenemez, kaynakta acilir. */
+function ExternalEventView({ draft, onClose }: Pick<Props, 'draft' | 'onClose'>) {
+  const source = PROVIDER_NAME[draft.external!.provider] ?? draft.external!.provider
+  return (
+    <Modal title={`Etkinlik · ${source}`} onClose={onClose}>
+      <div className="space-y-3 text-sm">
+        <h3 className="text-lg font-semibold">{draft.title}</h3>
+        <p>{formatRange(draft.start, draft.end, draft.allDay)}</p>
+        {draft.location && <p className="text-slate-600">{draft.location}</p>}
+        {draft.notes && <p className="max-h-48 overflow-auto whitespace-pre-wrap text-slate-600">{draft.notes}</p>}
+        <p className="text-xs text-slate-500">
+          Bu etkinlik {source}’ten geliyor ve burada değiştirilemez; orada düzenle, sonraki senkronda güncellenir.
+        </p>
+        <div className="flex items-center justify-between pt-2">
+          {draft.external!.url ? (
+            <a href={draft.external!.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+              {source}’te aç →
+            </a>
+          ) : (
+            <span />
+          )}
+          <button type="button" onClick={onClose} className="rounded-md bg-slate-900 px-4 py-1.5 font-medium text-white">
+            Kapat
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+export default function EventDialog(props: Props) {
+  return props.draft.external ? <ExternalEventView draft={props.draft} onClose={props.onClose} /> : <EventForm {...props} />
 }

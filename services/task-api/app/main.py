@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,6 +11,7 @@ from app.api.v1.cards import cards_router
 from app.api.v1.day_plans import day_plans_router
 from app.api.v1.events import events_router
 from app.api.v1.goals import goals_router
+from app.api.v1.integrations import integrations_router
 from app.api.v1.time_sessions import sessions_router
 from app.api.v1.user_settings import settings_router
 from app.config import settings
@@ -21,6 +23,7 @@ from app.core.middleware import RateLimitMiddleware
 from app.api.v1.health import router as health_router
 from app.core.correlation import CorrelationIdMiddleware
 from app.core.messaging import rabbitmq_client
+from app.integrations.scheduler import sync_loop
 
 setup_logging()
 
@@ -37,10 +40,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"RabbitMQ unavailable, domain events disabled: {e}")
 
+    sync_task = asyncio.create_task(sync_loop())
+
     yield
 
     #Shutdown
     logger.info("Shutting down application...")
+    sync_task.cancel()
     await rabbitmq_client.disconnect()
     await redis_cache.disconnect()
 
@@ -76,6 +82,7 @@ app.include_router(boards_router, prefix=settings.api_v1_prefix)
 app.include_router(cards_router, prefix=settings.api_v1_prefix)
 app.include_router(events_router, prefix=settings.api_v1_prefix)
 app.include_router(goals_router, prefix=settings.api_v1_prefix)
+app.include_router(integrations_router, prefix=settings.api_v1_prefix)
 app.include_router(sessions_router, prefix=settings.api_v1_prefix)
 app.include_router(day_plans_router, prefix=settings.api_v1_prefix)
 app.include_router(health_router)

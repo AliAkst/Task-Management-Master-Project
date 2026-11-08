@@ -97,9 +97,9 @@ export default function CalendarPage() {
       backgroundColor: deadline ? '#fff' : i.color,
       borderColor: i.color,
       textColor: deadline ? i.color : '#fff',
-      durationEditable: !deadline && !i.recurrence_rule,
+      durationEditable: !deadline && !i.recurrence_rule && !i.external,
       // Tekrarlar suruklenmez: degisiklik butun seriye uygulanir (pencereden)
-      startEditable: !i.recurrence_rule,
+      startEditable: !i.recurrence_rule && !i.external,
       classNames: done ? ['opacity-50', 'line-through'] : [],
       extendedProps: { item: i },
     }
@@ -158,8 +158,8 @@ export default function CalendarPage() {
       setOpenCard({ cardId: item.card_id!, boardId: item.board_id! })
       return
     }
-    if (item.recurrence_rule) {
-      // Tekrar degil seri duzenlenir: serinin asil zamanini getir
+    if (item.recurrence_rule || item.external) {
+      // Tekrar degil seri duzenlenir (dis etkinlikte not da gerekir): serinin asil zamanini getir
       const ev = await api<CalendarEvent>(`/events/${item.event_id}`)
       setDraft({
         id: ev.id,
@@ -172,6 +172,7 @@ export default function CalendarPage() {
         location: ev.location,
         notes: ev.notes,
         recurrenceRule: ev.recurrence_rule,
+        external: ev.external,
       })
       return
     }

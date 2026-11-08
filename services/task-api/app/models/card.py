@@ -3,7 +3,15 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.event import ExternalRef
 from app.models.task import TaskPriority, TaskStatus
+
+
+class CardExternalRef(ExternalRef):
+    """Kartin geldigi dis sistem + geri yazma (outbox) durumu (Faz 7c)."""
+
+    pending_push: bool = False
+    push_error: str | None = None
 
 
 # ---------------- Card ----------------
@@ -181,6 +189,8 @@ class CardDetail(CardSummary):
     subtasks: list[CardSummary] = Field(default_factory=list)
     depends_on: list[CardRef] = Field(default_factory=list)
     dependents: list[CardRef] = Field(default_factory=list)
+    # Kartin geldigi dis sistem (Trello / Microsoft To Do) ve geri yazma durumu
+    external: "CardExternalRef | None" = None
 
 
 class ActivityResponse(BaseModel):

@@ -51,6 +51,7 @@ class BoardResponse(BaseModel):
     weekly_time_budget_min: int | None
     privacy: BoardPrivacy
     default_model_id: str | None = None
+    system_kind: str | None = None
     is_archived: bool
     created_at: datetime
     updated_at: datetime

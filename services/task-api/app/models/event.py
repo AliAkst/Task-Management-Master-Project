@@ -52,6 +52,13 @@ class EventUpdate(BaseModel):
         return self
 
 
+class ExternalRef(BaseModel):
+    """Etkinligin geldigi dis sistem; varsa etkinlik salt okunurdur."""
+
+    provider: str
+    url: str | None = None
+
+
 class EventResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -65,6 +72,7 @@ class EventResponse(BaseModel):
     location: str | None
     notes: str | None
     recurrence_rule: str | None = None
+    external: ExternalRef | None = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -92,6 +100,8 @@ class CalendarItem(BaseModel):
     # Tekrarlayan etkinligin bir tekrari: start/end bu tekrarin zamanidir;
     # duzenleme butun seriye uygulanir (event_id)
     recurrence_rule: str | None = None
+    # Dis takvimden gelen etkinlik: salt okunur (surukleme/duzenleme kapali)
+    external: ExternalRef | None = None
 
 
 class CalendarResponse(BaseModel):
