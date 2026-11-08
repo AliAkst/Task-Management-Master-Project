@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.actions import ActionGate, action_payload, load_modes
 from app.agent.context import build_system_prompt
-from app.agent.day_planner import is_schedule_request, plan_day
+from app.agent.day_planner import is_schedule_request, is_tidy_request, plan_day
 from app.agent.loop import run_agent
 from app.agent.memory_extractor import (
     CHAT_HIDDEN_TOOLS,
@@ -363,6 +363,39 @@ async def _stream(
                     "dropped_local_messages": dropped,
                 },
             )
+
+            # "Profilimi/hafizani temizle": model gerekmez, kod adaylari bulur
+            if is_tidy_request(text) and toolbox.gate.allowed("forget_fact"):
+                result = await toolbox.execute(
+                    ToolCall(
+                        id=f"tidy-{conversation_id}-{user_row.id}",
+                        name="tidy_facts",
+                        arguments={},
+                    )
+                )
+                if result.action is not None:
+                    yield sse("action", result.action)
+                    reply = (
+                        "Profilinde temizlenecekleri buldum; onay kartından kontrol et."
+                    )
+                else:
+                    reply = (
+                        json.loads(result.text).get("error")
+                        or "Temizlenecek bilgi yok."
+                    )
+                yield sse("token", {"text": reply})
+                session.add(
+                    MessageEntity(
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=reply,
+                        model_id=model_id,
+                        is_local=is_local,
+                    )
+                )
+                await session.commit()
+                yield sse("done", {"conversation_id": conversation_id})
+                return
 
             # Gunu saat saat planlama istegi: odakli planlama adimi (tek arac)
             if is_schedule_request(text) and toolbox.gate.allowed("schedule_day"):

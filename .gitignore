@@ -11,3 +11,6 @@ dist/
 .ruff_cache/
 .mypy_cache/
 .coverage
+
+# start-app.ps1 kayitlari
+scripts/logs/

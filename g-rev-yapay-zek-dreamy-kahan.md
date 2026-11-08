@@ -102,6 +102,9 @@
 
 ### Yeni oturum için hızlı başlangıç
 - **Ortam:** Windows, Docker YOK (SQLite), uv: `C:\Users\alium\AppData\Roaming\Python\Python313\Scripts\uv.exe` (PATH'te değil). Ollama kurulu (qwen3.5:4b, gemma4:26b, qwen3.8:27b; deepseek-r1 ve coder listede gizli). GPU: RTX 4060 Laptop 8 GB.
+- **Günlük kullanım:** masaüstündeki **Ajanda** kısayolu (`scripts/start-app.ps1`: servisleri penceresiz başlatır, Ollama kapalıysa açar, hazır olunca tarayıcıda açar; ikinci tıklama sadece tarayıcıyı açar), **Ajanda - Durdur** ile kapatılır. Kısayolları yeniden kurmak: `scripts/install-shortcut.ps1`. Kayıtlar `scripts/logs/`.
+- **Asistan veritabanı:** sadece `ASSISTANT_DATABASE_URL` okur (eskiden `DATABASE_URL` sızınca boş `task_management.db` açıyordu).
+- **Profil temizliği:** sohbette "profilimi temizle" → kod tekrarları, tek güne ait ve anlamsız bilgileri bulur, tek onay kartıyla pasife alır.
 - **Çalıştırma:** `./scripts/dev.ps1` ya da önizleme (`task api project/.claude/launch.json`: task-api 8000, assistant 8100, web 5173).
 - **Testler:** `services/task-api`: `uv run pytest -q` (153) · `services/assistant-service`: `uv run pytest -q` (96) · `apps/web`: `npm run build`.
 - **Bulut model anahtarı:** `ASSISTANT_SECRET_KEY` yoksa ilk kayıtta `services/assistant-service/.secret_key` üretilir (git'te yok). Silinirse kayıtlı API anahtarları çözülemez, yeniden girilmeli.

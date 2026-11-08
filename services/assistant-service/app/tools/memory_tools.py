@@ -8,6 +8,7 @@ Hafiza (Faz 5b): asistanin kullanici hakkinda ogrendikleri + hedefler.
   bulut model bunlari ne gorur ne degistirebilir.
 """
 
+import re
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -29,6 +30,35 @@ CATEGORIES: dict[str, str] = {
 }
 PRIVATE_BY_DEFAULT = {"health", "relationship"}
 GOAL_STATUSES = ("active", "achieved", "dropped")
+
+# "Profilimi temizle": neyin gidecegine KOD karar verir (kucuk model yanlis
+# bilgiyi silebilir); model sadece belirli bilgileri ek olarak isaretleyebilir.
+_DAY_SPECIFIC = re.compile(
+    r"^(pazartesi|salı|çarşamba|perşembe|cuma|cumartesi|pazar|bugün|yarın)\b", re.I
+)
+_JUNK = re.compile(r"^kullanıcı (eklememiş|belirtmemiş|bir şey|.*görmek istiyor)", re.I)
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"[^\w ]", "", text.casefold()).strip()
+
+
+def tidy_reasons(facts: list[UserFactEntity]) -> list[tuple[UserFactEntity, str]]:
+    """Temizlenecek bilgiler: tekrarlar (en eskisi kalir), tek gune ait
+    ayrintilar, kullanici hakkinda olmayan anlamsiz kayitlar."""
+    out: list[tuple[UserFactEntity, str]] = []
+    seen: set[str] = set()
+    for f in sorted(facts, key=lambda x: x.id):
+        key = _norm(f.content)
+        if key in seen:
+            out.append((f, "tekrar"))
+        elif _DAY_SPECIFIC.match(f.content.strip()):
+            out.append((f, "tek güne ait"))
+        elif _JUNK.match(f.content.strip()):
+            out.append((f, "anlamsız"))
+        seen.add(key)
+    return out
+
 
 MEMORY_ACTION_TYPES = {
     "remember_fact": "Hakkımda bilgi kaydetme / güncelleme",
@@ -56,6 +86,16 @@ MEMORY_SPECS: list[ToolSpec] = [
                 },
             },
             "required": ["content"],
+        },
+    ),
+    ToolSpec(
+        "tidy_facts",
+        "Kullanıcı profilini/hafızayı temizlemeni isterse çağır: tekrar eden, tek güne ait ve "
+        "anlamsız bilgiler otomatik bulunur. Yanlış olduğunu bildiğin bilgilerin id'lerini "
+        "fact_ids ile ekleyebilirsin.",
+        {
+            "type": "object",
+            "properties": {"fact_ids": {"type": "array", "items": {"type": "integer"}}},
         },
     ),
     ToolSpec(
@@ -87,6 +127,7 @@ MEMORY_TOOL_NAMES = {s.name for s in MEMORY_SPECS}
 TOOL_TO_ACTION = {
     "remember_fact": "remember_fact",
     "forget_fact": "forget_fact",
+    "tidy_facts": "forget_fact",
     "save_goal": "manage_goal",
 }
 
@@ -180,6 +221,35 @@ class MemoryTools:
             f"🧠 Hatırlanacak ({CATEGORIES[category]}{lock}): «{_clip(content)}»",
         )
 
+    async def prepare_tidy(
+        self, fact_ids: list[Any] | None = None
+    ) -> tuple[dict[str, Any], str]:
+        async with self.session_maker() as session:
+            facts = await load_facts(
+                session, self.user_id, include_private=not self.cloud
+            )
+        picked = tidy_reasons(facts)
+        chosen = {f.id for f, _ in picked}
+        by_id = {f.id: f for f in facts}
+        for raw in fact_ids or []:
+            try:
+                fid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if fid in by_id and fid not in chosen:
+                picked.append((by_id[fid], "yanlış olarak işaretlendi"))
+                chosen.add(fid)
+        if not picked:
+            raise ValueError(
+                "Temizlenecek bilgi yok: tekrar ya da tek güne ait kayıt bulunmadı"
+            )
+        lines = [f"- «{_clip(f.content, 70)}» ({why})" for f, why in picked]
+        summary = (
+            f"🧹 Profil temizliği: {len(picked)} bilgi kaldırılır, "
+            f"{len(facts) - len(picked)} bilgi kalır\n" + "\n".join(lines)
+        )
+        return {"fact_ids": sorted(chosen)}, summary
+
     async def prepare_forget(self, fact_id: Any) -> tuple[dict[str, Any], str]:
         async with self.session_maker() as session:
             fact = await self._owned_fact(session, fact_id)
@@ -206,6 +276,18 @@ class MemoryTools:
                     session.add(fact)
                 await session.commit()
                 return {"fact_id": fact.id}
+            if action_type == "forget_fact" and "fact_ids" in args:
+                done = []
+                for fid in args["fact_ids"]:
+                    try:
+                        fact = await self._owned_fact(session, fid)
+                    except ValueError:
+                        continue  # arada silinmis olabilir
+                    fact.is_active = False
+                    fact.updated_at = now
+                    done.append(fact.id)
+                await session.commit()
+                return {"forgotten": done}
             if action_type == "forget_fact":
                 fact = await self._owned_fact(session, args["fact_id"])
                 fact.is_active = False

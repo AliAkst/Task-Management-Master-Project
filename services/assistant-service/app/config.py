@@ -8,7 +8,11 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Assistant Service"
-    database_url: str = "sqlite+aiosqlite:///./assistant.db"
+    # Kendi adi: dev.ps1 task-api icin DATABASE_URL ayarlayinca asistan yanlislikla
+    # bos bir task_management.db kullaniyordu (sohbetler/bilgiler "kayboluyordu")
+    database_url: str = Field(
+        "sqlite+aiosqlite:///./assistant.db", validation_alias="ASSISTANT_DATABASE_URL"
+    )
     # AI veriye SADECE task-api uzerinden, kullanicinin JWT'siyle erisir
     task_api_url: str = "http://localhost:8000/api/v1"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]

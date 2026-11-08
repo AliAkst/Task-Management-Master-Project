@@ -305,3 +305,31 @@ async def test_deleting_conversation_detaches_its_actions(client):
     async with client.db() as s:
         action = await s.scalar(select(AiActionEntity))
     assert action.conversation_id is None  # yeni sohbete karismaz
+
+
+async def test_tidy_profile_on_request(client):
+    """'Profilimi temizle' -> kod tekrarlari/tek gune ait/anlamsizlari bulur, onayla gider."""
+    for content in (
+        "Haftada 3 gün sabah koşuyor",
+        "Haftada 3 gün sabah koşuyor.",
+        "Salı günü kuyumcuya uğruyor.",
+        "Kullanıcı eklememiş.",
+        "İşe 9'da başlıyor",
+    ):
+        await client.post(
+            f"{API}/facts", json={"category": "routine", "content": content}
+        )
+    client.providers["fake:local"] = FakeProvider([])  # model hic cagrilmaz
+    events = await chat(client, "Profilimi temizler misin, çok tekrar var")
+    action = next(d for e, d in events if e == "action")
+    assert action["action_type"] == "forget_fact"
+    assert "3 bilgi kaldırılır, 2 bilgi kalır" in action["summary"]
+    assert client.providers["fake:local"].received == []
+
+    res = await client.post(f"{API}/actions/{action['id']}/approve", json={})
+    assert res.json()["data"]["status"] == "executed"
+    facts = (await client.get(f"{API}/facts")).json()["data"]["facts"]
+    assert sorted(f["content"] for f in facts) == [
+        "Haftada 3 gün sabah koşuyor",
+        "İşe 9'da başlıyor",
+    ]
