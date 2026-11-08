@@ -25,6 +25,8 @@ class EventCreate(BaseModel):
     card_id: int | None = None
     location: str | None = Field(None, max_length=200)
     notes: str | None = Field(None, max_length=20000)
+    # RRULE, orn. "FREQ=WEEKLY;BYDAY=MO,WE,FR" (bos: tekrarlanmaz)
+    recurrence_rule: str | None = Field(None, max_length=500)
 
     @model_validator(mode="after")
     def check(self) -> Self:
@@ -42,6 +44,7 @@ class EventUpdate(BaseModel):
     board_id: int | None = None
     location: str | None = Field(None, max_length=200)
     notes: str | None = Field(None, max_length=20000)
+    recurrence_rule: str | None = Field(None, max_length=500)  # null: tekrari kaldir
 
     @model_validator(mode="after")
     def check(self) -> Self:
@@ -61,6 +64,7 @@ class EventResponse(BaseModel):
     all_day: bool
     location: str | None
     notes: str | None
+    recurrence_rule: str | None = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -85,6 +89,9 @@ class CalendarItem(BaseModel):
     card_id: int | None = None
     card_status: TaskStatus | None = None
     location: str | None = None
+    # Tekrarlayan etkinligin bir tekrari: start/end bu tekrarin zamanidir;
+    # duzenleme butun seriye uygulanir (event_id)
+    recurrence_rule: str | None = None
 
 
 class CalendarResponse(BaseModel):

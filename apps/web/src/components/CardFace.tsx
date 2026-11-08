@@ -1,4 +1,5 @@
 import {
+  Repeat,
   AlignLeft,
   CalendarDays,
   Check,
@@ -12,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { describeRule } from '../lib/rrule'
 import type { CardSummary, Label } from '../lib/types'
 import { useActiveSession } from '../api/sessions'
 import { formatDuration, formatShortDate, isOverdue, PRIORITY_LABEL } from '../lib/format'
@@ -99,6 +101,11 @@ export default function CardFace({ card, labels, dragging }: Props) {
         {card.blocked && (
           <Meta icon={Link2} className="text-amber-700" title={`${card.blocked_by_count} ön koşul bitmedi`}>
             Bekliyor
+          </Meta>
+        )}
+        {card.recurrence_rule && (
+          <Meta icon={Repeat} title={`Tekrarlayan iş: ${describeRule(card.recurrence_rule)}`}>
+            {card.series_index != null && card.series_index > 1 ? `${card.series_index}.` : null}
           </Meta>
         )}
         {card.note_count > 0 && <Meta icon={StickyNote} title="Notlar">{card.note_count}</Meta>}

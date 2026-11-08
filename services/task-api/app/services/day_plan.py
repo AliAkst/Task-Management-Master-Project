@@ -36,6 +36,7 @@ from app.models.day_plan import (
 from app.models.task import TaskStatus
 from app.services.activity import ActivityLogger
 from app.services.ordering import STEP
+from app.services.recurrence import events_in_range, occurrences
 from app.services.timeutil import day_bounds, local_today, session_span, user_tz
 
 OUTCOME_ACTION = {
@@ -179,14 +180,14 @@ class DayPlanService:
             result.append(s)
 
         # 1) O gunun takvim bloklari / etkinlikleri
-        events = await self.uow.events.in_range(user_id, start, end)
+        events = await events_in_range(self.uow, user_id, start, end, tz)
         event_cards = {
             c.id: c
             for c in await self.uow.tasks.get_many(
-                [e.card_id for e in events if e.card_id is not None]
+                [e.card_id for e, _, _ in events if e.card_id is not None]
             )
         }
-        for e in events:
+        for e, occ_start, occ_end in events:
             card = event_cards.get(e.card_id) if e.card_id is not None else None
             if card is not None and card.status == TaskStatus.COMPLETED:
                 continue
@@ -197,10 +198,10 @@ class DayPlanService:
                     event_id=e.id,
                     title=e.title,
                     board_id=card.board_id if card else e.board_id,
-                    planned_start=None if e.all_day else e.start_at,
+                    planned_start=None if e.all_day else occ_start,
                     planned_minutes=None
                     if e.all_day
-                    else int((e.end_at - e.start_at).total_seconds() // 60),
+                    else int((occ_end - occ_start).total_seconds() // 60),
                 )
             )
 
@@ -357,6 +358,8 @@ class DayPlanService:
             if item.was_planned:
                 await self.uow.day_plan_items.delete(item)
 
+        tz = await user_tz(self.uow, user_id)
+        bounds = day_bounds(day, tz)
         newly_planned: list[TaskEntity] = []
         for idx, (it, (card, event)) in enumerate(
             zip(data.items, resolved, strict=True), start=1
@@ -367,6 +370,17 @@ class DayPlanService:
             if minutes is None and card is not None:
                 minutes = card.estimated_minutes
 
+            planned_start = event.start_at if event and not event.all_day else None
+            if event is not None and event.recurrence_rule and planned_start:
+                # Tekrarlayan etkinlik: o gunku tekrarin saati
+                occ = occurrences(
+                    event.recurrence_rule,
+                    event.start_at,
+                    event.end_at - event.start_at,
+                    bounds,
+                    tz,
+                )
+                planned_start = occ[0][0] if occ else None
             await self.uow.day_plan_items.create(
                 DayPlanItemEntity(
                     user_id=user_id,
@@ -380,9 +394,7 @@ class DayPlanService:
                     if card
                     else (event.board_id if event else None),
                     was_planned=True,
-                    planned_start=event.start_at
-                    if event and not event.all_day
-                    else None,
+                    planned_start=planned_start,
                     planned_minutes=minutes,
                     position=idx * STEP,
                 )

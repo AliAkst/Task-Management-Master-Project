@@ -492,6 +492,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cards/{card_id}/recurrence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Card Recurrence
+         * @description Karti tekrarlayan yapar (RRULE) ya da tekrari durdurur (rule=null).
+         *     Tamamlaninca bir sonraki kart kuralin bir sonraki tarihiyle acilir.
+         */
+        put: operations["set_card_recurrence_api_v1_cards__card_id__recurrence_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cards/{card_id}/split": {
         parameters: {
             query?: never;
@@ -1548,6 +1569,8 @@ export interface components {
             card_status?: components["schemas"]["TaskStatus"] | null;
             /** Location */
             location?: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
         };
         /** CalendarResponse */
         CalendarResponse: {
@@ -1667,6 +1690,17 @@ export interface components {
              * @default 0
              */
             subtask_tracked_seconds: number;
+            /** Series Id */
+            series_id?: number | null;
+            /** Series Index */
+            series_index?: number | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
+            /**
+             * Series Done Count
+             * @default 0
+             */
+            series_done_count: number;
             /** User Id */
             user_id: number;
             /** Description */
@@ -1704,6 +1738,14 @@ export interface components {
             list_id: number;
             /** Index */
             index: number;
+        };
+        /**
+         * CardRecurrence
+         * @description Karti tekrarlayan yapar (RRULE) ya da tekrari durdurur (null).
+         */
+        CardRecurrence: {
+            /** Rule */
+            rule?: string | null;
         };
         /**
          * CardRef
@@ -1827,6 +1869,17 @@ export interface components {
              * @default 0
              */
             subtask_tracked_seconds: number;
+            /** Series Id */
+            series_id?: number | null;
+            /** Series Index */
+            series_index?: number | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
+            /**
+             * Series Done Count
+             * @default 0
+             */
+            series_done_count: number;
         };
         /** CardUpdate */
         CardUpdate: {
@@ -2106,6 +2159,8 @@ export interface components {
             location?: string | null;
             /** Notes */
             notes?: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
         };
         /** EventResponse */
         EventResponse: {
@@ -2133,6 +2188,8 @@ export interface components {
             location: string | null;
             /** Notes */
             notes: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
             /** Created By */
             created_by: string;
             /**
@@ -2162,6 +2219,8 @@ export interface components {
             location?: string | null;
             /** Notes */
             notes?: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: string | null;
         };
         /** GoalCreate */
         GoalCreate: {
@@ -3923,6 +3982,43 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_CardDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_card_recurrence_api_v1_cards__card_id__recurrence_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                card_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardRecurrence"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

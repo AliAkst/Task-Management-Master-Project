@@ -2,7 +2,7 @@
 
 > ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
 >
-> **Branch:** `feature/ai-life-manager` · Faz 0–6b tamam. **Sıradaki: Faz 6c** (series + RRULE), sonra Faz 7.
+> **Branch:** `feature/ai-life-manager` · Faz 0–6 tamam. **Sıradaki: Faz 7** (dış entegrasyonlar).
 
 ## 0. İlerleme Durumu
 
@@ -21,7 +21,7 @@
 | 5c — Claude + model ayarları + tasarım gözden geçirme | ✅ Tamam | `a6b5e34` | AnthropicProvider (resmi SDK), Claude/GPT/Gemini bağlantı ekranı (Fernet şifreli key), local-zorunlu varsayılan model, board varsayılan modeli + ModelRouter, ücret uyarısı; tüm sayfaların tasarım gözden geçirmesi (aşağıda) |
 | 6a — Gün sonu döngüsü | ✅ Tamam | `f5ae4e8` | değerlendirme → arka plan işi: gün özeti (`ai_summary`) + yarın plan önerisi (gemma4:26b), tahmin katsayısı, arka plan modeli ayarı |
 | 6b — Öğrenen asistan | ✅ Tamam | `ff08bce` | haftalık analiz → `ai_insights` (onay → kalıcı bilgi), zincirde sıradaki kart plan önerilerinde |
-| 6c — Tekrarlayan işler | ⏳ Bekliyor | — | `series` + RRULE (kart ve etkinlik), "Koşu: 14. tamamlama" |
+| 6c — Tekrarlayan işler | ✅ Tamam | (bu commit) | tekrarlayan etkinlikler (RRULE, takvimde açılır), kart serileri (bitince sıradaki kart), ortak Tekrar seçici |
 | 7 — Dış Entegrasyonlar | ⏳ Bekliyor | — | Trello (tek seferlik import), Google, Microsoft To Do (Samsung Reminder üzerinden) |
 
 ### Faz 5b'de yapılanlar (ayrıntı)
@@ -62,6 +62,12 @@
 - **Zincirde sıradaki:** task-api yarın önerilerine yeni tür `next_in_chain`: ön koşullarının hepsi bitmiş ve sonuncusu son 14 günde bitmiş açık kartlar. Hem planlama ekranında ("Sıradaki") hem asistanın gün sonu önerisinde öncelikli aday.
 - **Gerçek model:** gemma4:26b örnek 4 haftalık veriyle 8 sn'de 4 doğru gözlem ve hafta özeti üretti; sayıları değiştirmedi. Yerel veritabanında henüz yeterli değerlendirilmiş gün yok, gerçek veride "kalıp bulunamadı" dedi (beklenen).
 
+### Faz 6c'de yapılanlar (ayrıntı)
+- **Kurallar (`app/services/recurrence.py`, `python-dateutil`):** RFC 5545 RRULE, sadece günlük/haftalık/aylık/yıllık (saatlik ve daha sık reddedilir); kural kullanıcının **yerel saatinde** açılır (yaz/kış saatinden bağımsız 07:00 hep 07:00), veritabanında UTC.
+- **Tekrarlayan etkinlik:** `events.recurrence_rule` (tek satır); `/calendar` ve gün planı önerileri aralıktaki tekrarları sorgu anında açar (tekrar başına satır yok; takvim kimliği `event-{id}-{zaman}`). Plan maddesi o günkü tekrarın saatini alır. Takvimde tekrarlar sürüklenmez; tıklayınca **seri** düzenlenir/silinir.
+- **Tekrarlayan kart:** `card_series` (başlık, board, kural, aktif mi) + `tasks.series_id/series_index`. `PUT /cards/{id}/recurrence` ({rule} ya da null). Seri kartı tamamlanınca (kanban, kart penceresi, gün değerlendirmesi — hepsi aynı yoldan) bir kez sıradaki kart açılır: ilk normal listede, başlık/açıklama/öncelik/tahmin/etiketler ve checklist (işaretsiz) kopyalanır; son tarih eski son tarihin saatini koruyan, şimdiden sonraki ilk tekrar (kaçırılan günler atlanır). Kural bitince (`UNTIL`/`COUNT`) seri durur. Kartlarda `series_done_count` ("seri 14 kez tamamlandı").
+- **Frontend:** ortak `RecurrencePicker` (Tekrarlanmaz / Her gün / Hafta içi / Haftanın günleri / Her ay / Her yıl / Özel RRULE + bitiş tarihi, okunur Türkçe açıklama — `lib/rrule.ts`); etkinlik penceresinde ve kart penceresinin künyesinde; kanban kartında tekrar ikonu + serideki sıra.
+
 ### Plandan bilinçli sapmalar
 | Plan | Yapılan | Neden |
 |---|---|---|
@@ -76,6 +82,8 @@
 | `model_routes` tablosu (chat/background_planning/insight/classification) | `model_prefs.background_model_id` (sohbet = varsayılan, arka plan = tek ayar) | Şimdilik iki görev sınıfı yeterli; sınıflandırma Faz 7'de |
 | pgvector semantik arama (ops.) | Yapılmadı | SQLite, Docker yok |
 | `card.unblocked` olayıyla sıradaki kartı takvime otomatik koyma (`schedule_next_in_chain` izni) | Açılan kart ertesi günün plan önerilerine `next_in_chain` olarak düşer; asistan gün sonu planında önceliklendirir | Olay kuyruğu yok; plan önerisi zaten onay/izin akışından geçiyor |
+| `series` tablosu (kart ve etkinlik ortak) | Kartlar için `card_series`; etkinlikte kural doğrudan `events.recurrence_rule` | Etkinlik tekrarları satır değil, sorgu anında açılıyor; seriye sadece kartların "kaçıncı" sayacı için gerek var |
+| Tekil tekrarı düzenleme/silme (istisnalar) | Değişiklik bütün seriye uygulanır | İlk sürümde sade tutuldu; EXDATE ile eklenebilir |
 | `propose_insight` sohbet aracı | Sadece haftalık analiz gözlem üretir | Model kalıp uydurmasın: gözlemler veriden hesaplanır |
 | Bulut modellerle gerçek test | Sadece birim/entegrasyon testleri (sahte istemci); gerçek API'ye istek atılmadı | Kullanıcı kararı: API maliyeti |
 
@@ -88,7 +96,7 @@
 ### Yeni oturum için hızlı başlangıç
 - **Ortam:** Windows, Docker YOK (SQLite), uv: `C:\Users\alium\AppData\Roaming\Python\Python313\Scripts\uv.exe` (PATH'te değil). Ollama kurulu (qwen3.5:4b, gemma4:26b, qwen3.8:27b; deepseek-r1 ve coder listede gizli). GPU: RTX 4060 Laptop 8 GB.
 - **Çalıştırma:** `./scripts/dev.ps1` ya da önizleme (`task api project/.claude/launch.json`: task-api 8000, assistant 8100, web 5173).
-- **Testler:** `services/task-api`: `uv run pytest -q` (146) · `services/assistant-service`: `uv run pytest -q` (77) · `apps/web`: `npm run build`.
+- **Testler:** `services/task-api`: `uv run pytest -q` (153) · `services/assistant-service`: `uv run pytest -q` (77) · `apps/web`: `npm run build`.
 - **Bulut model anahtarı:** `ASSISTANT_SECRET_KEY` yoksa ilk kayıtta `services/assistant-service/.secret_key` üretilir (git'te yok). Silinirse kayıtlı API anahtarları çözülemez, yeniden girilmeli.
 - **Test hesabı:** `apps/web/README.md`.
 - **Benchmark:** `services/assistant-service`: `uv run python -m scripts.benchmark_models` (rapor `benchmark_results/`, git'te yok).
@@ -305,7 +313,7 @@ Uygulamanın geri kalanı yalnızca nötr tipleri (`Msg`, `ToolSpec`, `ToolCall`
 | ✅ **3b — Planlama, Değerlendirme & İstatistik** (hatırlatıcılar: bkz. §0 sapmalar) | day_plans/items; planlama ekranı (takvimden + vadeli kartlardan otomatik dolar), değerlendirme ekranı (done/partial/not_done/postponed + neden + mood/energy), "yarına taşı"; planning/review saati ayarı + **hatırlatıcılar** (APScheduler + Web Push); `card_stats`, `daily_stats`, analytics endpoint'leri; **istatistik sayfası** (Recharts) | Performansını ölçen istatistikler; AI için zengin geçmiş |
 | ✅ **4 — AI Çekirdek** | **local model benchmark'ı (§8) ve model seçimi**; assistant-service; provider katmanı (OpenAICompatible → Ollama + GPT); ModelRouter + gizlilik filtresi; ContextBuilder; okuma tool'ları; SSE chat; chat paneli + **mesaj bazında model seçici** | Verilerini gören, yorumlayan sohbet asistanı (local model öncelikli) |
 | 🟡 **5 — AI Aksiyonları & Hafıza** (5a ✅, 5b ✅ + tasarım yenilemesi, **5c ⏳**: AnthropicProvider + model ayarları) | yazma + yapı kurma tool'ları; `ai_permissions` + onay kartları + "otomatik yapayım mı?" akışı; user_facts, goals, profil ekranı; onboarding sohbeti; AnthropicProvider; Ayarlar: provider/model, şifreli key, board varsayılan modeli | AI plan yapıp kart/etkinlik/zincir oluşturuyor, seni hatırlıyor; Claude/GPT/local geçişi |
-| ⏳ **6 — Proaktif & Öğrenen Asistan** | review/plan event'i → AI gün özeti + plan önerisi; zincirde sıradakini otomatik atama; haftalık değerlendirme + ai_insights; kişisel tahmin katsayısı; tekrarlayan kart/etkinlik (series + RRULE); ops. pgvector semantik arama | Kullandıkça seni daha iyi tanıyan, hedeflerine yönlendiren asistan |
+| ✅ **6 — Proaktif & Öğrenen Asistan** | review/plan event'i → AI gün özeti + plan önerisi; zincirde sıradakini otomatik atama; haftalık değerlendirme + ai_insights; kişisel tahmin katsayısı; tekrarlayan kart/etkinlik (series + RRULE); ops. pgvector semantik arama | Kullandıkça seni daha iyi tanıyan, hedeflerine yönlendiren asistan |
 | ⏳ **7 — Dış Entegrasyonlar** | `IntegrationConnector` arayüzü (provider katmanıyla aynı fikir) + Gelen Kutusu board'u; sırasıyla **Trello** (tek seferlik import, API key+token), **Google Calendar/Gmail** ve **Microsoft (Outlook/To Do, Graph API — Samsung Reminder → To Do senkronu üzerinden)** OAuth ile | Dış kaynaklardaki güncel işler uygulamaya akıyor, AI doğru board'a dağıtıyor |
 
 ---

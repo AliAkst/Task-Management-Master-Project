@@ -13,6 +13,8 @@ import type { BoardDetail, TaskPriority } from '../lib/types'
 import CardSchedule from './CardSchedule'
 import CardTime, { CardTimerButton } from './CardTime'
 import Modal from './Modal'
+import RecurrencePicker from './RecurrencePicker'
+import { dayCodeOf } from '../lib/rrule'
 
 interface Props {
   cardId: number
@@ -349,6 +351,23 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                 }}
               />
             </label>
+            <div className="col-span-2 space-y-1 lg:col-span-1">
+              <RecurrencePicker
+                key={`${c.id}-${c.recurrence_rule ?? ''}`}
+                value={c.recurrence_rule}
+                onChange={(rule) => rule !== c.recurrence_rule && m.recurrence.mutate(rule)}
+                startDay={dayCodeOf(c.due_date ? new Date(c.due_date) : new Date())}
+                inputClass={input}
+              />
+              {c.series_id != null && (
+                <p className="text-[13px] text-slate-600">
+                  Serinin {c.series_index}. kartı; seri {c.series_done_count} kez tamamlandı.
+                  {c.recurrence_rule &&
+                    (c.status === 'completed' ? ' Sıradaki kart açıldı.' : ' Bitince sıradaki kart kendiliğinden açılır.')}
+                </p>
+              )}
+              {m.recurrence.error && <p className="text-[13px] text-red-700">{m.recurrence.error.message}</p>}
+            </div>
             <div className="space-y-1">
               <span className={fieldLabel}>Etiketler</span>
               <div className="flex flex-wrap gap-1">
