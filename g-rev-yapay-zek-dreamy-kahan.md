@@ -18,7 +18,7 @@
 | 4 — AI Çekirdek | ✅ Tamam | `e52b4b7` | assistant-service, Ollama native adaptörü, benchmark, okuma araçları, gizlilik filtresi, sohbet paneli |
 | 5a — AI Aksiyonları | ✅ Tamam | `1d4f701` | yazma araçları, ai_permissions (ask/auto/never), ai_actions, onay kartları, `X-Actor: ai` |
 | 5b — Hafıza + Tasarım | ✅ Tamam | `347b36a` | **Tasarım yenilemesi** (aşağıda), user_facts, goals, profil ekranı, tanışma sohbeti, ayrı hafıza çıkarımı |
-| 5c — Claude + model ayarları + tasarım gözden geçirme | ✅ Tamam | (bu commit) | AnthropicProvider (resmi SDK), Claude/GPT/Gemini bağlantı ekranı (Fernet şifreli key), local-zorunlu varsayılan model, board varsayılan modeli + ModelRouter, ücret uyarısı; tüm sayfaların tasarım gözden geçirmesi (aşağıda) |
+| 5c — Claude + model ayarları + tasarım gözden geçirme | ✅ Tamam | `a6b5e34` | AnthropicProvider (resmi SDK), Claude/GPT/Gemini bağlantı ekranı (Fernet şifreli key), local-zorunlu varsayılan model, board varsayılan modeli + ModelRouter, ücret uyarısı; tüm sayfaların tasarım gözden geçirmesi (aşağıda) |
 | 6 — Proaktif & Öğrenen | ⏳ Bekliyor | — | review.submitted → gün özeti + ertesi gün planı (gemma4:26b), ai_insights, tahmin katsayısı, görev bazlı ModelRouter, RRULE |
 | 7 — Dış Entegrasyonlar | ⏳ Bekliyor | — | Trello (tek seferlik import), Google, Microsoft To Do (Samsung Reminder üzerinden) |
 
