@@ -23,4 +23,26 @@
 - Liste sürüklemede overlay görünür. `npm run build` temiz; konsol hatasız. Kısa GIF/ekran görüntüleri.
 
 ## İlerleme
-_(oturum sonunda doldurulur)_
+**Durum:** kod tamam, commit edilmedi (2026-11-09). Migration yok.
+
+### Yapılanlar
+- `api/boards.ts`: `moveCard`/`moveList` → `mutationKey` + `onMutate` (`cancelQueries`, önceki veriyi sakla, `setQueryData`), `onError` geri alma, `onSettled` refresh. Saf yardımcılar `applyCardMove` (komşu pozisyon ortası, uçlarda ±1, bitti listesine taşımada `status=completed`/`completed_at`, listeden çıkarken `pending`/`null`) ve `applyListMove` dışa aktarıldı.
+- `BoardPage.tsx`: effect, taşıma sürerken (`useIsMutating` + yerel `pendingMoves` sayacı) `columns`/`listOrder`'ı yeniden kurmaz → geri zıplama yok; özel `collisionDetection` (`pointerWithin` → `rectIntersection`; liste sürüklemede yalnız liste droppable'ları; kartta kart isabeti öncelikli); `MeasuringStrategy.Always`; `autoScroll` (threshold x 0.15 / y 0.1); `dropAnimation` (200 ms, cubic-bezier, `defaultDropAnimationSideEffects`), `prefers-reduced-motion` → `null`; `onDragCancel` `dragOrigin`'i de sıfırlar.
+- `KanbanList.tsx`: kart ve liste sortable geçişi 180 ms ease; sürüklenen kartın yerinde kesik çizgili hayalet (opacity 0.4); yeni `ListOverlay` (başlık + ilk 3 kart + "+N kart daha").
+- `CardFace.tsx`: overlay kartı `rotate-2 scale-[1.03] cursor-grabbing` + belirgin gölge.
+
+### Sapmalar
+| Plan | Yapılan | Neden |
+|---|---|---|
+| Hata yolu: mevcut "Taşınamadı" gösterimi | Mevcut `m.moveCard.error` mesajı korundu (API'nin hata metni); `moveList` hatası ekrana yazılmıyor, yalnız geri alınıyor | Mevcut gösterim yalnız `moveCard.error`'a bağlıydı; kapsam dışı bırakıldı |
+| `useIsMutating` ile koruma | + yerel `pendingMoves` sayacı | `mutate()` çağrısı ile `isMutating` güncellemesi arasında bir render'da effect eski veriden kurup zıplama yaratabilirdi |
+| Kart sürüklemede yalnız `pointerWithin`→`rectIntersection` | Kart isabeti varsa kartlar, yoksa liste hedefi seçilir | Liste bölümü de isabet aldığından kart hedefi ikinci sıraya düşebiliyordu |
+| Tarayıcı doğrulaması (5175, 3×30 kart) | **Yapılmadı** | `.env` kopya DB'yi garanti etmiyor; gerçek DB riski, uykudaki oturumda kopya kurulumu yapılmadı |
+
+### Doğrulanmayanlar
+- **Arayüz tarayıcıda hiç görülmedi:** listeler arası/aynı liste/boş liste/bitti listesine bırakma, Slow 3G, task-api kapalıyken geri alma + hata mesajı, liste overlay'i, drop animasyonu, reduced-motion. Yalnız `tsc -b && vite build` temiz ve `applyCardMove`/`applyListMove` izole betikle (node, 9 doğrulama) sınandı.
+- Konsol hatası denetlenmedi, GIF/ekran görüntüsü alınmadı.
+- `moveList` iyimser sırası sunucunun `move_list` indeks anlamıyla aynı varsayıldı (arka uç kodu okunmadı; refresh sonrası sunucu sırası kazanır).
+
+### Test sayıları
+- task-api: 333 geçti · assistant-service: 152 geçti · `npm run build` temiz (yeni test yok; web'de test koşucusu yok).

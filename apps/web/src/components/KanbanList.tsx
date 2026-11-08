@@ -19,18 +19,48 @@ function SortableCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: cardKey(card.id),
     data: { type: 'card' },
+    transition: { duration: 180, easing: 'ease' },
   })
   return (
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={isDragging ? 'opacity-30' : ''}
+      className={isDragging ? 'opacity-40 [&>div]:border-dashed [&>div]:border-slate-400' : ''}
       {...attributes}
       {...listeners}
       onClick={() => onOpen(card.id)}
     >
       <CardFace card={card} labels={labels} />
     </li>
+  )
+}
+
+/** Liste surukleme overlay'i: baslik + ilk 3 kartin ozeti. */
+export function ListOverlay({
+  list,
+  cards,
+  labels,
+}: {
+  list: BoardList
+  cards: CardSummary[]
+  labels: Map<number, Label>
+}) {
+  return (
+    <section className="w-72 rotate-2 scale-[1.02] cursor-grabbing rounded-xl bg-slate-100 pb-2 shadow-[0_12px_32px_-8px_rgb(23_32_56/0.4)]">
+      <h3 className="px-3 pt-3 pb-2 text-sm font-medium">
+        {list.is_done_list && <span className="mr-1 text-green-600">✓</span>}
+        {list.name}
+        <span className="ml-2 text-xs font-normal text-slate-400">{cards.length}</span>
+      </h3>
+      <ul className="flex flex-col gap-2 px-2">
+        {cards.slice(0, 3).map((c) => (
+          <li key={c.id}>
+            <CardFace card={c} labels={labels} />
+          </li>
+        ))}
+      </ul>
+      {cards.length > 3 && <p className="px-3 pt-2 text-xs text-slate-500">+{cards.length - 3} kart daha</p>}
+    </section>
   )
 }
 
@@ -58,6 +88,7 @@ export default function KanbanList({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: listKey(list.id),
     data: { type: 'list' },
+    transition: { duration: 180, easing: 'ease' },
   })
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
