@@ -14,6 +14,7 @@ import { useBoards } from '../api/boards'
 import { useAuthStore } from '../stores/auth'
 import { useAssistantUi } from '../stores/assistant'
 import AssistantPanel from './AssistantPanel'
+import { useAutoInboxTriage } from './InboxTriage'
 import Reminders from './Reminders'
 import TimerWidget from './TimerWidget'
 
@@ -80,6 +81,7 @@ export default function Layout() {
   const logout = useAuthStore((s) => s.logout)
   const assistantOpen = useAssistantUi((s) => s.open)
   const toggleAssistant = useAssistantUi((s) => s.toggle)
+  useAutoInboxTriage()
   return (
     // h-screen: icerik alani kesin yukseklik alir (React Flow %100 yukseklik ister,
     // kanban listeleri de sayfa yerine kendi iclerinde kayar)

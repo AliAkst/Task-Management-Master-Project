@@ -19,6 +19,7 @@ from sqlalchemy import select, update
 import app.api.chat as chat_module
 from app.agent.actions import action_payload
 from app.agent.day_review import run_day_review
+from app.agent.inbox_triage import run_inbox_triage
 from app.agent.insights import run_weekly_insights
 from app.api.deps import current_user, ok
 from app.api.providers import load_cloud_config, user_background_model
@@ -32,6 +33,7 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 KIND = "day_review"
 WEEKLY = "weekly_insight"
+INBOX = "inbox_triage"
 WEEKLY_EVERY = timedelta(days=7)
 ACTIVE = ("queued", "running")
 RESTART_ERROR = "Servis yeniden başladı; iş yarım kaldı. Yeniden başlatabilirsin."
@@ -120,7 +122,11 @@ async def _execute(
             model_id, cloud, timeout=settings.background_timeout_seconds
         )
         action_id = None
-        if kind == WEEKLY:
+        if kind == INBOX:
+            result, action_id = await run_inbox_triage(
+                api, provider, chat_module.session_maker, user_id=user["id"], tz=tz
+            )
+        elif kind == WEEKLY:
             result = await run_weekly_insights(
                 api,
                 provider,
@@ -216,7 +222,9 @@ def _spawn(
 async def start_job(user: dict[str, Any], kind: str, day: date) -> dict[str, Any]:
     """Isi kuyruga koyar ve baslatir; ayni gun icin suren is varsa onu doner."""
     async with chat_module.session_maker() as session:
-        job = await latest_job(session, user["id"], kind, day.isoformat())
+        # Gelen Kutusu isi gune bagli degil: suren herhangi bir is yeterli
+        lookup = None if kind == INBOX else day.isoformat()
+        job = await latest_job(session, user["id"], kind, lookup)
         if job is not None and job.status in ACTIVE:
             return await job_out(session, job)  # type: ignore[return-value]
         installed = {m.id for m in await chat_module.list_local_models()}
@@ -251,6 +259,19 @@ async def start_job(user: dict[str, Any], kind: str, day: date) -> dict[str, Any
 async def start_day_review(day: date, user: dict = Depends(current_user)):
     """Gun ozeti + yarin plan onerisi isini baslatir (suruyorsa onu doner)."""
     return ok(await start_job(user, KIND, day))
+
+
+@router.post("/inbox-triage")
+async def start_inbox_triage(user: dict = Depends(current_user)):
+    """Gelen Kutusu dagitimini baslatir (suruyorsa onu doner)."""
+    return ok(await start_job(user, INBOX, date.today()))
+
+
+@router.get("/inbox-triage")
+async def get_inbox_triage(user: dict = Depends(current_user)):
+    """Son Gelen Kutusu isi (yoksa null)."""
+    async with chat_module.session_maker() as session:
+        return ok(await job_out(session, await latest_job(session, user["id"], INBOX)))
 
 
 @router.get("/day-review/{day}")

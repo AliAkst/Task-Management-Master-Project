@@ -50,6 +50,7 @@ ACTION_TYPES: dict[str, str] = {
     "link_cards": "Kartları ön koşulla bağlama",
     "plan_day": "Gün planına madde ekleme",
     "schedule_day": "Günü saat saat planlama (kartlar + takvim blokları)",
+    "triage_inbox": "Gelen Kutusu'ndaki kartları board'lara dağıtma",
     **DELETE_ACTION_TYPES,
     **MEMORY_ACTION_TYPES,
 }
@@ -244,6 +245,21 @@ def _int(value: Any, field: str) -> int:
 
 def _clip(text: str, n: int = 60) -> str:
     return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def triage_summary(moves: list[dict[str, Any]]) -> str:
+    """Gelen Kutusu dagitiminin onay karti metni (cikarilan maddelerden sonra yeniden kurulur)."""
+    lines = [
+        f"• {_clip(m['title'], 50)} → {m['board']} / {m['list']}"
+        + (f" — {_clip(m['reason'], 80)}" if m.get("reason") else "")
+        for m in moves
+    ]
+    return f"📥 Gelen Kutusu'ndan {len(moves)} kart taşınır:\n" + "\n".join(lines)
+
+
+def without_cards(args: dict[str, Any], card_ids: set[int]) -> dict[str, Any]:
+    """Dagitim isleminden kullanicinin cikardigi kartlar (onaydan once)."""
+    return {**args, "moves": [m for m in args["moves"] if m["card_id"] not in card_ids]}
 
 
 @dataclass
@@ -571,6 +587,49 @@ class WriteTools:
             "plan_day", {"date": day.isoformat(), "items": new}, summary
         )
 
+    async def _prepare_triage_inbox(
+        self, moves: list[dict[str, Any]]
+    ) -> PreparedAction:
+        """Gelen Kutusu kartlarini board listelerine tasima onerisi (id'ler cozulur)."""
+        if not moves:
+            raise ValueError("En az bir kart gerekli")
+        resolved: list[dict[str, Any]] = []
+        boards: dict[int, dict[str, Any]] = {}
+        seen: set[int] = set()
+        for m in moves:
+            card = await self._card(m.get("card_id"))
+            if card["id"] in seen:
+                continue
+            seen.add(card["id"])
+            bid = _int(m.get("board_id"), "board_id")
+            if bid not in boards:
+                boards[bid] = await self._board(bid)
+            board = boards[bid]
+            if board["board"].get("system_kind"):
+                raise ValueError("Kart Gelen Kutusu'nun kendisine taşınamaz")
+            if card["board_id"] == bid:
+                continue  # zaten orada
+            wanted = m.get("list_id")
+            lst = next((x for x in board["lists"] if x["id"] == wanted), None)
+            lst = lst or self._find_list(board, None)
+            resolved.append(
+                {
+                    "card_id": card["id"],
+                    "title": card["title"],
+                    "from_board_id": card["board_id"],
+                    "board_id": bid,
+                    "board": board["board"]["name"],
+                    "list_id": lst["id"],
+                    "list": lst["name"],
+                    "reason": str(m["reason"])[:300] if m.get("reason") else None,
+                }
+            )
+        if not resolved:
+            raise ValueError("Taşınacak kart kalmadı")
+        return PreparedAction(
+            "triage_inbox", {"moves": resolved}, triage_summary(resolved)
+        )
+
     async def _prepare_schedule_day(
         self, day: Any, blocks: list[dict[str, Any]]
     ) -> PreparedAction:
@@ -720,6 +779,8 @@ class WriteTools:
             return {"linked": True}
         if action_type == "schedule_day":
             return await self._execute_schedule(api, args)
+        if action_type == "triage_inbox":
+            return await self._execute_triage(api, args)
         if action_type in ("delete_cards", "cancel_day"):
             return await execute_delete(api, action_type, args)
         if action_type == "plan_day":
@@ -750,6 +811,35 @@ class WriteTools:
             p = await api.write("PUT", f"/day-plans/{args['date']}", {"items": merged})
             return {"date": p["date"], "items": len(p["items"])}
         raise ValueError(f"Bilinmeyen işlem: {action_type}")
+
+    async def _execute_triage(
+        self, api: TaskApiClient, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Kartlari tasir (X-Actor: ai). Arada baska yere tasinmis karta dokunulmaz;
+        bir kartin hatasi digerlerini durdurmaz."""
+        moved: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
+        for m in args["moves"]:
+            try:
+                card = await api.get(f"/cards/{m['card_id']}")
+                if card.get("board_id") != m["from_board_id"]:
+                    skipped.append({"card_id": m["card_id"], "title": m["title"]})
+                    continue
+                # index sona kirpilir -> listenin sonuna tasi
+                await api.write(
+                    "POST",
+                    f"/cards/{m['card_id']}/move",
+                    {"list_id": m["list_id"], "index": 100000},
+                )
+                moved.append(
+                    {"card_id": m["card_id"], "title": m["title"], "board": m["board"]}
+                )
+            except TaskApiError as err:
+                failed.append({"title": m["title"], "error": err.message})
+        if not moved and failed:
+            raise TaskApiError(422, failed[0]["error"])
+        return {"moved": moved, "skipped": skipped, "failed": failed}
 
     async def _execute_schedule(
         self, api: TaskApiClient, args: dict[str, Any]
