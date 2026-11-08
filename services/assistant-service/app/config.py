@@ -31,6 +31,10 @@ class Settings(BaseSettings):
 
     # Varsayilan HER ZAMAN local model (kullanici Ayarlar'dan baska bir local secebilir)
     default_model: str = "ollama:qwen3.5:4b"
+    # Arka plan isleri (gun sonu ozeti + ertesi gun plani, haftalik analiz): yavas
+    # ama daha iyi planlayan buyuk local model. Kurulu degilse sohbet modeli
+    background_model: str = "ollama:gemma4:26b"
+    background_timeout_seconds: float = 1800.0
     max_tool_rounds: int = 6
     # Sohbetten sonra ayri, odakli hafiza cikarimi (bkz. app/agent/memory_extractor.py)
     memory_extraction: bool = True

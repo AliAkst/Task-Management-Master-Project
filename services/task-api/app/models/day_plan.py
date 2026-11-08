@@ -60,6 +60,12 @@ class DayReview(BaseModel):
     unplanned: list[UnplannedInput] = Field(default_factory=list, max_length=50)
 
 
+class AiSummaryInput(BaseModel):
+    """Asistanin yazdigi gun ozeti; None ozeti siler."""
+
+    ai_summary: str | None = Field(None, max_length=4000)
+
+
 # ---------------- yanitlar ----------------
 class DayPlanItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -90,6 +96,7 @@ class DayPlanResponse(BaseModel):
     reflection: str | None = None
     planned_at: datetime | None = None
     reviewed_at: datetime | None = None
+    ai_summary: str | None = None  # asistanin gun ozeti (Faz 6)
     items: list[DayPlanItemResponse] = Field(default_factory=list)
     tracked_today_sec: int = 0  # o gun toplam (plansiz dahil)
 

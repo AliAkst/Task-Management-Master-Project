@@ -2,7 +2,7 @@
 
 > ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
 >
-> **Branch:** `feature/ai-life-manager` · Faz 0–5c tamam. **Sıradaki: Faz 6**, sonra Faz 7.
+> **Branch:** `feature/ai-life-manager` · Faz 0–6a tamam. **Sıradaki: Faz 6b** (haftalık analiz + ai_insights, zincirde sıradaki), sonra 6c (series + RRULE), Faz 7.
 
 ## 0. İlerleme Durumu
 
@@ -19,7 +19,9 @@
 | 5a — AI Aksiyonları | ✅ Tamam | `1d4f701` | yazma araçları, ai_permissions (ask/auto/never), ai_actions, onay kartları, `X-Actor: ai` |
 | 5b — Hafıza + Tasarım | ✅ Tamam | `347b36a` | **Tasarım yenilemesi** (aşağıda), user_facts, goals, profil ekranı, tanışma sohbeti, ayrı hafıza çıkarımı |
 | 5c — Claude + model ayarları + tasarım gözden geçirme | ✅ Tamam | `a6b5e34` | AnthropicProvider (resmi SDK), Claude/GPT/Gemini bağlantı ekranı (Fernet şifreli key), local-zorunlu varsayılan model, board varsayılan modeli + ModelRouter, ücret uyarısı; tüm sayfaların tasarım gözden geçirmesi (aşağıda) |
-| 6 — Proaktif & Öğrenen | ⏳ Bekliyor | — | review.submitted → gün özeti + ertesi gün planı (gemma4:26b), ai_insights, tahmin katsayısı, görev bazlı ModelRouter, RRULE |
+| 6a — Gün sonu döngüsü | ✅ Tamam | (bu commit) | değerlendirme → arka plan işi: gün özeti (`ai_summary`) + yarın plan önerisi (gemma4:26b), tahmin katsayısı, arka plan modeli ayarı |
+| 6b — Öğrenen asistan | ⏳ Bekliyor | — | haftalık analiz → `ai_insights` (onay → fact), zincirde sıradaki kartı önerme (`card.unblocked`) |
+| 6c — Tekrarlayan işler | ⏳ Bekliyor | — | `series` + RRULE (kart ve etkinlik), "Koşu: 14. tamamlama" |
 | 7 — Dış Entegrasyonlar | ⏳ Bekliyor | — | Trello (tek seferlik import), Google, Microsoft To Do (Samsung Reminder üzerinden) |
 
 ### Faz 5b'de yapılanlar (ayrıntı)
@@ -43,6 +45,15 @@
 - **Frontend:** Ayarlar → Asistan modeli (local varsayılan + Claude/GPT/Gemini satırları), board formunda "Bu board'da asistan modeli", sohbet panelinde "Otomatik" seçeneği + bulut modele geçerken ücret onay şeridi; bulut seçimi tarayıcıda kalıcı olmaz (yenilenince local'e döner).
 - **Tasarım gözden geçirmesi** (1440 px'te tüm sayfalar gezildi, ekran görüntüleriyle eleştirildi): ortak `PageHeader`/`Section`/`Segmented` (`components/Page.tsx`); Ayarlar, İstatistik, gün değerlendirme ve plan düzenleyicideki "beyaz kart kiti" çizgili bölümlere çevrildi; Ayarlar'da sol bölüm menüsü + anında kaydetme; İstatistik'te defter satırı sayılar, mürekkep tonlarında eksen/ızgara, özel ipucu kutusu, veri yokken açıklamalı boş durum (ruh hâli noktalarının görünmeme hatası düzeltildi); FullCalendar `--fc-*` ve React Flow `--xy-*` değişkenleriyle temalandı (sarı "bugün", lacivert düğmeler, iki satırlık "Tüm gün" gitti); ilişki görünümüne çizgi açıklaması; kart penceresi PC'de iki sütun (içerik + künye); değerlendirme formu iki sütun, emoji yerine sözcüklü 1–5 ölçek; ✓ ⛓ ○ 🔒 ⏰ 🗓 gibi metin sembolleri lucide ikonlarına çevrildi; board başlığı/listesinde gizlilik ve atanmış model görünür.
 
+### Faz 6a'da yapılanlar (ayrıntı)
+- **Tetikleme:** RabbitMQ olmadığı için `review.submitted` olayı yerine arayüz değerlendirme kaydedilince `POST /assistant/day-review/{gün}` atar. İş assistant-service içinde `asyncio` ile sürer (sayfa kapansa da), işler sırayla çalışır (büyük model bir kez yüklensin). Durum `ai_jobs` tablosunda (queued/running/done/failed); servis yeniden başlarsa yarım işler `failed` olur, "Yeniden oluştur" ile tekrarlanır. Kullanıcının JWT'si kullanılır (30 dk; gemma4:26b gerçek testte 42 sn sürdü).
+- **İş (`app/agent/day_review.py`):** model sadece **seçer ve gerekçe yazar** (JSON). Adaylar task-api'nin yarın önerilerinden gelir; bloke, zaten planlı ve (bulut modelde) `local_only` board'a ait olanlar elenir; kullanıcının günlük notu bulut modele gönderilmez. Günlük kapasite son 4 haftada değerlendirilen günlerin ortalama çalışma süresinin 1,25 katı (120–480 dk, veri yoksa 360). Geçmişte reddedilen plan önerileri ve nedenleri isteme eklenir.
+- **Tahmin katsayısı:** son 4 haftada biten kartların gerçek/tahmin oranının medyanı (en az 3 ölçüm, 0,5–3 arası); kart süreleri buna göre düzeltilir ve arayüzde "İşlerin genelde tahmininden %35 uzun sürüyor" diye gösterilir.
+- **Öneri:** `plan_day` işlemi olarak kaydedilir ve izin moduna uyar (sor → onay kartı, otomatik → hemen eklenir, asla → önerilmez). `plan_day` artık takvim etkinliği (`event_id`) maddesi de alır.
+- **task-api:** `PUT /day-plans/{gün}/ai-summary`, yanıtlarda `ai_summary`.
+- **Görev bazlı model:** `model_prefs.background_model_id` (boş = önerilen `gemma4:26b`, kurulu değilse sohbet modeli). Bulut seçilebilir, ücret uyarısıyla. Ayarlar → Asistan modeli → "Arka plan işleri".
+- **Frontend:** Bugün sayfasında "Asistanın notu" (değerlendirilmiş günde özet, yarın için öneri, gerekçeler, onay kartı; iş sürerken 5 sn'de bir yoklama), planlama modunda önceki akşamın bekleyen önerisi.
+
 ### Plandan bilinçli sapmalar
 | Plan | Yapılan | Neden |
 |---|---|---|
@@ -53,6 +64,9 @@
 | Faz 5 tek parça | 5a / 5b / 5c | Kapsam büyüklüğü |
 | `provider` = ollama/openai/anthropic/openai_compatible, `is_default` kayıtta | Claude/GPT/Gemini (Gemini, Google'ın OpenAI-uyumlu uç noktasıyla mevcut adaptörü kullanır); varsayılan ayrı `model_prefs` tablosunda ve **sadece local** | Kullanıcı kararı: varsayılan hep local, bulut ücretli olduğu için bilerek seçilir |
 | `boards.default_model_config_id` (FK) | `boards.default_model_id` (`"saglayici:model"` metni) | Ayrı servis/veritabanı; model kimliği zaten saglayici:model biçiminde |
+| `review.submitted` olayını dinleyen tüketici | Arayüzün tetiklediği servis içi arka plan işi (`ai_jobs`) | RabbitMQ/Docker yok |
+| `model_routes` tablosu (chat/background_planning/insight/classification) | `model_prefs.background_model_id` (sohbet = varsayılan, arka plan = tek ayar) | Şimdilik iki görev sınıfı yeterli; sınıflandırma Faz 7'de |
+| pgvector semantik arama (ops.) | Yapılmadı | SQLite, Docker yok |
 | Bulut modellerle gerçek test | Sadece birim/entegrasyon testleri (sahte istemci); gerçek API'ye istek atılmadı | Kullanıcı kararı: API maliyeti |
 
 ### Bilinen sorunlar / dikkat
@@ -64,7 +78,7 @@
 ### Yeni oturum için hızlı başlangıç
 - **Ortam:** Windows, Docker YOK (SQLite), uv: `C:\Users\alium\AppData\Roaming\Python\Python313\Scripts\uv.exe` (PATH'te değil). Ollama kurulu (qwen3.5:4b, gemma4:26b, qwen3.8:27b; deepseek-r1 ve coder listede gizli). GPU: RTX 4060 Laptop 8 GB.
 - **Çalıştırma:** `./scripts/dev.ps1` ya da önizleme (`task api project/.claude/launch.json`: task-api 8000, assistant 8100, web 5173).
-- **Testler:** `services/task-api`: `uv run pytest -q` (143) · `services/assistant-service`: `uv run pytest -q` (56) · `apps/web`: `npm run build`.
+- **Testler:** `services/task-api`: `uv run pytest -q` (145) · `services/assistant-service`: `uv run pytest -q` (69) · `apps/web`: `npm run build`.
 - **Bulut model anahtarı:** `ASSISTANT_SECRET_KEY` yoksa ilk kayıtta `services/assistant-service/.secret_key` üretilir (git'te yok). Silinirse kayıtlı API anahtarları çözülemez, yeniden girilmeli.
 - **Test hesabı:** `apps/web/README.md`.
 - **Benchmark:** `services/assistant-service`: `uv run python -m scripts.benchmark_models` (rapor `benchmark_results/`, git'te yok).

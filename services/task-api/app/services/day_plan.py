@@ -25,6 +25,7 @@ from app.db.entities.day_plan import (
 )
 from app.db.unit_of_work import TaskUnitOfWork
 from app.models.day_plan import (
+    AiSummaryInput,
     DayPlanItemResponse,
     DayPlanResponse,
     DayPlanSave,
@@ -117,6 +118,7 @@ class DayPlanService:
             reflection=plan.reflection,
             planned_at=plan.planned_at,
             reviewed_at=plan.reviewed_at,
+            ai_summary=plan.ai_summary,
             tracked_today_sec=total_today,
             items=[
                 DayPlanItemResponse.model_validate(i).model_copy(
@@ -378,6 +380,17 @@ class DayPlanService:
             raise NotFoundException("DayPlanItem", item_id)
         await self.uow.day_plan_items.delete(item)
         await self.uow.commit()
+
+    async def set_ai_summary(
+        self, user_id: int, day: date, data: AiSummaryInput
+    ) -> DayPlanResponse:
+        """Asistanin gun ozeti. Plan maddelerine dokunmaz; degerlendirilmis
+        gunde de yazilabilir (ozet zaten degerlendirmeden sonra uretilir)."""
+        plan = await self._get_or_create(user_id, day)
+        text = (data.ai_summary or "").strip()
+        plan.ai_summary = text or None
+        await self.uow.commit()
+        return await self.get(user_id, day)
 
     # ---------------- degerlendirme ----------------
     async def review(self, user_id: int, day: date, data: DayReview) -> DayPlanResponse:

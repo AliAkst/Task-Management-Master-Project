@@ -21,6 +21,7 @@ from app.llm.registry import (
     CLOUD_PROVIDERS,
     CloudConfig,
     is_local_model,
+    parse_model_id,
     probe_provider,
 )
 from app.llm.types import LLMError
@@ -44,7 +45,9 @@ class ProbeRequest(BaseModel):
 
 
 class PrefsUpdate(BaseModel):
-    default_model_id: str = Field(..., min_length=3, max_length=200)
+    # Gonderilmeyen alan degismez; background_model_id=None -> onerilen buyuk local
+    default_model_id: str | None = Field(None, min_length=3, max_length=200)
+    background_model_id: str | None = Field(None, min_length=3, max_length=200)
 
 
 # ---------------- yardimcilar (chat.py de kullanir) ----------------
@@ -92,6 +95,22 @@ async def load_cloud_config(
 async def user_default_model(session: AsyncSession, user_id: int) -> str:
     pref = await session.get(ModelPrefEntity, user_id)
     return pref.default_model_id if pref else settings.default_model
+
+
+async def user_background_model(
+    session: AsyncSession, user_id: int, installed: set[str] | None = None
+) -> str:
+    """
+    Arka plan isleri icin model: kullanicinin secimi > config'teki buyuk local
+    model (kuruluysa) > sohbet varsayilani. `installed`: kurulu local modeller
+    (None: kontrol etme).
+    """
+    pref = await session.get(ModelPrefEntity, user_id)
+    if pref and pref.background_model_id:
+        return pref.background_model_id
+    if installed is None or settings.background_model in installed:
+        return settings.background_model
+    return await user_default_model(session, user_id)
 
 
 def _clean_models(names: list[str]) -> list[str]:
@@ -210,7 +229,14 @@ async def test_provider(
 async def get_prefs(
     user: dict = Depends(current_user), session: AsyncSession = Depends(get_session)
 ):
-    return ok({"default_model_id": await user_default_model(session, user["id"])})
+    pref = await session.get(ModelPrefEntity, user["id"])
+    return ok(
+        {
+            "default_model_id": await user_default_model(session, user["id"]),
+            "background_model_id": pref.background_model_id if pref else None,
+            "suggested_background_model": settings.background_model,
+        }
+    )
 
 
 @router.put("/preferences")
@@ -219,17 +245,40 @@ async def put_prefs(
     user: dict = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    if not is_local_model(data.default_model_id):
+    sent = data.model_fields_set
+    if "default_model_id" in sent and (
+        data.default_model_id is None or not is_local_model(data.default_model_id)
+    ):
         raise HTTPException(
             422, "Varsayılan model local olmalı; bulut modeller sadece elle seçilir"
         )
+    bg = data.background_model_id
+    if "background_model_id" in sent and bg and not is_local_model(bg):
+        # Bulut arka plan modeli: kullanici bilerek secer, saglayici bagli olmali
+        try:
+            provider, name = parse_model_id(bg)
+            cloud = await load_cloud_config(session, user["id"], provider)
+        except LLMError as e:
+            raise HTTPException(422, str(e)) from e
+        if cloud is None or name not in cloud.models:
+            raise HTTPException(422, "Bu bulut modeli bağlı ya da etkin değil")
     pref = await session.get(ModelPrefEntity, user["id"])
     if pref is None:
         pref = ModelPrefEntity(
-            user_id=user["id"], default_model_id=data.default_model_id
+            user_id=user["id"],
+            default_model_id=await user_default_model(session, user["id"]),
         )
         session.add(pref)
-    pref.default_model_id = data.default_model_id
+    if "default_model_id" in sent:
+        pref.default_model_id = data.default_model_id  # type: ignore[assignment]
+    if "background_model_id" in sent:
+        pref.background_model_id = bg
     pref.updated_at = datetime.now(UTC)
     await session.commit()
-    return ok({"default_model_id": pref.default_model_id})
+    return ok(
+        {
+            "default_model_id": pref.default_model_id,
+            "background_model_id": pref.background_model_id,
+            "suggested_background_model": settings.background_model,
+        }
+    )

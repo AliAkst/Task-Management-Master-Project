@@ -56,7 +56,9 @@ export default function DayReviewForm({
   plan,
   suggestions,
   boards,
+  onReviewed,
 }: {
+  onReviewed?: () => void
   day: string
   plan: DayPlan
   suggestions: PlanSuggestion[]
@@ -125,7 +127,7 @@ export default function DayReviewForm({
           .map((s) => ({ card_id: s.card_id, outcome: 'done' as const })),
         ...extra.map((title) => ({ title, outcome: 'done' as const })),
       ],
-    })
+    }, { onSuccess: () => onReviewed?.() })
   }
 
   const row = (i: DayPlan['items'][number]) => {

@@ -127,9 +127,11 @@ def cloud_models(configs: list[tuple[str, list[str]]]) -> list[ModelInfo]:
     return out
 
 
-def build_provider(model_id: str, cloud: CloudConfig | None = None) -> LLMProvider:
+def build_provider(
+    model_id: str, cloud: CloudConfig | None = None, *, timeout: float | None = None
+) -> LLMProvider:
     provider, name = parse_model_id(model_id)
-    timeout = settings.llm_timeout_seconds
+    timeout = timeout or settings.llm_timeout_seconds
     if provider == "ollama":
         info = ModelInfo(
             id=model_id, provider="ollama", model=name, label=name, is_local=True

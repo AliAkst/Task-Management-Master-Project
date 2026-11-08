@@ -407,3 +407,36 @@ class TestDayPlanOwnership:
             await client.get(f"{API}/cards/{card['id']}", headers=auth_headers)
         ).json()["data"]
         assert mine["status"] == "pending"
+
+
+class TestAiSummary:
+    """Faz 6: asistanin gun ozeti plan maddelerine dokunmadan yazilir."""
+
+    async def test_summary_roundtrip_after_review(self, client, auth_headers, spor):
+        card = await create_card(client, auth_headers, spor["lists"][0]["id"], "Koşu")
+        await save_plan(client, auth_headers, [{"card_id": card["id"]}])
+        await review(client, auth_headers, {"mood": 3})
+        res = await client.put(
+            f"{API}/day-plans/{D}/ai-summary",
+            json={"ai_summary": "  Kısa bir gün oldu.  "},
+            headers=auth_headers,
+        )
+        assert res.status_code == 200, res.text
+        data = res.json()["data"]
+        assert data["ai_summary"] == "Kısa bir gün oldu."
+        assert data["status"] == "reviewed" and len(data["items"]) == 1
+        res = await client.put(
+            f"{API}/day-plans/{D}/ai-summary",
+            json={"ai_summary": None},
+            headers=auth_headers,
+        )
+        assert res.json()["data"]["ai_summary"] is None
+
+    async def test_summary_isolated(self, client, auth_headers, other_headers):
+        await client.put(
+            f"{API}/day-plans/{D}/ai-summary",
+            json={"ai_summary": "benim"},
+            headers=auth_headers,
+        )
+        res = await client.get(f"{API}/day-plans/{D}", headers=other_headers)
+        assert res.json()["data"].get("ai_summary") is None

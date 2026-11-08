@@ -171,13 +171,42 @@ class ProviderConfigEntity(Base):
 
 
 class ModelPrefEntity(Base):
-    """Kullanicinin varsayilan modeli (sadece local model olabilir)."""
+    """
+    Kullanicinin model tercihleri (gorev bazli yonlendirme).
+    default_model_id: sohbet varsayilani, SADECE local olabilir.
+    background_model_id: arka plan isleri (gun sonu plani, haftalik analiz);
+    None = config'teki buyuk local model. Bulut secilebilir (kullanici uyarilir).
+    """
 
     __tablename__ = "model_prefs"
 
     user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     default_model_id: Mapped[str] = mapped_column(String(200))
+    background_model_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class AiJobEntity(Base):
+    """
+    Arka plan isi (Faz 6). kind: day_review (gun ozeti + ertesi gun plan onerisi).
+    status: queued -> running -> done | failed. result: uretilen ozet, plan
+    maddeleri ve gerekceleri; onerilen plan ai_actions'ta (action_id).
+    """
+
+    __tablename__ = "ai_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(30))
+    target_date: Mapped[str] = mapped_column(String(10), index=True)  # YYYY-MM-DD
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    model_id: Mapped[str] = mapped_column(String(200))
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    action_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 engine = create_async_engine(settings.database_url)

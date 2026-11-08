@@ -815,6 +815,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/day-plans/{day}/ai-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Ai Summary
+         * @description Asistanin gun ozetini yazar (ya da None ile siler).
+         */
+        put: operations["set_ai_summary_api_v1_day_plans__day__ai_summary_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/day-plan-items/{item_id}": {
         parameters: {
             query?: never;
@@ -965,6 +985,14 @@ export interface components {
              * Format: date-time
              */
             occurred_at: string;
+        };
+        /**
+         * AiSummaryInput
+         * @description Asistanin yazdigi gun ozeti; None ozeti siler.
+         */
+        AiSummaryInput: {
+            /** Ai Summary */
+            ai_summary?: string | null;
         };
         /** AnalyticsSummary */
         AnalyticsSummary: {
@@ -1904,6 +1932,8 @@ export interface components {
             planned_at?: string | null;
             /** Reviewed At */
             reviewed_at?: string | null;
+            /** Ai Summary */
+            ai_summary?: string | null;
             /** Items */
             items?: components["schemas"]["DayPlanItemResponse"][];
             /**
@@ -4657,6 +4687,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DayReview"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_ai_summary_api_v1_day_plans__day__ai_summary_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiSummaryInput"];
             };
         };
         responses: {

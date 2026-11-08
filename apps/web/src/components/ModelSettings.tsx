@@ -6,6 +6,7 @@ import {
   useModels,
   useProviderMutations,
   useProviders,
+  useSetBackgroundModel,
   useSetDefaultModel,
   type ProviderConfig,
 } from '../api/assistant'
@@ -41,6 +42,62 @@ function DefaultModel() {
       </select>
       {local.length === 0 && models.data && (
         <p className="w-full text-[13px] text-slate-500">Ollama kapalı görünüyor; açınca kurulu modellerin burada listelenir.</p>
+      )}
+      {set.error && <p className="w-full text-[13px] text-red-700">{set.error.message}</p>}
+    </div>
+  )
+}
+
+/**
+ * Arka plan isleri (gun sonu ozeti + yarin plani; ileride haftalik analiz).
+ * Varsayilan: onerilen buyuk local model. Bulut secilebilir ama ucret uyarisiyla.
+ */
+function BackgroundModel() {
+  const models = useModels()
+  const prefs = useModelPrefs()
+  const set = useSetBackgroundModel()
+  const all = models.data?.models ?? []
+  const local = all.filter((m) => m.is_local)
+  const cloud = all.filter((m) => !m.is_local)
+  const suggested = prefs.data?.suggested_background_model ?? ''
+  const suggestedInstalled = local.some((m) => m.id === suggested)
+  const value = prefs.data?.background_model_id ?? ''
+  const isCloud = value !== '' && !value.startsWith('ollama:')
+
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 py-4">
+      <div className="max-w-prose">
+        <p className="font-semibold">Arka plan işleri</p>
+        <p className="text-[14px] text-slate-600">
+          Günü değerlendirdikten sonra özeti yazan ve yarının planını öneren model. Sen beklemediğin için yavaş
+          ama daha iyi planlayan büyük bir model seçmek mantıklı.
+        </p>
+      </div>
+      <select
+        className="min-w-56 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+        value={value}
+        disabled={set.isPending || !prefs.data}
+        onChange={(e) => set.mutate(e.target.value || null)}
+        aria-label="Arka plan işleri modeli"
+      >
+        <option value="">
+          Önerilen: {suggested.replace('ollama:', '')}
+          {models.data && !suggestedInstalled ? ' (kurulu değil, sohbet modeli kullanılır)' : ''}
+        </option>
+        <optgroup label="Local">
+          {local.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </optgroup>
+        {cloud.length > 0 && (
+          <optgroup label="Bulut (ücretli)">
+            {cloud.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </optgroup>
+        )}
+      </select>
+      {isCloud && (
+        <p className="flex w-full items-start gap-1.5 text-[13px] text-amber-800">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
+          {CLOUD_COST_WARNING} Her gün değerlendirmesinde bir istek gider.
+        </p>
       )}
       {set.error && <p className="w-full text-[13px] text-red-700">{set.error.message}</p>}
     </div>
@@ -253,6 +310,7 @@ export default function ModelSettings() {
       </p>
       <div className="divide-y divide-slate-200 border-y border-slate-200">
         <DefaultModel />
+        <BackgroundModel />
         <div className="py-4">
           <p className="font-semibold">Bulut modeller</p>
           <p className="max-w-prose text-[14px] text-slate-600">
