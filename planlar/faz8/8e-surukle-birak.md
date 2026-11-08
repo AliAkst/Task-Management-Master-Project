@@ -23,7 +23,7 @@
 - Liste sürüklemede overlay görünür. `npm run build` temiz; konsol hatasız. Kısa GIF/ekran görüntüleri.
 
 ## İlerleme
-**Durum:** kod tamam, commit edilmedi (2026-11-09). Migration yok.
+**Durum:** kod tamam, commit `d222784` (2026-11-09; tarayıcı doğrulaması yapılmadı). Migration yok.
 
 ### Yapılanlar
 - `api/boards.ts`: `moveCard`/`moveList` → `mutationKey` + `onMutate` (`cancelQueries`, önceki veriyi sakla, `setQueryData`), `onError` geri alma, `onSettled` refresh. Saf yardımcılar `applyCardMove` (komşu pozisyon ortası, uçlarda ±1, bitti listesine taşımada `status=completed`/`completed_at`, listeden çıkarken `pending`/`null`) ve `applyListMove` dışa aktarıldı.
