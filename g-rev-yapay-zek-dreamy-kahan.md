@@ -26,7 +26,7 @@
 | 7b — OAuth + Google Calendar | ✅ Tamam | `b8b46d1` (7a–7c ortak) | OAuth altyapısı, tek yönlü takvim senkronu, salt okunur etkinlikler (§4.1) |
 | 7c — Microsoft To Do | ✅ Tamam | `b8b46d1` (7a–7c ortak) | Samsung Reminder → To Do → Gelen Kutusu; tamamlamayı geri yazma (outbox) (§4.1) |
 | 7d — Gelen Kutusu dağıtımı | ✅ Tamam | `b21b062` | asistan kartlara board önerir, madde madde onay kartı (§4.1) |
-| 7 denetimi (Opus) | ✅ Tamam | — (commit bekliyor) | plan ↔ kod uyumlu; eksik: OAuth kimliği yalnız `.env`'den → **arayüzde kurulum sihirbazı** eklendi (aşağıda) |
+| 7 denetimi (Opus) | ✅ Tamam | `d0a2c3c` | plan ↔ kod uyumlu; eksik: OAuth kimliği yalnız `.env`'den → **arayüzde kurulum sihirbazı** eklendi (aşağıda) |
 
 ### Faz 5b'de yapılanlar (ayrıntı)
 - **Tasarım yenilemesi (frontend-design skill'iyle):** jenerik SaaS kart kiti → "kâğıt üstüne mürekkep + ajanda sekmeleri".
