@@ -13,7 +13,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.actions import ActionGate, action_payload, load_modes
-from app.agent.context import build_system_prompt
+from app.agent.context import build_system_prompt, focus_line
 from app.agent.day_planner import is_schedule_request, is_tidy_request, plan_day
 from app.agent.loop import run_agent
 from app.agent.memory_extractor import (
@@ -60,6 +60,7 @@ class ChatRequest(BaseModel):
     # None: otomatik (acik board'un varsayilani > kullanicinin local varsayilani)
     model_id: str | None = None
     board_id: int | None = None  # kullanicinin o an baktigi board (varsa)
+    card_id: int | None = None  # acik kart penceresi ("bu kart")
 
 
 class TitleUpdate(BaseModel):
@@ -293,7 +294,16 @@ async def chat(data: ChatRequest, user: dict = Depends(current_user)):
         conversation_id = conv.id
 
     return StreamingResponse(
-        _stream(user, conversation_id, data.message, provider, model_id, route.source),
+        _stream(
+            user,
+            conversation_id,
+            data.message,
+            provider,
+            model_id,
+            route.source,
+            board_id=data.board_id,
+            card_id=data.card_id,
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -306,6 +316,8 @@ async def _stream(
     provider,
     model_id: str,
     model_source: str = "message",
+    board_id: int | None = None,
+    card_id: int | None = None,
 ) -> AsyncIterator[str]:
     is_local = provider.info.is_local
     api = TaskApiClient(user["token"])
@@ -339,8 +351,9 @@ async def _stream(
                 model_id=model_id,
                 modes=await load_modes(session, user["id"]),
             )
+            focus = await focus_line(api, toolbox, board_id, card_id)
             system = await build_system_prompt(
-                api, toolbox, user, tz, provider.info.label, is_local, facts
+                api, toolbox, user, tz, provider.info.label, is_local, facts, focus
             )
 
             user_row = MessageEntity(

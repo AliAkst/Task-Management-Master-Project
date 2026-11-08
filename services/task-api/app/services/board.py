@@ -24,6 +24,7 @@ from app.models.board import (
 )
 from app.services.activity import ActivityLogger, diff
 from app.services.ordering import STEP, place_at
+from app.services.palette import next_free_color
 
 logger = get_logger(__name__)
 
@@ -318,7 +319,11 @@ class BoardService:
         self, board_id: int, user_id: int, data: LabelCreate
     ) -> LabelResponse:
         board = await self.get_owned_board(board_id, user_id)
-        label = LabelEntity(user_id=user_id, board_id=board.id, **data.model_dump())
+        values = data.model_dump()
+        if not values.get("color"):
+            existing = await self.uow.labels.list_for_board(board.id)
+            values["color"] = next_free_color([lb.color for lb in existing])
+        label = LabelEntity(user_id=user_id, board_id=board.id, **values)
         await self.uow.labels.create(label)
         await self.uow.commit()
         return LabelResponse.model_validate(label)

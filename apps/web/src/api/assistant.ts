@@ -100,7 +100,7 @@ export type StreamEvent =
  * (EventSource POST desteklemedigi icin fetch + stream okuyucu.)
  */
 export async function streamChat(
-  body: { message: string; conversation_id: number | null; model_id: string | null; board_id: number | null },
+  body: { message: string; conversation_id: number | null; model_id: string | null; board_id: number | null; card_id?: number | null },
   onEvent: (e: StreamEvent) => void,
   signal: AbortSignal,
   retried = false,
@@ -159,6 +159,10 @@ export const TOOL_LABEL: Record<string, string> = {
   link_cards: 'bağlantı önerdi',
   plan_day: 'plan önerdi',
   schedule_day: 'günü planlıyor',
+  add_checklist_items: 'checklist maddesi önerdi',
+  update_checklist_items: 'checklist değişikliği önerdi',
+  delete_checklist_items: 'madde silme önerdi',
+  set_card_labels: 'etiket önerdi',
 }
 
 // ---------------- islemler & izinler ----------------

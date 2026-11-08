@@ -2349,11 +2349,8 @@ export interface components {
         LabelCreate: {
             /** Name */
             name: string;
-            /**
-             * Color
-             * @default #64748b
-             */
-            color: string;
+            /** Color */
+            color?: string | null;
         };
         /** LabelResponse */
         LabelResponse: {

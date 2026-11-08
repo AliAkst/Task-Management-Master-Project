@@ -251,6 +251,42 @@ class TestCards:
         )
         assert card["label_ids"] == [own_label]
 
+    async def test_label_without_color_gets_next_free_palette_color(
+        self, client, auth_headers
+    ):
+        from app.services.palette import BOARD_PALETTE
+
+        b = await create_board(client, auth_headers, name="Renk")
+        url = f"{API}/boards/{b['board']['id']}/labels"
+        colors = []
+        for name in ("A", "B", "C"):
+            res = await client.post(url, json={"name": name}, headers=auth_headers)
+            assert res.status_code == 201, res.text
+            colors.append(res.json()["data"]["color"])
+        assert colors == BOARD_PALETTE[:3]
+
+        # Acik renk verilirse ona dokunulmaz; sirada kullanilmayan ilk renk kalir
+        res = await client.post(
+            url, json={"name": "D", "color": BOARD_PALETTE[3]}, headers=auth_headers
+        )
+        assert res.json()["data"]["color"] == BOARD_PALETTE[3]
+        res = await client.post(url, json={"name": "E"}, headers=auth_headers)
+        assert res.json()["data"]["color"] == BOARD_PALETTE[4]
+
+    async def test_label_color_falls_back_to_first_when_palette_exhausted(
+        self, client, auth_headers
+    ):
+        from app.services.palette import BOARD_PALETTE
+
+        b = await create_board(client, auth_headers, name="Dolu")
+        url = f"{API}/boards/{b['board']['id']}/labels"
+        for i, color in enumerate(BOARD_PALETTE):
+            await client.post(
+                url, json={"name": f"L{i}", "color": color}, headers=auth_headers
+            )
+        res = await client.post(url, json={"name": "Fazla"}, headers=auth_headers)
+        assert res.json()["data"]["color"] == BOARD_PALETTE[0]
+
     async def test_notes_checklist_and_summary_counts(self, client, auth_headers):
         detail = await create_board(client, auth_headers)
         card = await create_card(

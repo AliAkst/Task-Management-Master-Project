@@ -36,6 +36,7 @@ from app.models.task import TaskPriority, TaskStatus
 from app.services.activity import ActivityLogger
 from app.services.card import CardService
 from app.services.ordering import STEP
+from app.services.palette import BOARD_PALETTE
 
 # Trello key/token sorgu parametresi olarak gider: httpx'in INFO kayitlari URL'yi
 # (yani gizli degerleri) yazar. Seviyeyi yukselt.
@@ -56,18 +57,6 @@ DONE_LIST_NAMES = {
     "tamamlanan",
     "tamamlananlar",
 }
-BOARD_PALETTE = [
-    "#64748b",
-    "#ef4444",
-    "#f97316",
-    "#eab308",
-    "#22c55e",
-    "#14b8a6",
-    "#3b82f6",
-    "#6366f1",
-    "#a855f7",
-    "#ec4899",
-]
 TRELLO_BACKGROUNDS = {
     "blue": "#3b82f6",
     "orange": "#f97316",
