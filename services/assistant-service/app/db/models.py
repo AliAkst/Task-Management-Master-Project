@@ -1,7 +1,16 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.engine import Dialect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -75,6 +84,46 @@ class MessageEntity(Base):
     tokens_in: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tokens_out: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class AiActionEntity(Base):
+    """
+    AI'in yazma islemi (oneri ya da yapilmis). Onay akisinin ve denetim kaydinin
+    temeli; ret nedenleri AI'in tercihlerini ogrenmesi icin sinyal (Faz 6).
+    status: proposed | executed | rejected | failed
+    """
+
+    __tablename__ = "ai_actions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    conversation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    tool_call_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    action_type: Mapped[str] = mapped_column(String(50))
+    # task-api'ye gidecek, onceden cozulmus/dogrulanmis argumanlar
+    args: Mapped[dict[str, Any]] = mapped_column(JSON)
+    summary: Mapped[str] = mapped_column(Text)  # kullaniciya gosterilen ozet
+    status: Mapped[str] = mapped_column(String(20), default="proposed", index=True)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    user_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class AiPermissionEntity(Base):
+    """Islem turu basina kullanicinin secimi: ask | auto | never (varsayilan ask)."""
+
+    __tablename__ = "ai_permissions"
+    __table_args__ = (UniqueConstraint("user_id", "action_type"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    action_type: Mapped[str] = mapped_column(String(50))
+    mode: Mapped[str] = mapped_column(String(10), default="ask")
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
 
 engine = create_async_engine(settings.database_url)

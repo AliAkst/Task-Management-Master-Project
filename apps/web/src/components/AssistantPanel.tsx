@@ -9,14 +9,17 @@ import {
   useConversations,
   useMessages,
   useModels,
+  type AiAction,
   type ChatMessage,
 } from '../api/assistant'
+import ActionCard from './ActionCard'
 import { useAssistantUi } from '../stores/assistant'
 
 interface LiveTurn {
   user: string
   text: string
   tools: { id: string; name: string; done: boolean; ok: boolean }[]
+  actions: AiAction[]
   notice?: string
   error?: string
 }
@@ -41,7 +44,22 @@ function ToolChips({ names }: { names: string[] }) {
   )
 }
 
-function Bubble({ m }: { m: Pick<ChatMessage, 'role' | 'content'> & { tools?: string[] } }) {
+function Actions({ items }: { items: AiAction[] }) {
+  if (items.length === 0) return null
+  return (
+    <div className="mt-1.5 space-y-1.5">
+      {items.map((a) => (
+        <ActionCard key={a.id} action={a} />
+      ))}
+    </div>
+  )
+}
+
+function Bubble({
+  m,
+}: {
+  m: Pick<ChatMessage, 'role' | 'content'> & { tools?: string[]; actions?: AiAction[] }
+}) {
   if (m.role === 'user') {
     return (
       <div className="ml-10 rounded-2xl rounded-br-sm bg-slate-900 px-3 py-2 text-sm whitespace-pre-wrap text-white">
@@ -57,26 +75,34 @@ function Bubble({ m }: { m: Pick<ChatMessage, 'role' | 'content'> & { tools?: st
           <Markdown>{m.content}</Markdown>
         </div>
       )}
+      <Actions items={m.actions ?? []} />
     </div>
   )
 }
 
 /** Gecmis mesajlari arac turlariyla birlikte tek "asistan cevabi"na toplar. */
-function groupHistory(msgs: ChatMessage[]): (ChatMessage & { tools: string[] })[] {
-  const out: (ChatMessage & { tools: string[] })[] = []
-  let pending: string[] = []
+type Grouped = ChatMessage & { tools: string[]; actions: AiAction[] }
+
+function groupHistory(msgs: ChatMessage[]): Grouped[] {
+  const out: Grouped[] = []
+  let tools: string[] = []
+  let actions: AiAction[] = []
   for (const m of msgs) {
     if (m.role === 'assistant' && m.tools.length > 0 && !m.content) {
-      pending.push(...m.tools)
+      tools.push(...m.tools)
+      actions.push(...(m.actions ?? []))
       continue
     }
     if (m.role === 'assistant') {
-      out.push({ ...m, tools: [...pending, ...m.tools] })
-      pending = []
+      out.push({ ...m, tools: [...tools, ...m.tools], actions: [...actions, ...(m.actions ?? [])] })
+      tools = []
+      actions = []
     } else {
-      out.push({ ...m, tools: [] })
+      out.push({ ...m, tools: [], actions: [] })
     }
   }
+  // Cevap metni gelmeden biten tur (or. hata): islemler yine gorunsun
+  if (actions.length > 0) out.push({ id: 'pending', role: 'assistant', content: null, tools, actions })
   return out
 }
 
@@ -106,7 +132,7 @@ export default function AssistantPanel() {
     const message = text.trim()
     if (!message || busy) return
     setInput('')
-    const turn: LiveTurn = { user: message, text: '', tools: [] }
+    const turn: LiveTurn = { user: message, text: '', tools: [], actions: [] }
     setLive(turn)
     const controller = new AbortController()
     abort.current = controller
@@ -129,6 +155,8 @@ export default function AssistantPanel() {
                 return { ...t, tools: [...t.tools, { id: e.data.id, name: e.data.name, done: false, ok: true }] }
               case 'tool_end':
                 return { ...t, tools: t.tools.map((x) => (x.id === e.data.id ? { ...x, done: true, ok: e.data.ok } : x)) }
+              case 'action':
+                return { ...t, actions: [...t.actions, e.data] }
               case 'error':
                 return { ...t, error: e.data.message }
               default:
@@ -147,6 +175,10 @@ export default function AssistantPanel() {
       abort.current = null
     }
     if (convId !== null && convId !== conversationId) setConversation(convId)
+    // Otomatik yapilan islemler varsa kanban/takvim/plan verisini tazele
+    for (const key of [['board'], ['boards'], ['card'], ['calendar'], ['day']]) {
+      qc.invalidateQueries({ queryKey: key })
+    }
     await Promise.all([
       qc.invalidateQueries({ queryKey: assistantKeys.conversations }),
       convId !== null && qc.invalidateQueries({ queryKey: assistantKeys.messages(convId) }),
@@ -204,7 +236,7 @@ export default function AssistantPanel() {
                 <button key={s} onClick={() => void send(s)} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-slate-200 hover:ring-slate-400">{s}</button>
               ))}
             </div>
-            <p className="mt-4 text-xs text-slate-400">Şimdilik sadece okuyabilirim; kart/etkinlik oluşturma bir sonraki adımda geliyor.</p>
+            <p className="mt-4 text-xs text-slate-400">Kart, etkinlik ve plan önerebilirim; ne otomatik yapılacağına Ayarlar'dan sen karar verirsin.</p>
           </div>
         )}
         {msgs.map((m) => <Bubble key={m.id} m={m} />)}
@@ -229,6 +261,7 @@ export default function AssistantPanel() {
               ) : (
                 !live.error && <p className="text-xs text-slate-400">{current?.is_local ? 'Local model düşünüyor… (ilk mesajda model belleğe yükleniyor)' : 'Düşünüyor…'}</p>
               )}
+              <Actions items={live.actions} />
               {live.error && <p className="mt-1 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{live.error}</p>}
             </div>
           </>

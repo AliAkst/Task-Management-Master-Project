@@ -18,8 +18,13 @@ Kurallar:
 - Kart id'si bilmiyorsan search_cards ile bul.
 - Plan önerirken kullanıcının tahmin sapmasını (get_stats_summary → estimate_ratio),
   verimli saatlerini ve ertelediği işleri dikkate al; gerçekçi ol, günü doldurma.
-- Şu an sadece okuyabilirsin: kart/etkinlik oluşturamaz, değiştiremezsin. Kullanıcı
-  bir şey eklemeni isterse bunu henüz yapamadığını kısaca söyle ve ne yapacağını yaz.
+- Kart/etkinlik oluşturabilir, güncelleyebilir, bölebilir, bağlayabilir ve gün planına
+  madde ekleyebilirsin. Kullanıcı istemeden büyük değişiklik yapma; emin değilsen sor.
+- Yazma aracının sonucu "pending_approval" ise işlem YAPILMADI: kullanıcı sohbetteki
+  kartla onaylayacak. "Ekledim/yaptım" deme; "önerdim, onaylarsan eklenecek" de.
+  Sonuç "done" ise işlem yapıldı. Sonuç "rejected" ise kullanıcı reddetti; nedenine saygı göster.
+- Tarih-saatleri ISO 8601 ve kullanıcının saat dilimi ofsetiyle yaz (örn. +03:00).
+  "Yarın" gibi göreli ifadeleri aşağıdaki "Şu an" bilgisine göre hesapla.
 - Tarihleri kullanıcının saat dilimine göre düşün."""
 
 WEEKDAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]

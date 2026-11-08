@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/auth'
 
@@ -15,11 +15,28 @@ export interface Conversation {
   updated_at: string
 }
 
+/** AI'in yazma islemi (oneri ya da yapilmis). */
+export interface AiAction {
+  id: number
+  action_type: string
+  summary: string
+  status: 'proposed' | 'executed' | 'rejected' | 'failed'
+  result: Record<string, unknown> | null
+  user_feedback: string | null
+}
+
+export interface Permission {
+  action_type: string
+  label: string
+  mode: 'ask' | 'auto' | 'never'
+}
+
 export interface ChatMessage {
   id: number | string
   role: 'user' | 'assistant'
   content: string | null
   tools: string[]
+  actions?: AiAction[]
   model_id?: string | null
   is_local?: boolean
 }
@@ -64,6 +81,7 @@ export type StreamEvent =
   | { event: 'token'; data: { text: string } }
   | { event: 'tool_start'; data: { id: string; name: string; arguments: Record<string, unknown> } }
   | { event: 'tool_end'; data: { id: string; name: string; ok: boolean } }
+  | { event: 'action'; data: AiAction }
   | { event: 'done'; data: { conversation_id: number } }
   | { event: 'error'; data: { message: string } }
 
@@ -123,4 +141,60 @@ export const TOOL_LABEL: Record<string, string> = {
   get_calendar: 'takvime baktı',
   get_day_plan: 'gün planına baktı',
   get_stats_summary: 'istatistiklerine baktı',
+  create_card: 'kart önerdi',
+  update_card: 'kart güncellemesi önerdi',
+  add_note: 'not önerdi',
+  create_event: 'takvim önerdi',
+  split_card: 'bölme önerdi',
+  link_cards: 'bağlantı önerdi',
+  plan_day: 'plan önerdi',
+}
+
+// ---------------- islemler & izinler ----------------
+/** Onay/ret sonrasi: AI'in degistirdigi uygulama verilerini ve sohbeti tazele. */
+function useRefreshAfterAction() {
+  const qc = useQueryClient()
+  return () => {
+    for (const key of [['board'], ['boards'], ['card'], ['calendar'], ['day'], ['analytics'], ['assistant']]) {
+      qc.invalidateQueries({ queryKey: key })
+    }
+  }
+}
+
+export function useActionDecision() {
+  const refresh = useRefreshAfterAction()
+  return {
+    approve: useMutation({
+      mutationFn: ({ id, rememberAuto }: { id: number; rememberAuto: boolean }) =>
+        api<AiAction>(`${BASE}/actions/${id}/approve`, {
+          method: 'POST',
+          body: JSON.stringify({ remember_auto: rememberAuto }),
+        }),
+      onSuccess: refresh,
+    }),
+    reject: useMutation({
+      mutationFn: ({ id, reason }: { id: number; reason: string | null }) =>
+        api<AiAction>(`${BASE}/actions/${id}/reject`, {
+          method: 'POST',
+          body: JSON.stringify({ reason }),
+        }),
+      onSuccess: refresh,
+    }),
+  }
+}
+
+export function usePermissions() {
+  return useQuery({
+    queryKey: ['assistant', 'permissions'],
+    queryFn: () => api<Permission[]>(`${BASE}/permissions`),
+  })
+}
+
+export function useSetPermission() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ actionType, mode }: { actionType: string; mode: Permission['mode'] }) =>
+      api(`${BASE}/permissions/${actionType}`, { method: 'PUT', body: JSON.stringify({ mode }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['assistant', 'permissions'] }),
+  })
 }

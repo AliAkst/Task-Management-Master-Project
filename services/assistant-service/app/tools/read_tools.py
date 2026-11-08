@@ -9,12 +9,16 @@ onu hemen doldurur. Her arac sadece gereken alanlari dondurur.
 import json
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from app.llm.types import ToolCall, ToolSpec
 from app.tools.privacy import HIDDEN_MESSAGE, PrivacyFilter
 from app.tools.task_api import TaskApiClient, TaskApiError
+from app.tools.write_tools import WRITE_SPECS, WRITE_TOOL_NAMES, WriteTools
+
+if TYPE_CHECKING:
+    from app.agent.actions import ActionGate, ToolResult
 
 MAX_RESULT_CHARS = 6000
 
@@ -56,6 +60,9 @@ class ToolBox:
         self.privacy = privacy
         self.tz = tz
         self._boards: list[dict[str, Any]] | None = None
+        self.writer = WriteTools(api, privacy, tz)
+        # Yazma araclari sadece izin kapisi baglaninca acilir (Faz 5)
+        self.gate: ActionGate | None = None
         self._handlers: dict[str, Callable[..., Awaitable[Any]]] = {
             "list_boards": self.list_boards,
             "get_board": self.get_board,
@@ -87,8 +94,15 @@ class ToolBox:
         return self._boards
 
     # ---------------- arac tanimlari ----------------
+    def specs(self) -> list[ToolSpec]:
+        """Okuma araclari + (izin kapisi varsa) kullanicinin 'asla' demedigi yazma araclari."""
+        writes = (
+            [s for s in WRITE_SPECS if self.gate.allowed(s.name)] if self.gate else []
+        )
+        return self.read_specs() + writes
+
     @staticmethod
-    def specs() -> list[ToolSpec]:
+    def read_specs() -> list[ToolSpec]:
         return [
             ToolSpec(
                 "list_boards",
@@ -149,13 +163,29 @@ class ToolBox:
         ]
 
     # ---------------- calistirma ----------------
-    async def execute(self, call: ToolCall) -> tuple[str, bool]:
-        """Araci calistirir -> (modele gidecek JSON metni, basarili_mi)."""
+    async def execute(self, call: ToolCall) -> "ToolResult":
+        """Araci calistirir -> modele gidecek JSON metni (+ yazmada islem karti)."""
+        from app.agent.actions import ToolResult
+
+        def fail(msg: str) -> ToolResult:
+            return ToolResult(json.dumps({"error": msg}, ensure_ascii=False), False)
+
+        if not call.valid:
+            return fail("Argümanlar geçerli JSON değil")
+        if call.name in WRITE_TOOL_NAMES:
+            if self.gate is None or not self.gate.allowed(call.name):
+                return fail("Bu işlem şu an kapalı.")
+            try:
+                prepared = await self.writer.prepare(call.name, call.arguments)
+            except TypeError as e:
+                return fail(f"Geçersiz argümanlar: {e}")
+            except (TaskApiError, ValueError) as e:
+                return fail(getattr(e, "message", str(e)))
+            return await self.gate.handle(call, prepared)
+
         handler = self._handlers.get(call.name)
         if handler is None:
-            return json.dumps({"error": f"Bilinmeyen araç: {call.name}"}), False
-        if not call.valid:
-            return json.dumps({"error": "Argümanlar geçerli JSON değil"}), False
+            return fail(f"Bilinmeyen araç: {call.name}")
         try:
             result = await handler(**call.arguments)
             ok = not (isinstance(result, dict) and "error" in result)
@@ -166,7 +196,7 @@ class ToolBox:
         text = json.dumps(result, ensure_ascii=False, default=str)
         if len(text) > MAX_RESULT_CHARS:
             text = text[:MAX_RESULT_CHARS] + '… (kısaltıldı)"'
-        return text, ok
+        return ToolResult(text, ok)
 
     # ---------------- araclar ----------------
     async def list_boards(self) -> Any:

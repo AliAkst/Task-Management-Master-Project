@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.actions import router as actions_router
 from app.api.chat import router as chat_router
 from app.config import settings
 
@@ -30,6 +31,7 @@ async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
 
 
 app.include_router(chat_router, prefix="/api/v1/assistant")
+app.include_router(actions_router, prefix="/api/v1/assistant")
 
 
 @app.get("/health")
