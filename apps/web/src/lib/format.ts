@@ -99,3 +99,10 @@ export function formatClock(sec: number): string {
     .map((n) => String(n).padStart(2, '0'))
     .join(':')
 }
+
+/** Dosya boyutu: 1,5 MB / 320 KB / 80 B */
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
+}

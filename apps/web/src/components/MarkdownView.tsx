@@ -1,8 +1,9 @@
-import { Children, isValidElement, useState, type ReactElement, type ReactNode } from 'react'
-import Markdown, { type Components } from 'react-markdown'
+import { Children, isValidElement, useCallback, useState, type ReactElement, type ReactNode } from 'react'
+import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy } from 'lucide-react'
+import type { Attachment } from '../lib/types'
 
 const REMARK = [remarkGfm]
 const REHYPE: [typeof rehypeHighlight, { detect: boolean; ignoreMissing: boolean }][] = [
@@ -61,11 +62,20 @@ const components: Components = {
     ) : (
       <code className="rounded bg-[var(--code-bg)] px-1 py-0.5 font-mono text-[0.9em]">{children}</code>
     ),
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer">
-      {children}
-    </a>
-  ),
+  a: ({ href, children }) =>
+    href ? (
+      <a href={href} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    ) : (
+      <span className="text-slate-500">📎 ek silinmiş</span>
+    ),
+  img: ({ src, alt }) =>
+    src ? (
+      <img src={src} alt={alt ?? ''} loading="lazy" className="my-1 inline-block max-h-80 max-w-full rounded border border-slate-200" />
+    ) : (
+      <span className="text-slate-500">📎 ek silinmiş</span>
+    ),
   table: ({ children }) => (
     <div className="my-2 overflow-x-auto">
       <table className="border-collapse text-[14px]">{children}</table>
@@ -78,15 +88,26 @@ const components: Components = {
 interface Props {
   content: string
   className?: string
+  /** Kartin ekleri: `attachment:ID` baglantilari imzali URL'ye cevrilir. */
+  attachments?: Attachment[]
 }
 
 /** Markdown gosterimi: GFM, kod vurgulama + kopyala. Ham HTML kapali (react-markdown varsayilani). */
-export default function MarkdownView({ content, className = '' }: Props) {
+export default function MarkdownView({ content, className = '', attachments }: Props) {
+  // attachment:ID -> url; ek yoksa null (bilesen "ek silinmis" gosterir). Digerleri varsayilan guvenli donusum.
+  const urlTransform = useCallback(
+    (url: string) => {
+      const m = /^attachment:(\d+)$/.exec(url)
+      if (!m) return defaultUrlTransform(url)
+      return attachments?.find((a) => a.id === Number(m[1]))?.url ?? null
+    },
+    [attachments],
+  )
   return (
     <div
       className={`break-words [&_a]:text-blue-700 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_p+p]:mt-2 [&_ul]:list-disc [&_li:has(>input)]:ml-0 [&_li:has(>input)]:list-none ${className}`}
     >
-      <Markdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={components}>
+      <Markdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={components} urlTransform={urlTransform}>
         {content}
       </Markdown>
     </div>

@@ -6,6 +6,7 @@ import {
   CornerDownRight,
   Hourglass,
   Link2,
+  Paperclip,
   ListChecks,
   ListTree,
   StickyNote,
@@ -109,6 +110,7 @@ export default function CardFace({ card, labels, dragging }: Props) {
           </Meta>
         )}
         {card.note_count > 0 && <Meta icon={StickyNote} title="Notlar">{card.note_count}</Meta>}
+        {card.attachment_count > 0 && <Meta icon={Paperclip} title="Ekler">{card.attachment_count}</Meta>}
         {card.has_description && <Meta icon={AlignLeft} title="Açıklama var" />}
       </div>
     </div>

@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # OAuth donus adresleri: API'nin ve arayuzun disaridan gorunen adresi
     api_base_url: str = "http://localhost:8000"
     web_base_url: str = "http://localhost:5173"
+    # Kart ekleri (Faz 8c)
+    attachments_max_mb: int = 25
+    # Bos: services/task-api/data/attachments
+    attachments_dir: str | None = None
     #RabbitMQ Settings
     rabbitmq_host: str = "localhost"
     rabbitmq_port: int = 5672

@@ -342,6 +342,19 @@ class TestReadTools:
         ]
         assert out["labels"] == [{"id": 32, "name": "Bekliyor"}]
 
+    async def test_get_card_lists_attachment_names_only(
+        self, api, task_api_transport
+    ):
+        api.card_extra[11]["attachments"] = [
+            {"id": 5, "filename": "rapor.pdf", "url": "/x?token=gizli", "size_bytes": 9}
+        ]
+        box = await ToolBox.create(
+            TaskApiClient("t", transport=task_api_transport), cloud=False, tz=TZ
+        )
+        out = await box.get_card(11)
+        assert out["attachments"] == ["rapor.pdf"]
+        assert "token" not in json.dumps(out)
+
     async def test_get_board_lists_labels(self, api, task_api_transport):
         box = await ToolBox.create(
             TaskApiClient("t", transport=task_api_transport), cloud=False, tz=TZ

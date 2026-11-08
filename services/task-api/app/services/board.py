@@ -23,6 +23,7 @@ from app.models.board import (
     is_local_model,
 )
 from app.services.activity import ActivityLogger, diff
+from app.services.attachment_storage import get_storage
 from app.services.ordering import STEP, place_at
 from app.services.palette import next_free_color
 
@@ -239,8 +240,10 @@ class BoardService:
         await detach_goals(self.uow.session, board_id=board.id)
         await self.uow.events.delete_for_board(board.id)
         await self.uow.time_sessions.detach_board_cards(board.id)
+        file_keys = await self.uow.attachments.keys_for_board(board.id)
         await self.uow.boards.delete_cascade(board)
         await self.uow.commit()
+        get_storage().delete_many(file_keys)  # commit sonrasi; hata loglanir
 
     # ---------------- liste ----------------
     async def create_list(

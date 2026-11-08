@@ -1,9 +1,10 @@
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.resilience import with_db_retry
 from app.db.entities import (
     ActivityLogEntity,
+    CardAttachmentEntity,
     CardDependencyEntity,
     CardNoteEntity,
     ChecklistItemEntity,
@@ -150,4 +151,69 @@ class DependencyRepository(BaseRepository[CardDependencyEntity]):
                 (CardDependencyEntity.card_id == card_id)
                 | (CardDependencyEntity.depends_on_id == card_id)
             )
+        )
+
+
+class AttachmentRepository(BaseRepository[CardAttachmentEntity]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, CardAttachmentEntity)
+
+    @with_db_retry
+    async def list_for_card(self, card_id: int) -> list[CardAttachmentEntity]:
+        result = await self.session.execute(
+            select(CardAttachmentEntity)
+            .where(CardAttachmentEntity.card_id == card_id)
+            .order_by(CardAttachmentEntity.created_at, CardAttachmentEntity.id)
+        )
+        return list(result.scalars().all())
+
+    @with_db_retry
+    async def counts_for_cards(self, card_ids: list[int]) -> dict[int, int]:
+        if not card_ids:
+            return {}
+        result = await self.session.execute(
+            select(CardAttachmentEntity.card_id, func.count())
+            .where(CardAttachmentEntity.card_id.in_(card_ids))
+            .group_by(CardAttachmentEntity.card_id)
+        )
+        return dict(result.all())
+
+    @with_db_retry
+    async def all_storage_keys(self) -> set[str]:
+        result = await self.session.execute(select(CardAttachmentEntity.storage_key))
+        return set(result.scalars().all())
+
+    @with_db_retry
+    async def keys_for_card(self, card_id: int) -> list[str]:
+        result = await self.session.execute(
+            select(CardAttachmentEntity.storage_key).where(
+                CardAttachmentEntity.card_id == card_id
+            )
+        )
+        return list(result.scalars().all())
+
+    @with_db_retry
+    async def keys_for_board(self, board_id: int) -> list[str]:
+        from app.db.entities import TaskEntity
+
+        result = await self.session.execute(
+            select(CardAttachmentEntity.storage_key).where(
+                CardAttachmentEntity.card_id.in_(
+                    select(TaskEntity.id).where(TaskEntity.board_id == board_id)
+                )
+            )
+        )
+        return list(result.scalars().all())
+
+    async def delete_for_card(self, card_id: int) -> None:
+        await self.session.execute(
+            delete(CardAttachmentEntity).where(CardAttachmentEntity.card_id == card_id)
+        )
+
+    async def detach_note(self, note_id: int) -> None:
+        """Not silinince ekler kalir, note_id bosalir (SQLite'ta FK kapali)."""
+        await self.session.execute(
+            update(CardAttachmentEntity)
+            .where(CardAttachmentEntity.note_id == note_id)
+            .values(note_id=None)
         )

@@ -18,6 +18,7 @@ export type BoardList = Res<S['ListResponse']>
 export type Label = Res<S['LabelResponse']>
 export type CardSummary = Res<S['CardSummary']>
 export type Note = Res<S['NoteResponse']>
+export type Attachment = Res<S['AttachmentResponse']>
 export type ChecklistItem = Res<S['ChecklistItemResponse']>
 export type Activity = Res<S['ActivityResponse']>
 export type UserSettings = Res<S['UserSettingsResponse']>
@@ -25,9 +26,10 @@ export type UserSettings = Res<S['UserSettingsResponse']>
 export type CardRef = Res<S['CardRef']>
 export type CardDetail = Omit<
   Res<S['CardDetail']>,
-  'notes' | 'checklist' | 'subtasks' | 'depends_on' | 'dependents' | 'parent'
+  'notes' | 'attachments' | 'checklist' | 'subtasks' | 'depends_on' | 'dependents' | 'parent'
 > & {
   notes: Note[]
+  attachments: Attachment[]
   checklist: ChecklistItem[]
   subtasks: CardSummary[]
   depends_on: CardRef[]

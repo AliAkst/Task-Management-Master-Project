@@ -77,7 +77,11 @@ class BoardRepository(BaseRepository[BoardEntity]):
         Board'u ve icerigini siler. SQLite FK cascade'i varsayilan olarak kapali
         oldugu icin cocuk kayitlari acikca siliyoruz (Postgres'te zararsiz).
         """
-        from app.db.entities import CardNoteEntity, ChecklistItemEntity
+        from app.db.entities import (
+            CardAttachmentEntity,
+            CardNoteEntity,
+            ChecklistItemEntity,
+        )
 
         card_ids = select(TaskEntity.id).where(TaskEntity.board_id == board.id)
         label_ids = select(LabelEntity.id).where(LabelEntity.board_id == board.id)
@@ -85,6 +89,11 @@ class BoardRepository(BaseRepository[BoardEntity]):
             delete(CardLabelEntity).where(
                 CardLabelEntity.card_id.in_(card_ids)
                 | CardLabelEntity.label_id.in_(label_ids)
+            )
+        )
+        await self.session.execute(
+            delete(CardAttachmentEntity).where(
+                CardAttachmentEntity.card_id.in_(card_ids)
             )
         )
         await self.session.execute(
