@@ -1,5 +1,65 @@
 # AI Destekli Kişisel Yaşam & Görev Yönetimi — Genel Çerçeve Planı (v2)
 
+> ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
+>
+> **Branch:** `feature/ai-life-manager` · Faz 0–5b tamam. **Sıradaki: Faz 5c**, sonra Faz 6, Faz 7.
+
+## 0. İlerleme Durumu
+
+### Faz durumu
+| Faz | Durum | Commit | Not |
+|---|---|---|---|
+| 0 — Hazırlık | ✅ Tamam | `54fbde6` | Dapr kaldırıldı, 6 bug + ek bug'lar, user_settings, React iskeleti, dev.ps1, `.claude/agents` |
+| 1a — Board & Kartlar | ✅ Tamam | `54fbde6` | boards/lists/cards/notes/checklist/labels, activity_log, kanban (dnd-kit) |
+| 1b — Hiyerarşi & Bağlantılar | ✅ Tamam | `4e8431d` | alt kartlar, card_dependencies (DAG), bölme, unblock event'i, React Flow grafik |
+| 2 — Takvim | ✅ Tamam | `4e8431d` | events, `/calendar`, FullCalendar, kartı takvime sürükleme |
+| 3a — Zaman takibi | ✅ Tamam | `4e8431d` | time_sessions, global kronometre, elle giriş, çakışma kontrolü |
+| 3b — Planlama/Değerlendirme/İstatistik | ✅ Tamam | `4e8431d` | day_plans, Bugün sayfası, `/analytics/summary`, İstatistik sayfası, hatırlatıcılar (bkz. sapmalar) |
+| 4 — AI Çekirdek | ✅ Tamam | `e52b4b7` | assistant-service, Ollama native adaptörü, benchmark, okuma araçları, gizlilik filtresi, sohbet paneli |
+| 5a — AI Aksiyonları | ✅ Tamam | `1d4f701` | yazma araçları, ai_permissions (ask/auto/never), ai_actions, onay kartları, `X-Actor: ai` |
+| 5b — Hafıza + Tasarım | ✅ Tamam | (bu oturumun son commit'i) | **Tasarım yenilemesi** (aşağıda), user_facts, goals, profil ekranı, tanışma sohbeti, ayrı hafıza çıkarımı |
+| 5c — Claude + model ayarları | ⏳ Sıradaki | — | AnthropicProvider, provider_configs (şifreli key, Fernet), Ayarlar'da model ekranı, board varsayılan modeli. **Önce `claude-api` skill'ini oku.** |
+| 6 — Proaktif & Öğrenen | ⏳ Bekliyor | — | review.submitted → gün özeti + ertesi gün planı (gemma4:26b), ai_insights, tahmin katsayısı, görev bazlı ModelRouter, RRULE |
+| 7 — Dış Entegrasyonlar | ⏳ Bekliyor | — | Trello (tek seferlik import), Google, Microsoft To Do (Samsung Reminder üzerinden) |
+
+### Faz 5b'de yapılanlar (ayrıntı)
+- **Tasarım yenilemesi (frontend-design skill'iyle):** jenerik SaaS kart kiti → "kâğıt üstüne mürekkep + ajanda sekmeleri".
+  - Renkler `index.css` `@theme` içinde: Tailwind `slate` paleti mürekkep tonlarıyla yeniden tanımlandı (kâğıt `#F2F4F8`, mürekkep `#172038`, dolma kalem mavisi `#2B44C9`, kayıt kırmızısı `#D93A4A`). Yeni bileşenlerde de `slate-*`/`blue-*` kullanmak yeterli.
+  - Yazı: Bricolage Grotesque (h1/h2 başlıklar), Atkinson Hyperlegible Next (arayüz) — `index.html`'de Google Fonts.
+  - Üst menü → sol ray (`Layout.tsx`): ana menü + **hayat alanları renkli ajanda sekmeleri** (tek "cesur" öğe) + kronometre + asistan.
+  - Emoji → lucide-react ikonları; büyük harfli etiketler kaldırıldı; "Bugün" sayfasında büyük tarih başlığı; board kartlarında kenar sekmesi; görünür klavye odağı; `prefers-reduced-motion`.
+- **Hedefler (task-api):** `goals` tablosu + `/goals` CRUD, board/kart silinince bağlantı kopar (hedef kalır).
+- **Hafıza (assistant-service):** `user_facts` (kategori, kaynak, `is_private`; sağlık/ilişki varsayılan gizli → bulut modele gitmez), `/assistant/facts` API'si.
+- **Araçlar:** `remember_fact`, `forget_fact`, `save_goal` (izin türleri `remember_fact`, `forget_fact`, `manage_goal`), `list_goals`.
+- **Sistem mesajı:** bilinen bilgiler + aktif hedefler + bilinmeyen kategoriler; az bilgi varsa tanışma talimatı.
+- **Ayrı hafıza çıkarımı (`app/agent/memory_extractor.py`):** gerçek testte hem qwen3.5:4b hem gemma4:26b sohbet ederken araç çağırmadan "not aldım" dedi. Çözüm: cevaptan sonra tek görevli, sadece hafıza araçlı odaklı ikinci çağrı → öneriler onay kartı olarak gelir (gerçek modelle doğrulandı).
+- **Profil sayfası** (`/profile`): bilgileri düzelt/gizle/sil, hedefler, "Tanışma sohbetini başlat".
+- **Hata düzeltmeleri:** Ollama araç çağrısı id'leri her akışta `call_0`'dan başlıyordu → turlar arası çakışma (onay sonucu yanlış mesaja yazılabilirdi); artık benzersiz. Sohbet mesajına bağlı olmayan öneriler sayfa yenilenince kayboluyordu → en yakın asistan cevabına bağlanıyor.
+
+### Plandan bilinçli sapmalar
+| Plan | Yapılan | Neden |
+|---|---|---|
+| Ollama için OpenAI-uyumlu adaptör | Ollama **native** `/api/chat` adaptörü | `/v1` `num_ctx`'i yok sayıyor: 4B model 14.3 GB / %38 GPU → native + 16K: 3.6 GB / %100 GPU (~3.5× hız) |
+| Hatırlatıcılar: notification-service + APScheduler + Web Push | Frontend `Reminders.tsx` (uygulama açıkken tarayıcı bildirimi + şerit) | Bu makinede Docker/RabbitMQ yok. Gerçek push Docker kurulunca |
+| `daily_stats` / `card_stats` tabloları | Her istekte hesaplanan `/analytics/summary` | Kişisel ölçekte veri küçük; önbellek tablo eskiyebilirdi |
+| Hafıza aracını sohbet modeli çağırır | Ayrı, odaklı hafıza çıkarımı adımı | Modeller sohbet ederken araç çağırmıyordu (yukarıda) |
+| Faz 5 tek parça | 5a / 5b / 5c | Kapsam büyüklüğü |
+
+### Bilinen sorunlar / dikkat
+- **qwen3.5:4b** hızlı ve araç çağrılarında doğru ama çok adımlı işte zayıf: onay beklerken "ekledim" diyebiliyor, anlam hataları yapıyor (koşu etkinliğini "ayakkabı al" kartına bağladı). Onay kartları gerçeği gösteriyor; Faz 6'da görev bazlı yönlendirme (planlama → gemma4:26b) bunun için.
+- Sohbet geçmişinde model önceki "not aldım" kalıbını taklit edebiliyor.
+- Lokal test DB'sinde test verileri var (Spor/Date/Eğitimler board'ları, "Koşu ayakkabısı al" AI kartı, bekleyen bir hafıza önerisi).
+- task-api'de eski dosyalarda birkaç lint uyarısı (Faz 0 öncesinden).
+
+### Yeni oturum için hızlı başlangıç
+- **Ortam:** Windows, Docker YOK (SQLite), uv: `C:\Users\alium\AppData\Roaming\Python\Python313\Scripts\uv.exe` (PATH'te değil). Ollama kurulu (qwen3.5:4b, gemma4:26b, qwen3.8:27b; deepseek-r1 ve coder listede gizli). GPU: RTX 4060 Laptop 8 GB.
+- **Çalıştırma:** `./scripts/dev.ps1` ya da önizleme (`task api project/.claude/launch.json`: task-api 8000, assistant 8100, web 5173).
+- **Testler:** `services/task-api`: `uv run pytest -q` (139) · `services/assistant-service`: `uv run pytest -q` (37) · `apps/web`: `npm run build`.
+- **Test hesabı:** `apps/web/README.md`.
+- **Benchmark:** `services/assistant-service`: `uv run python -m scripts.benchmark_models` (rapor `benchmark_results/`, git'te yok).
+
+---
+
 ## Context
 
 Elimizde, öğrenme amaçlı yazılmış ve sağlam bir altyapısı olan bir **task-api** (FastAPI + PostgreSQL + Redis + Dapr/RabbitMQ, Repository/Specification/UoW, resilience desenleri, JWT auth) ve bir **notification-service** var. Bugün sadece düz bir `tasks` tablosu ve CRUD bulunuyor; arayüz, board/kart yapısı, takvim, süre takibi ve AI yok.
@@ -205,13 +265,13 @@ Uygulamanın geri kalanı yalnızca nötr tipleri (`Msg`, `ToolSpec`, `ToolCall`
 |---|---|---|
 | ✅ **0 — Hazırlık** | `git init`; PROJECT_OVERVIEW §12'deki 6 bug; **Dapr'ın kaldırılması** (publisher → aio-pika, notification-service → `consumer.py`); `servicess/` temizliği; CORS; `user_settings`; genel `DomainEventPublisher`; `scripts/dev.ps1`; `apps/web` iskeleti (Vite + login + API client) | Tek komutla ayağa kalkan ortam, yeşil testler, frontend'den login |
 | ✅ **1a — Board & Kartlar** | boards (privacy, scope, bütçe), board_lists, kart genişletmesi + migration, notes, checklist, labels; sıralama/taşıma; **activity_log (ilk günden)**; frontend: board listesi, kanban (dnd-kit), kart detay modalı | Trello benzeri günlük kullanım; geçmiş birikmeye başlar |
-| **1b — Hiyerarşi & Bağlantılar** | parent_id alt kartlar, card_dependencies (DAG + döngü kontrolü), blocked hesaplama, `card.completed → card.unblocked` event'i, ilerleme roll-up; frontend: alt kart listesi, **React Flow grafik görünüm** (sürükleyerek ip bağlama) | Ana görev → alt görevler → sıralı zincirler |
-| **2 — Takvim** ⟂ **3a — Zaman takibi** *(paralel)* | **2:** events CRUD, `GET /calendar?from&to` (etkinlik + tarihli kartlar, board renkleriyle), FullCalendar, kartı takvime sürükleme. **3a:** time_sessions, global timer widget, kart/ana kart toplam süre | Tüm board'lar tek takvimde; kronometre çalışıyor |
-| **3b — Planlama, Değerlendirme & İstatistik** | day_plans/items; planlama ekranı (takvimden + vadeli kartlardan otomatik dolar), değerlendirme ekranı (done/partial/not_done/postponed + neden + mood/energy), "yarına taşı"; planning/review saati ayarı + **hatırlatıcılar** (APScheduler + Web Push); `card_stats`, `daily_stats`, analytics endpoint'leri; **istatistik sayfası** (Recharts) | Performansını ölçen istatistikler; AI için zengin geçmiş |
-| **4 — AI Çekirdek** | **local model benchmark'ı (§8) ve model seçimi**; assistant-service; provider katmanı (OpenAICompatible → Ollama + GPT); ModelRouter + gizlilik filtresi; ContextBuilder; okuma tool'ları; SSE chat; chat paneli + **mesaj bazında model seçici** | Verilerini gören, yorumlayan sohbet asistanı (local model öncelikli) |
-| **5 — AI Aksiyonları & Hafıza** | yazma + yapı kurma tool'ları; `ai_permissions` + onay kartları + "otomatik yapayım mı?" akışı; user_facts, goals, profil ekranı; onboarding sohbeti; AnthropicProvider; Ayarlar: provider/model, şifreli key, board varsayılan modeli | AI plan yapıp kart/etkinlik/zincir oluşturuyor, seni hatırlıyor; Claude/GPT/local geçişi |
-| **6 — Proaktif & Öğrenen Asistan** | review/plan event'i → AI gün özeti + plan önerisi; zincirde sıradakini otomatik atama; haftalık değerlendirme + ai_insights; kişisel tahmin katsayısı; tekrarlayan kart/etkinlik (series + RRULE); ops. pgvector semantik arama | Kullandıkça seni daha iyi tanıyan, hedeflerine yönlendiren asistan |
-| **7 — Dış Entegrasyonlar** | `IntegrationConnector` arayüzü (provider katmanıyla aynı fikir) + Gelen Kutusu board'u; sırasıyla **Trello** (tek seferlik import, API key+token), **Google Calendar/Gmail** ve **Microsoft (Outlook/To Do, Graph API — Samsung Reminder → To Do senkronu üzerinden)** OAuth ile | Dış kaynaklardaki güncel işler uygulamaya akıyor, AI doğru board'a dağıtıyor |
+| ✅ **1b — Hiyerarşi & Bağlantılar** | parent_id alt kartlar, card_dependencies (DAG + döngü kontrolü), blocked hesaplama, `card.completed → card.unblocked` event'i, ilerleme roll-up; frontend: alt kart listesi, **React Flow grafik görünüm** (sürükleyerek ip bağlama) | Ana görev → alt görevler → sıralı zincirler |
+| ✅ **2 — Takvim** ⟂ **3a — Zaman takibi** *(paralel)* | **2:** events CRUD, `GET /calendar?from&to` (etkinlik + tarihli kartlar, board renkleriyle), FullCalendar, kartı takvime sürükleme. **3a:** time_sessions, global timer widget, kart/ana kart toplam süre | Tüm board'lar tek takvimde; kronometre çalışıyor |
+| ✅ **3b — Planlama, Değerlendirme & İstatistik** (hatırlatıcılar: bkz. §0 sapmalar) | day_plans/items; planlama ekranı (takvimden + vadeli kartlardan otomatik dolar), değerlendirme ekranı (done/partial/not_done/postponed + neden + mood/energy), "yarına taşı"; planning/review saati ayarı + **hatırlatıcılar** (APScheduler + Web Push); `card_stats`, `daily_stats`, analytics endpoint'leri; **istatistik sayfası** (Recharts) | Performansını ölçen istatistikler; AI için zengin geçmiş |
+| ✅ **4 — AI Çekirdek** | **local model benchmark'ı (§8) ve model seçimi**; assistant-service; provider katmanı (OpenAICompatible → Ollama + GPT); ModelRouter + gizlilik filtresi; ContextBuilder; okuma tool'ları; SSE chat; chat paneli + **mesaj bazında model seçici** | Verilerini gören, yorumlayan sohbet asistanı (local model öncelikli) |
+| 🟡 **5 — AI Aksiyonları & Hafıza** (5a ✅, 5b ✅ + tasarım yenilemesi, **5c ⏳**: AnthropicProvider + model ayarları) | yazma + yapı kurma tool'ları; `ai_permissions` + onay kartları + "otomatik yapayım mı?" akışı; user_facts, goals, profil ekranı; onboarding sohbeti; AnthropicProvider; Ayarlar: provider/model, şifreli key, board varsayılan modeli | AI plan yapıp kart/etkinlik/zincir oluşturuyor, seni hatırlıyor; Claude/GPT/local geçişi |
+| ⏳ **6 — Proaktif & Öğrenen Asistan** | review/plan event'i → AI gün özeti + plan önerisi; zincirde sıradakini otomatik atama; haftalık değerlendirme + ai_insights; kişisel tahmin katsayısı; tekrarlayan kart/etkinlik (series + RRULE); ops. pgvector semantik arama | Kullandıkça seni daha iyi tanıyan, hedeflerine yönlendiren asistan |
+| ⏳ **7 — Dış Entegrasyonlar** | `IntegrationConnector` arayüzü (provider katmanıyla aynı fikir) + Gelen Kutusu board'u; sırasıyla **Trello** (tek seferlik import, API key+token), **Google Calendar/Gmail** ve **Microsoft (Outlook/To Do, Graph API — Samsung Reminder → To Do senkronu üzerinden)** OAuth ile | Dış kaynaklardaki güncel işler uygulamaya akıyor, AI doğru board'a dağıtıyor |
 
 ---
 

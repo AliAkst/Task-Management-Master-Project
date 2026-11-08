@@ -126,6 +126,27 @@ class AiPermissionEntity(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
 
+class UserFactEntity(Base):
+    """
+    Asistanin kullanici hakkinda bildikleri (seni tanimasi). Kullanici profil
+    ekraninda gorur, duzeltir, siler. is_private: bulut modellere gonderilmez
+    (saglik ve iliski kategorilerinde varsayilan).
+    source: ai_learned | user_entered
+    """
+
+    __tablename__ = "user_facts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    category: Mapped[str] = mapped_column(String(30))
+    content: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(20), default="ai_learned")
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
 engine = create_async_engine(settings.database_url)
 session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

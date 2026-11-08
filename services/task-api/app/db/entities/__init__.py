@@ -14,6 +14,7 @@ from .card_content import (
 )
 from .day_plan import DayPlanEntity, DayPlanItemEntity
 from .event import EventEntity
+from .goal import GoalEntity
 from .task import TaskEntity
 from .time_session import TimeSessionEntity
 from .user import UserEntity
@@ -32,6 +33,7 @@ __all__ = [
     "DayPlanEntity",
     "DayPlanItemEntity",
     "EventEntity",
+    "GoalEntity",
     "LabelEntity",
     "TaskEntity",
     "TimeSessionEntity",

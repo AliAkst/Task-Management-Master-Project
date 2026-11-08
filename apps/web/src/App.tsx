@@ -9,6 +9,7 @@ import SettingsPage from './pages/SettingsPage'
 import CalendarPage from './pages/CalendarPage'
 import TodayPage from './pages/TodayPage'
 import StatsPage from './pages/StatsPage'
+import ProfilePage from './pages/ProfilePage'
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/today" element={<TodayPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

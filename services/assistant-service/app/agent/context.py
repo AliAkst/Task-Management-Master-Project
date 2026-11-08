@@ -8,6 +8,8 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from app.db.models import UserFactEntity
+from app.tools.memory_tools import CATEGORIES
 from app.tools.read_tools import ToolBox
 from app.tools.task_api import TaskApiClient, TaskApiError
 
@@ -44,6 +46,7 @@ async def build_system_prompt(
     tz: ZoneInfo,
     model_label: str,
     is_local: bool,
+    facts: list[UserFactEntity] | None = None,
 ) -> str:
     now = datetime.now(tz)
     lines = [
@@ -82,6 +85,20 @@ async def build_system_prompt(
             state = "değerlendirildi" if plan["status"] == "reviewed" else "planlandı"
             lines.append(f"Bugünün planı {state}: {len(items)} madde, {done} yapıldı.")
 
+    lines += _memory_lines(facts or [])
+    goals = await _safe_goals(toolbox)
+    if goals:
+        lines.append("")
+        lines.append(
+            "Kullanıcının aktif hedefleri (planlarken bunlara hizmet eden işleri öne çıkar):"
+        )
+        lines += [
+            f"- [hedef {g['id']}] {g['title']}"
+            + (f" (hedef tarih {g['target_date']})" if g.get("target_date") else "")
+            + (f" — neden: {g['why']}" if g.get("why") else "")
+            for g in goals
+        ]
+
     if not is_local:
         lines.append(
             "Not: Bulut modelisin; kullanıcının 'sadece local' işaretli board'larının "
@@ -89,3 +106,44 @@ async def build_system_prompt(
         )
     lines.append(f"(Model: {model_label})")
     return "\n".join(lines)
+
+
+MIN_FACTS_FOR_ACQUAINTED = 3
+
+
+def _memory_lines(facts: list[UserFactEntity]) -> list[str]:
+    """Bilinenler + bilinmeyen kategoriler (dogal sorular icin) + tanisma talimati."""
+    lines: list[str] = [""]
+    if facts:
+        lines.append(
+            "Kullanıcı hakkında bildiklerin (güncellemek/silmek için id'yi kullan):"
+        )
+        lines += [f"- [{f.id}, {f.category}] {f.content}" for f in facts]
+    known = {f.category for f in facts}
+    missing = [CATEGORIES[c] for c in CATEGORIES if c not in known and c != "other"]
+    if len(facts) < MIN_FACTS_FOR_ACQUAINTED:
+        lines.append(
+            "Kullanıcıyı henüz yeterince tanımıyorsun. Uygun bir anda kısa bir tanışma yap: "
+            "her seferinde TEK soru sor (hayat alanları, hedefleri, günlük rutini, çalışma "
+            "saatleri, enerjisinin yüksek olduğu zamanlar)."
+        )
+    elif missing:
+        lines.append(
+            "Henüz bilmediğin konular: " + ", ".join(missing) + ". Sohbet doğal olarak "
+            "elverdiğinde (sorguya çekmeden) bunları öğren."
+        )
+    lines.append(
+        "Kullanıcının kendisi hakkında söylediği kalıcı bilgiler, cevabından sonra ayrıca "
+        "hafızaya kaydedilmek üzere önerilir. Bu yüzden 'not aldım/kaydettim' DEME; "
+        "sohbete doğal biçimde devam et. Kullanıcı açıkça bir bilgiyi silmeni ya da "
+        "düzeltmeni isterse forget_fact / remember_fact(fact_id) kullan."
+    )
+    return lines
+
+
+async def _safe_goals(toolbox: ToolBox) -> list[dict[str, Any]]:
+    try:
+        goals = await toolbox.api.get("/goals", status="active")
+    except TaskApiError:
+        return []
+    return [g for g in goals if not toolbox.privacy.board_hidden(g.get("board_id"))]

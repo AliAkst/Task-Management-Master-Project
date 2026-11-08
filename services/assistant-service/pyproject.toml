@@ -36,5 +36,6 @@ asyncio_default_fixture_loop_scope = "function"
 "app/agent/context.py" = ["E501"]
 "app/tools/write_tools.py" = ["E501"]
 "app/agent/actions.py" = ["E501"]
+"app/tools/memory_tools.py" = ["E501"]
 "tests/*" = ["E501"]
 "scripts/benchmark_models.py" = ["E501"]

@@ -43,9 +43,9 @@ export default function BoardsPage() {
           <Link
             key={b.id}
             to={`/boards/${b.id}`}
-            className="group rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md"
+            className="group relative overflow-hidden rounded-lg border border-slate-200 bg-white py-4 pr-4 pl-6 hover:border-slate-400"
           >
-            <div className="mb-2 h-1.5 w-12 rounded-full" style={{ backgroundColor: b.color }} />
+            <span aria-hidden className="absolute inset-y-0 left-0 w-2.5" style={{ backgroundColor: b.color }} />
             <div className="flex items-center gap-2">
               <h2 className="font-medium group-hover:underline">{b.name}</h2>
               {b.privacy === 'local_only' && (

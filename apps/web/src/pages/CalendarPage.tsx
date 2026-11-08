@@ -183,7 +183,7 @@ export default function CalendarPage() {
     <div className="flex min-h-0 flex-1">
       <aside className="flex w-64 shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white p-3">
         <section>
-          <h2 className="mb-2 text-xs font-medium tracking-wide text-slate-500 uppercase">Board'lar</h2>
+          <p className="mb-2 text-[13px] text-slate-500">Gösterilen alanlar</p>
           <div className="flex flex-wrap gap-1.5">
             {allBoards.map((b) => {
               const on = !hidden.has(b.id)
@@ -202,7 +202,7 @@ export default function CalendarPage() {
         </section>
 
         <section className="min-h-0 flex-1">
-          <h2 className="mb-1 text-xs font-medium tracking-wide text-slate-500 uppercase">Açık kartlar</h2>
+          <h2 className="mb-1 text-[17px]">Açık kartlar</h2>
           <p className="mb-2 text-xs text-slate-400">Takvime sürükleyerek zaman ayır.</p>
           <ul ref={listRef} className="space-y-1.5">
             {openCards.map((c) => {

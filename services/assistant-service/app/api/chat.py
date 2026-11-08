@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.actions import ActionGate, action_payload, load_modes
 from app.agent.context import build_system_prompt
 from app.agent.loop import run_agent
+from app.agent.memory_extractor import MEMORY_TOOLS, extract_memory
 from app.api.deps import current_user, ok
 from app.config import settings
 from app.db.models import (
@@ -26,6 +27,7 @@ from app.db.models import (
 )
 from app.llm.registry import build_provider, list_models
 from app.llm.types import LLMError, Msg, ToolCall
+from app.tools.memory_tools import MemoryTools, load_facts
 from app.tools.read_tools import ToolBox
 from app.tools.task_api import TaskApiClient, TaskApiError
 
@@ -140,19 +142,36 @@ async def messages(
     session: AsyncSession = Depends(get_session),
 ):
     await owned_conversation(session, conversation_id, user["id"])
-    rows = await session.scalars(
-        select(MessageEntity)
-        .where(MessageEntity.conversation_id == conversation_id)
-        .order_by(MessageEntity.id)
+    rows = list(
+        await session.scalars(
+            select(MessageEntity)
+            .where(MessageEntity.conversation_id == conversation_id)
+            .order_by(MessageEntity.id)
+        )
     )
+    all_actions = list(
+        await session.scalars(
+            select(AiActionEntity)
+            .where(AiActionEntity.conversation_id == conversation_id)
+            .order_by(AiActionEntity.id)
+        )
+    )
+    linked = {c["id"] for m in rows for c in m.tool_calls or []}
     actions = {
         a.tool_call_id: action_payload(a)
-        for a in await session.scalars(
-            select(AiActionEntity).where(
-                AiActionEntity.conversation_id == conversation_id
-            )
-        )
+        for a in all_actions
+        if a.tool_call_id in linked
     }
+    # Hafiza cikarimi gibi sohbet mesajina bagli olmayan oneriler: kendisinden
+    # once yazilmis son asistan cevabina eklenir (sayfa yenilense de gorunsun)
+    extra: dict[int, list[dict]] = {}
+    answers = [m for m in rows if m.role == "assistant" and m.content]
+    for a in all_actions:
+        if a.tool_call_id in linked or not answers:
+            continue
+        before = [m for m in answers if m.created_at <= a.created_at]
+        target = (before or answers)[-1]
+        extra.setdefault(target.id, []).append(action_payload(a))
     return ok(
         [
             {
@@ -162,7 +181,8 @@ async def messages(
                 "tools": [c["name"] for c in m.tool_calls or []],
                 "actions": [
                     actions[c["id"]] for c in m.tool_calls or [] if c["id"] in actions
-                ],
+                ]
+                + extra.get(m.id, []),
                 "model_id": m.model_id,
                 "is_local": m.is_local,
                 "created_at": m.created_at,
@@ -251,6 +271,10 @@ async def _stream(
             settings_data = await api.get("/settings/")
             tz = ZoneInfo(settings_data.get("timezone") or DEFAULT_TZ)
             toolbox = await ToolBox.create(api, cloud=not is_local, tz=tz)
+            toolbox.writer.memory = MemoryTools(
+                session_maker, user["id"], cloud=not is_local
+            )
+            facts = await load_facts(session, user["id"], include_private=is_local)
             toolbox.gate = ActionGate(
                 session_maker,
                 toolbox.writer,
@@ -260,7 +284,7 @@ async def _stream(
                 modes=await load_modes(session, user["id"]),
             )
             system = await build_system_prompt(
-                api, toolbox, user, tz, provider.info.label, is_local
+                api, toolbox, user, tz, provider.info.label, is_local, facts
             )
 
             user_row = MessageEntity(
@@ -283,6 +307,7 @@ async def _stream(
             )
 
             msgs = [Msg("system", system), *map(to_msg, history), Msg("user", text)]
+            used_memory_tool = False
             async for ev in run_agent(
                 provider, msgs, toolbox, max_rounds=settings.max_tool_rounds
             ):
@@ -312,6 +337,13 @@ async def _stream(
                     yield sse("error", ev.data)
                     return
                 else:
+                    if ev.type == "tool_start" and ev.data.get("name") in MEMORY_TOOLS:
+                        used_memory_tool = True
+                    yield sse(ev.type, ev.data)
+
+            # Sohbet modeli hafizaya dokunmadiysa: ayri, odakli hafiza cikarimi
+            if settings.memory_extraction and not used_memory_tool:
+                async for ev in extract_memory(provider, toolbox, text, facts):
                     yield sse(ev.type, ev.data)
 
             conv = await session.get(ConversationEntity, conversation_id)

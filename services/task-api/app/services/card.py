@@ -390,6 +390,9 @@ class CardService:
         await self.uow.checklist.delete_for_card(card.id)
         await self.uow.dependencies.delete_for_card(card.id)
         await self.uow.day_plan_items.detach_card(card.id)
+        from app.services.goal import detach_goals
+
+        await detach_goals(self.uow.session, card_id=card.id)
         await self.uow.events.delete_for_card(card.id)
         await self.uow.time_sessions.detach_card(card.id)
         await self.uow.tasks.detach_children(card.id)

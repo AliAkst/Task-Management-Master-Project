@@ -21,6 +21,7 @@ from app.services.card import CardService
 from app.services.analytics import AnalyticsService
 from app.services.day_plan import DayPlanService
 from app.services.event import EventService
+from app.services.goal import GoalService
 from app.services.time_session import TimeSessionService
 from app.services.task import TaskService
 from app.services.user_settings import UserSettingsService
@@ -103,6 +104,13 @@ async def get_analytics_service(
     return AnalyticsService(uow)
 
 
+async def get_goal_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+    actor: str = Depends(get_actor),
+) -> GoalService:
+    return GoalService(uow, actor)
+
+
 async def get_auth_service(uow: TaskUnitOfWork = Depends(get_unit_of_work)):
     """Kimlik dogrulama islemlerini yuruten servisi hazirlar"""
     return AuthService(uow)
@@ -168,3 +176,4 @@ TimeSessionServiceDep = Annotated[
 ]
 DayPlanServiceDep = Annotated[DayPlanService, Depends(get_day_plan_service)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
+GoalServiceDep = Annotated[GoalService, Depends(get_goal_service)]

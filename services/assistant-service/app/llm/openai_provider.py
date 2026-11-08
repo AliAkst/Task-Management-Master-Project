@@ -5,6 +5,7 @@ Farklari sadece base_url / api_key / ek parametreler.
 
 import json
 import re
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -196,7 +197,7 @@ class OpenAICompatibleProvider:
             yield ChatChunk(
                 type="tool_call",
                 tool_call=ToolCall(
-                    id=slot["id"] or f"call_{i}",
+                    id=slot["id"] or f"call_{uuid.uuid4().hex[:12]}",
                     name=slot["name"],
                     arguments=args,
                     raw_arguments=None if valid else slot["args"],

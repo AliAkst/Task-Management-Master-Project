@@ -118,7 +118,7 @@ export default function PlanEditor({
         {grouped.length === 0 && <p className="text-sm text-slate-400">Bu gün için öneri yok.</p>}
         {grouped.map((g) => (
           <div key={g.kind} className="mb-3">
-            <h3 className="mb-1 text-xs font-medium tracking-wide text-slate-500 uppercase">{KIND_LABEL[g.kind]}</h3>
+            <h3 className="mb-1 text-[13px] text-slate-500">{KIND_LABEL[g.kind]}</h3>
             <ul className="space-y-1">
               {g.items.map((s) => {
                 const on = inDraft.has(keyOf(s))

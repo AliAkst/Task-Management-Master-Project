@@ -1,12 +1,13 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { Square, Timer } from 'lucide-react'
 import { useActiveSession, useElapsed, useSessionMutations } from '../api/sessions'
 import { formatClock } from '../lib/format'
 
 const BASE_TITLE = 'Yaşam Planlayıcı'
 const LONG_RUN_SEC = 8 * 3600
 
-/** Ust menudeki global kronometre: her sayfada calisan oturumu gosterir. */
+/** Sol raydaki global kronometre: her sayfada calisan oturumu gosterir. */
 export default function TimerWidget() {
   const active = useActiveSession()
   const m = useSessionMutations()
@@ -26,9 +27,10 @@ export default function TimerWidget() {
         onClick={() => m.start.mutate(null)}
         disabled={m.start.isPending}
         title="Karta bağlı olmayan çalışma süresi başlat"
-        className="rounded-md px-2.5 py-1 text-sm whitespace-nowrap text-slate-500 hover:bg-slate-100"
+        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[15px] text-slate-700 hover:bg-slate-100"
       >
-        ▶ Serbest
+        <Timer size={17} strokeWidth={1.75} aria-hidden />
+        Serbest çalışma başlat
       </button>
     )
   }
@@ -38,25 +40,32 @@ export default function TimerWidget() {
 
   return (
     <div
-      className={`flex items-center gap-2 rounded-full py-1 pr-1 pl-3 text-sm ${
-        longRun ? 'bg-amber-100' : 'bg-red-50'
-      }`}
+      className={`rounded-lg border bg-white px-2.5 py-2 ${longRun ? 'border-amber-400' : 'border-[var(--color-rec)]/40'}`}
       title={longRun ? '8 saatten uzun süredir çalışıyor — durdurmayı unutmuş olabilir misin?' : undefined}
     >
-      <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+      <div className="flex items-center gap-2">
+        <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[var(--color-rec)]" aria-hidden />
+        <span className="text-[22px] leading-none font-[650] tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
+          {formatClock(elapsed)}
+        </span>
+        <button
+          onClick={() => m.stop.mutate()}
+          disabled={m.stop.isPending}
+          aria-label="Kronometreyi durdur"
+          title="Durdur"
+          className="ml-auto rounded-md bg-slate-900 p-1.5 text-white hover:bg-slate-700 disabled:opacity-50"
+        >
+          <Square size={12} fill="currentColor" aria-hidden />
+        </button>
+      </div>
       {cardLink ? (
-        <Link to={cardLink} className="max-w-24 truncate hover:underline lg:max-w-56">{label}</Link>
+        <Link to={cardLink} className="mt-1 block truncate text-[13px] text-slate-600 hover:text-slate-900 hover:underline">
+          {label}
+        </Link>
       ) : (
-        <span className="max-w-24 truncate lg:max-w-56">{label}</span>
+        <p className="mt-1 truncate text-[13px] text-slate-600">{label}</p>
       )}
-      <span className="font-mono tabular-nums">{formatClock(elapsed)}</span>
-      <button
-        onClick={() => m.stop.mutate()}
-        disabled={m.stop.isPending}
-        className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs text-white disabled:opacity-50"
-      >
-        ■ Durdur
-      </button>
+      {longRun && <p className="mt-1 text-[12px] text-amber-800">8 saati geçti — unutulmuş olabilir mi?</p>}
     </div>
   )
 }
