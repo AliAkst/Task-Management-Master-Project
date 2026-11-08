@@ -66,6 +66,45 @@ def _microsoft(uow: TaskUnitOfWork = Depends(get_unit_of_work)):
     return MicrosoftTodoService(uow)
 
 
+# ---------------- OAuth uygulama kimligi (kurulum sihirbazi) ----------------
+@integrations_router.get(
+    "/oauth-clients", response_model=ApiResponse[list[oauth.OAuthClientInfo]]
+)
+async def oauth_clients(
+    user: CurrentUserDep, uow: TaskUnitOfWork = Depends(get_unit_of_work)
+):
+    """Google/Microsoft icin uygulama kimligi girilmis mi + eklenecek yonlendirme adresi."""
+    return ApiResponse(
+        success=True,
+        data=[await oauth.client_info(uow, user.id, p) for p in oauth.PROVIDERS],
+    )
+
+
+@integrations_router.put(
+    "/{provider}/oauth-client", response_model=ApiResponse[oauth.OAuthClientInfo]
+)
+async def save_oauth_client(
+    provider: str,
+    data: oauth.OAuthClientSave,
+    user: CurrentUserDep,
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+):
+    """Kurulum sihirbazindan gelen client id/secret (sir sifreli saklanir, geri donmez)."""
+    return ApiResponse(
+        success=True, data=await oauth.save_client(uow, user.id, provider, data)
+    )
+
+
+@integrations_router.delete(
+    "/{provider}/oauth-client", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_oauth_client(
+    provider: str, user: CurrentUserDep, uow: TaskUnitOfWork = Depends(get_unit_of_work)
+):
+    await oauth.delete_client(uow, user.id, provider)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @integrations_router.delete("/{provider}", status_code=status.HTTP_204_NO_CONTENT)
 async def disconnect(
     provider: str,
@@ -89,12 +128,12 @@ class ConnectResponse(BaseModel):
 @integrations_router.post(
     "/{provider}/connect", response_model=ApiResponse[ConnectResponse]
 )
-async def oauth_connect(provider: str, user: CurrentUserDep):
+async def oauth_connect(
+    provider: str, user: CurrentUserDep, uow: TaskUnitOfWork = Depends(get_unit_of_work)
+):
     """Saglayicinin izin ekraninin adresini dondurur (arayuz oraya yonlendirir)."""
-    return ApiResponse(
-        success=True,
-        data=ConnectResponse(authorize_url=oauth.connect_url(user.id, provider)),
-    )
+    url = await oauth.connect_url(uow, user.id, provider)
+    return ApiResponse(success=True, data=ConnectResponse(authorize_url=url))
 
 
 @integrations_router.get("/{provider}/callback", include_in_schema=False)
@@ -103,6 +142,7 @@ async def oauth_callback(
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
+    error_description: str | None = None,
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
 ):
     """
@@ -111,6 +151,14 @@ async def oauth_callback(
     """
     base = f"{settings.web_base_url.rstrip('/')}/settings"
     try:
+        if error and error != "access_denied":
+            # Ornek: Microsoft AADSTS hatalari (yanlis hesap turu, yonlendirme adresi)
+            detail = (error_description or error).splitlines()[0][:300]
+            raise IntegrationError(
+                f"{provider} bağlantıyı reddetti: {detail}",
+                "OAUTH_PROVIDER_ERROR",
+                status_code=400,
+            )
         if error or not code or not state:
             raise IntegrationError(
                 "İzin verilmedi ya da bağlantı iptal edildi.",

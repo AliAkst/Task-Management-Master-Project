@@ -2,7 +2,7 @@
 
 > ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
 >
-> **Branch:** `feature/ai-life-manager` · Faz 0–6 tamam, **7a–7d commit'lendi** (7a–7c: `b8b46d1`, 7d: `b21b062`) ve push edildi. **Sıradaki: Opus Faz 7 denetimi** (plan ↔ kod, §4.1 kabul ölçütleri) — detay plan §4.1.
+> **Branch:** `feature/ai-life-manager` · Faz 0–6 tamam, **7a–7d commit'lendi** (7a–7c: `b8b46d1`, 7d: `b21b062`) ve push edildi. **Opus Faz 7 denetimi yapıldı** (aşağıda "Faz 7 denetimi"); denetimde eklenen OAuth kurulum sihirbazı **commit'lenmedi** (Haiku oturumu). **Sıradaki:** commit/push → kullanıcı gerçek hesaplarla kabul denemesi (Google, Microsoft, Trello, gemma4 triage).
 
 ## 0. İlerleme Durumu
 
@@ -26,6 +26,7 @@
 | 7b — OAuth + Google Calendar | ✅ Tamam | `b8b46d1` (7a–7c ortak) | OAuth altyapısı, tek yönlü takvim senkronu, salt okunur etkinlikler (§4.1) |
 | 7c — Microsoft To Do | ✅ Tamam | `b8b46d1` (7a–7c ortak) | Samsung Reminder → To Do → Gelen Kutusu; tamamlamayı geri yazma (outbox) (§4.1) |
 | 7d — Gelen Kutusu dağıtımı | ✅ Tamam | `b21b062` | asistan kartlara board önerir, madde madde onay kartı (§4.1) |
+| 7 denetimi (Opus) | ✅ Tamam | — (commit bekliyor) | plan ↔ kod uyumlu; eksik: OAuth kimliği yalnız `.env`'den → **arayüzde kurulum sihirbazı** eklendi (aşağıda) |
 
 ### Faz 5b'de yapılanlar (ayrıntı)
 - **Tasarım yenilemesi (frontend-design skill'iyle):** jenerik SaaS kart kiti → "kâğıt üstüne mürekkep + ajanda sekmeleri".
@@ -121,9 +122,22 @@
 - **Doğrulanmadı:** gerçek gemma4:26b ile 5 örnek kart (kabul ölçütünün gerçek-model kısmı; istem zayıf çıkarsa önce örnekli istem eklenir) ve tarayıcıda Gelen Kutusu şeridi görsel kontrolü (8000/5173 çalışan uygulama gerçek veritabanıyla dolu; açılışta otomatik tetik gerçek modeli çalıştıracağı için önizleme açılmadı). Gerçek denemede: Gelen Kutusu'na birkaç kart ekle → board sayfasında "Asistan dağıtsın" → onay kartı → madde çıkar/onayla.
 - **Commit/push (Haiku oturumu, yapıldı):** 7d tek commit `b21b062`. Push: `origin/feature/ai-life-manager`. Ruff: yeni dosyalarda yalnız E501 (5 satır; depoda zaten yaygın).
 
+### Faz 7 denetimi (Opus, 2026-11-08)
+- **Sonuç:** 7a–7d adımları ve test kapsamı planla uyumlu; sapmalar zaten tabloda gerekçeli. task-api 247 → **265** test, assistant 120, `npm run build` temiz, ruff'ta yeni dosyalarda yalnız E501.
+- **Eksik bulundu ve düzeltildi — OAuth kurulumu:** Google/Microsoft istemci kimliği/sırrı yalnız `services/task-api/.env`'den okunuyordu; arayüz sadece "`.env`'e yaz" hatası veriyordu, kullanıcı kendi başına bağlanamıyordu.
+  - **Backend:** `oauth_clients` tablosu (migration `e4b8c2f6a9d3`, kullanıcı başına sağlayıcı başına; sır Fernet şifreli, API'den hiç dönmez). Çözüm sırası: arayüzden girilen → `.env` (yedek). `GET /integrations/oauth-clients` (configured/source/client_id/**redirect_uri**), `PUT|DELETE /integrations/{provider}/oauth-client`. Biçim denetimi sık kopyalama hatalarını yakalar: Google kimliği `.apps.googleusercontent.com` ile bitmeli; Microsoft kimliği GUID olmalı, sır alanına **Secret ID** (GUID) yapıştırılırsa "Value'yu kopyala" uyarısı; boşluk/satır sonu.
+  - **Hata mesajları:** token ucundan `invalid_client`/`unauthorized_client` → "Kimlik bilgilerini değiştir" yönlendirmesi (`OAUTH_INVALID_CLIENT`); `redirect_uri_mismatch` → eklenecek tam adres; sağlayıcının callback'e gönderdiği `error_description` (ör. Microsoft AADSTS) ilk satırıyla gösterilir; yenilemede `invalid_client` da hesabı "Yeniden bağlan"a alır (önceden her 15 dk'da 502 tekrarlanırdı).
+  - **Frontend:** `components/OAuthSetup.tsx` — "Kurulumu başlat" → adım adım sihirbaz (Google: proje, Calendar API, Auth Platform, **Publish app** (7 günlük token düşmesine karşı), Web client + kopyalanabilir yönlendirme adresi; Microsoft: Samsung Reminder senkronu, Azure App registrations, *Personal Microsoft accounts only*, Web yönlendirmesi, **Value** sırrı) → "Kaydet ve bağlan" (kaydeder, izin ekranına yönlendirir). Kurulu iken satırda kimlik özeti + "Kimlik bilgilerini değiştir" / "Sil". Google/Microsoft satırları tek `OAuthRow` bileşeninde birleşti.
+  - **Testler:** `tests/integration/test_oauth_clients.py` (18: şifreli saklama, sır dönmez, arayüz kimliği ile tam bağlanma, `.env` önceliği/geri düşme, kullanıcı yalıtımı, biçim hataları, eyleme dönük hata mesajları).
+  - Tarayıcıda doğrulandı (8001/5175 kopya portlarda; `vite.config.ts` artık `TASK_API_PROXY`/`ASSISTANT_PROXY` ortam değişkenini okur, `.claude/launch.json`'a `task-api-alt`/`web-alt` eklendi). Migration gerçek DB'ye uygulandı (öncesinde yedek alındı).
+- **Bulundu, geri alındı:** commit'lenmemiş `scripts/start-app.ps1` değişikliği (`uvicorn --reload`): denetim sırasında dosya değişince Windows'ta yeniden başlatma takıldı — reloader 8000 portunu tuttu ama yanıt vermedi (uygulama erişilemez oldu); ayrıca reload migration çalıştırmıyor. Kullanıcı kararıyla geri alındı (`git checkout`). **Kural:** kod güncellenince (yeni oturum, `git pull`) "Ajanda - Durdur" → "Ajanda" (bu, `.env` eşitlemesi + migration'ı da çalıştırır).
+- **Hâlâ kullanıcıda (kabul ölçütlerinin gerçek-hesap kısmı):** Google bağlan → takvim seç → `/calendar`; Microsoft bağlan → telefonda hatırlatıcı ≤15 dk Gelen Kutusu'nda, kartı bitir → To Do'da tamamlandı; Trello gerçek board import; gemma4:26b ile 5 kartlık triage. Çözülemeyen OAuth/refresh hatasında ayrı Opus hata ayıklama oturumu.
+- **Gözlem (değişiklik gerekmedi):** Google ilk senkronda `nextSyncToken` dönmezse her tur tam senkron yapılır (doğru ama daha yavaş); Microsoft'ta kişisel hesapla Azure'da uygulama kaydı için ücretsiz Azure dizini istenebilir (sihirbazda not var).
+
 ### Plandan bilinçli sapmalar
 | Plan | Yapılan | Neden |
 |---|---|---|
+| OAuth kimliği `.env`'de (§4.1 7b/7c ön koşul) | Arayüzde kurulum sihirbazı + şifreli `oauth_clients`; `.env` yedek | Kullanıcı `.env` düzenlemeden, yönlendirilerek bağlanabilsin |
 | Model `[{card_id, board_id, list_id?, reason}]` seçer (§4.1 adım 2) | Aynen; ayrıca kart/board'un kendisi de modele gerçek id'siyle gösterilir | Numara eşlemesi yerine doğrudan id + kodla doğrulama yeterli |
 | Tek onay kartı, kullanıcı tek tek çıkarabilir (adım 3) | `ActionCard` `items` + `exclude_card_ids` (onay anında `args` süzülür) | Madde seçimi için backend'de ayrı uç gerekmedi |
 | Yürütücü kartı taşır (adım 3) | + onay anında kart hâlâ Gelen Kutusu'ndaysa taşır, değilse atlar | Öneri ile onay arasında kullanıcı kartı elle taşımış olabilir |
@@ -168,7 +182,7 @@
 - **Asistan veritabanı:** sadece `ASSISTANT_DATABASE_URL` okur (eskiden `DATABASE_URL` sızınca boş `task_management.db` açıyordu).
 - **Profil temizliği:** sohbette "profilimi temizle" → kod tekrarları, tek güne ait ve anlamsız bilgileri bulur, tek onay kartıyla pasife alır.
 - **Çalıştırma:** `./scripts/dev.ps1` ya da önizleme (`task api project/.claude/launch.json`: task-api 8000, assistant 8100, web 5173).
-- **Testler:** `services/task-api`: `uv run pytest -q` (247) · `services/assistant-service`: `uv run pytest -q` (120) · `apps/web`: `npm run build`.
+- **Testler:** `services/task-api`: `uv run pytest -q` (265) · `services/assistant-service`: `uv run pytest -q` (120) · `apps/web`: `npm run build`.
 - **Bulut model anahtarı:** `ASSISTANT_SECRET_KEY` yoksa ilk kayıtta `services/assistant-service/.secret_key` üretilir (git'te yok). Silinirse kayıtlı API anahtarları çözülemez, yeniden girilmeli.
 - **Test hesabı:** `apps/web/README.md`.
 - **Benchmark:** `services/assistant-service`: `uv run python -m scripts.benchmark_models` (rapor `benchmark_results/`, git'te yok).
@@ -386,7 +400,7 @@ Uygulamanın geri kalanı yalnızca nötr tipleri (`Msg`, `ToolSpec`, `ToolCall`
 | ✅ **4 — AI Çekirdek** | **local model benchmark'ı (§8) ve model seçimi**; assistant-service; provider katmanı (OpenAICompatible → Ollama + GPT); ModelRouter + gizlilik filtresi; ContextBuilder; okuma tool'ları; SSE chat; chat paneli + **mesaj bazında model seçici** | Verilerini gören, yorumlayan sohbet asistanı (local model öncelikli) |
 | 🟡 **5 — AI Aksiyonları & Hafıza** (5a ✅, 5b ✅ + tasarım yenilemesi, **5c ⏳**: AnthropicProvider + model ayarları) | yazma + yapı kurma tool'ları; `ai_permissions` + onay kartları + "otomatik yapayım mı?" akışı; user_facts, goals, profil ekranı; onboarding sohbeti; AnthropicProvider; Ayarlar: provider/model, şifreli key, board varsayılan modeli | AI plan yapıp kart/etkinlik/zincir oluşturuyor, seni hatırlıyor; Claude/GPT/local geçişi |
 | ✅ **6 — Proaktif & Öğrenen Asistan** | review/plan event'i → AI gün özeti + plan önerisi; zincirde sıradakini otomatik atama; haftalık değerlendirme + ai_insights; kişisel tahmin katsayısı; tekrarlayan kart/etkinlik (series + RRULE); ops. pgvector semantik arama | Kullandıkça seni daha iyi tanıyan, hedeflerine yönlendiren asistan |
-| 🟡 **7 — Dış Entegrasyonlar** (7a–7d ✅ commit'lendi, push edildi; Opus denetimi bekliyor) | `IntegrationConnector` arayüzü (provider katmanıyla aynı fikir) + Gelen Kutusu board'u; sırasıyla **Trello** (tek seferlik import, API key+token), **Google Calendar** (Gmail kapsam dışı) ve **Microsoft (Outlook/To Do, Graph API — Samsung Reminder → To Do senkronu üzerinden)** OAuth ile | Dış kaynaklardaki güncel işler uygulamaya akıyor, AI doğru board'a dağıtıyor |
+| ✅ **7 — Dış Entegrasyonlar** (7a–7d push edildi; Opus denetimi yapıldı, gerçek hesap denemesi kullanıcıda) | `IntegrationConnector` arayüzü (provider katmanıyla aynı fikir) + Gelen Kutusu board'u; sırasıyla **Trello** (tek seferlik import, API key+token), **Google Calendar** (Gmail kapsam dışı) ve **Microsoft (Outlook/To Do, Graph API — Samsung Reminder → To Do senkronu üzerinden)** OAuth ile | Dış kaynaklardaki güncel işler uygulamaya akıyor, AI doğru board'a dağıtıyor |
 
 ## 4.1 Faz 7 — Detay Plan
 
@@ -494,7 +508,7 @@ Ortak modül yapısı (`services/task-api/app/integrations/`): `base.py` (`SyncR
 | 5 | ✅ 7c kodlama | Sonnet | Microsoft To Do | 7b'nin `oauth.py`'sine bağımlı |
 | 6 | ✅ 7d kodlama | Sonnet | Inbox triage | 7c'den **bağımsız** (Gelen Kutusu 7a'da) → istenirse 7b'den sonra 7c ile **ayrı oturumda paralel** (farklı servis, çakışan dosya yok; tek ortak dosya `SettingsPage.tsx` izin etiketleri → 7d bunu en sona bıraksın) |
 | 7 | ✅ 7a–7d push | Haiku | commit + push | 7d tek commit `b21b062` (`inbox_triage.py`, `jobs.py`, `actions.py`, `write_tools.py`, test, web `InboxTriage.tsx`/`ActionCard.tsx`/`BoardPage.tsx`/`Layout.tsx`/`assistant.ts`); tüm testler + web build geçti (task-api 247, assistant 120) |
-| 8 | Faz 7 denetimi | Opus | plan ↔ kod karşılaştırması | §4.1 kabul ölçütlerine göre |
+| 8 | ✅ Faz 7 denetimi | Opus | plan ↔ kod karşılaştırması | Yapıldı; OAuth kurulum sihirbazı eklendi (§0 "Faz 7 denetimi") — commit/push bekliyor |
 | (gerekirse) | OAuth/senkron hata ayıklama | Opus | yalnızca çözülemeyen gerçek-hesap hatası | |
 
 Verimlilik kuralları (kodlama oturumlarına):

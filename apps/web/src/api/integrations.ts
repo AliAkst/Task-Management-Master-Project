@@ -59,8 +59,18 @@ export interface MicrosoftStatus {
   failed_push: number
 }
 
+/** Google/Microsoft uygulama kimligi girilmis mi (sir hicbir zaman donmez). */
+export interface OAuthClientInfo {
+  provider: 'google' | 'microsoft'
+  configured: boolean
+  source: 'app' | 'env' | null
+  client_id: string | null
+  redirect_uri: string
+}
+
 const keys = {
   all: ['integrations'] as const,
+  oauthClients: ['integrations', 'oauth-clients'] as const,
   microsoftLists: ['integrations', 'microsoft', 'lists'] as const,
   microsoftStatus: ['integrations', 'microsoft', 'status'] as const,
   trelloBoards: ['integrations', 'trello', 'boards'] as const,
@@ -71,6 +81,13 @@ export function useIntegrations() {
   return useQuery({
     queryKey: keys.all,
     queryFn: () => api<IntegrationAccount[]>('/integrations'),
+  })
+}
+
+export function useOAuthClients() {
+  return useQuery({
+    queryKey: keys.oauthClients,
+    queryFn: () => api<OAuthClientInfo[]>('/integrations/oauth-clients'),
   })
 }
 
@@ -141,6 +158,16 @@ export function useIntegrationMutations() {
       mutationFn: (provider: string) =>
         api<{ authorize_url: string }>(`/integrations/${provider}/connect`, { method: 'POST' }),
       onSuccess: (r) => window.location.assign(r.authorize_url),
+    }),
+    // Kurulum sihirbazi: client id/secret kaydet (sonra connectOAuth)
+    saveOAuthClient: useMutation({
+      mutationFn: ({ provider, ...data }: { provider: string; client_id: string; client_secret: string }) =>
+        api<OAuthClientInfo>(`/integrations/${provider}/oauth-client`, { method: 'PUT', body: JSON.stringify(data) }),
+      onSuccess: () => qc.invalidateQueries({ queryKey: keys.oauthClients }),
+    }),
+    deleteOAuthClient: useMutation({
+      mutationFn: (provider: string) => api<void>(`/integrations/${provider}/oauth-client`, { method: 'DELETE' }),
+      onSuccess: () => qc.invalidateQueries({ queryKey: keys.oauthClients }),
     }),
     saveGoogleSettings: useMutation({
       mutationFn: (data: { calendar_ids: string[]; board_id: number | null }) =>
