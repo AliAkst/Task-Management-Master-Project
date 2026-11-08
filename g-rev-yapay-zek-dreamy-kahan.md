@@ -2,7 +2,7 @@
 
 > ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
 >
-> **Branch:** `feature/ai-life-manager` · Faz 0–6 tamam. **Sıradaki: Faz 7** (dış entegrasyonlar).
+> **Branch:** `feature/ai-life-manager` · Faz 0–6 tamam, **7a–7d commit'lendi** (7a–7c: `b8b46d1`, 7d: `b21b062`) ve push edildi. **Sıradaki: Opus Faz 7 denetimi** (plan ↔ kod, §4.1 kabul ölçütleri) — detay plan §4.1.
 
 ## 0. İlerleme Durumu
 
@@ -22,7 +22,10 @@
 | 6a — Gün sonu döngüsü | ✅ Tamam | `f5ae4e8` | değerlendirme → arka plan işi: gün özeti (`ai_summary`) + yarın plan önerisi (gemma4:26b), tahmin katsayısı, arka plan modeli ayarı |
 | 6b — Öğrenen asistan | ✅ Tamam | `ff08bce` | haftalık analiz → `ai_insights` (onay → kalıcı bilgi), zincirde sıradaki kart plan önerilerinde |
 | 6c — Tekrarlayan işler | ✅ Tamam | `3fa972e` | tekrarlayan etkinlikler (RRULE, takvimde açılır), kart serileri (bitince sıradaki kart), ortak Tekrar seçici |
-| 7 — Dış Entegrasyonlar | ⏳ Bekliyor | — | Trello (tek seferlik import), Google, Microsoft To Do (Samsung Reminder üzerinden) |
+| 7a — Entegrasyon altyapısı + Trello | ✅ Tamam | `b8b46d1` (7a–7c ortak) | integration_accounts, external_links, Gelen Kutusu, Trello API key+token ile tek seferlik import (§4.1) |
+| 7b — OAuth + Google Calendar | ✅ Tamam | `b8b46d1` (7a–7c ortak) | OAuth altyapısı, tek yönlü takvim senkronu, salt okunur etkinlikler (§4.1) |
+| 7c — Microsoft To Do | ✅ Tamam | `b8b46d1` (7a–7c ortak) | Samsung Reminder → To Do → Gelen Kutusu; tamamlamayı geri yazma (outbox) (§4.1) |
+| 7d — Gelen Kutusu dağıtımı | ✅ Tamam | `b21b062` | asistan kartlara board önerir, madde madde onay kartı (§4.1) |
 
 ### Faz 5b'de yapılanlar (ayrıntı)
 - **Tasarım yenilemesi (frontend-design skill'iyle):** jenerik SaaS kart kiti → "kâğıt üstüne mürekkep + ajanda sekmeleri".
@@ -75,9 +78,56 @@
 - **Sohbet silme:** SQLite'ta FK kapalı olduğu için silinen sohbetin `ai_actions` kayıtları aynı numarayı alan yeni sohbete karışıyordu; artık sohbetten koparılıyor.
 - **Kronometre (Focus To-Do gibi):** sol raydaki "Çalışmaya başla" → kart seçici (bugünün planı + açık kartlar, arama, kartsız çalış), çalışırken "başka karta geç"; isteğe bağlı odak süresi (25/50 dk, ilerleme çubuğu, dolunca bildirim; kayıt durmaz). Bugün → plan maddelerinde ▶.
 
+### Faz 7a'da yapılanlar (ayrıntı)
+- **Migration `d9a2c6e4f1b8`:** `integration_accounts`, `external_links`, `boards.system_kind`. Gerçek DB'nin kopyasında upgrade → downgrade → upgrade denendi (gerçek DB'ye dokunulmadı; uygulama bir sonraki açılışta `alembic upgrade head` ile uygular).
+- **Altyapı (`app/integrations/`):** `base.py` (`SyncResult`, `IntegrationError`, kullanıcı/sağlayıcı başına `asyncio.Lock`), `accounts.py` (Fernet şifreli kayıt, maskeli yanıt, yeniden bağlanınca ayarlar korunur), `trello.py`. `app/core/crypto.py` = asistan `security.py` kopyası (`TASK_API_SECRET_KEY` ya da git'e girmeyen `services/task-api/.secret_key`); `cryptography`, `httpx` ana bağımlılık.
+- **Gelen Kutusu:** `BoardService.get_or_create_inbox()` (`system_kind="inbox"`, `local_only`, tek liste "Gelen"); silme 409 `INBOX_PROTECTED`, yeniden adlandırma serbest. **Bir entegrasyon hesabı kaydedilince otomatik oluşur** (planda çağıran yoktu; 7b/7c aynı `save()` yolunu kullanır).
+- **Trello:** `TrelloClient` (key/token sorgu parametresi; `httpx` INFO günlüğü URL'yi yazdığı için `httpx` logger'ı WARNING'e çekildi), saf `map_board()` (arşivli liste/kart ve arşivli listedeki kartlar alınmaz; `Done/Bitti/Tamamlandı/Tamamlanan` → `is_done_list`; `dueComplete` → tamamlandı; renk adı/hex → en yakın palet rengi; ekler açıklamaya link listesi; birden çok checklist → "Ad: madde"; yorumlar → notlar `"<yazar>, <tarih>: "`, `created_at` yorum tarihi). Import doğrudan entity yazar (olay yayını/seri/unblock tetiklenmez), `actor=integration`, `created_by=integration`, tek commit/board; bir board'un hatası diğerlerini durdurmaz.
+- **Idempotent kural (ayrıntı):** her nesne için ayrı kontrol — mevcut kart atlanır (yerel düzenlemeler ezilmez) ama o karta eklenen yeni checklist maddesi/yorum alınır; kullanıcının sildiği kart tekrar gelmez; yerelde silinen board/liste baştan kurulur (eski alt bağlantılar `external_parent_id` ile temizlenir).
+- **API:** `PUT /integrations/trello`, `GET /integrations`, `DELETE /integrations/{provider}` (kartlar kalır), `GET /integrations/trello/boards`, `POST /integrations/trello/import`. Başkasının board id'si 404.
+- **Frontend:** Ayarlar → **Bağlantılar** (`IntegrationsSettings.tsx`, `api/integrations.ts`); `Row` bileşeni `Page.tsx`'e taşındı; Board'lar sayfasında Gelen Kutusu ikonu, board ayarlarında silme yerine "silinemez" notu.
+- **Testler:** task-api 153 → **176** (`tests/unit/test_trello_mapping.py`, `tests/integration/test_integrations_trello.py`, `tests/fixtures/trello_board.json`); `npm run build` temiz. Yeni dosyalarda ruff'ta sadece E501 (depoda zaten yaygın).
+- **Doğrulanmadı:** gerçek Trello hesabıyla import (key/token verilmedi) ve tarayıcıda Ayarlar → Bağlantılar görsel kontrolü (8000/5173 portları çalışan uygulamada dolu; kopya DB ile önizleme izni verilmedi).
+
+### Faz 7b'de yapılanlar (ayrıntı)
+- **OAuth (`app/integrations/oauth.py`, sağlayıcıdan bağımsız):** `PROVIDERS` kaydı (şimdilik `google`; 7c'de `microsoft` sadece buraya bir tanım eklenir). `POST /integrations/{provider}/connect` → `authorize_url`; `state` = 10 dk'lık imzalı JWT (`purpose=oauth_state`, user_id + sağlayıcı; erişim token'ı ya da başka sağlayıcının state'i reddedilir). `GET /integrations/{provider}/callback` auth header'sız çalışır, her sonucu `WEB_BASE_URL/settings?connected=…` ya da `?connect_error=…&message=…` + `#baglantilar` ile **302** yönlendirir (hata sayfasında bile arayüze döner). `ensure_fresh_token()`: bitişe <60 sn → yeniler, eski refresh token korunur; `invalid_grant` → hesap `error`, 409 `INTEGRATION_RECONNECT` ("Yeniden bağlan"; hata durumunda senkron denemeleri anında reddedilir). Hesap etiketi `id_token`'daki e-posta (imza doğrulanmaz, sadece etiket). İstemci kimliği/sırrı yoksa 422 `OAUTH_NOT_CONFIGURED`.
+- **Google (`google_calendar.py`):** `calendar.readonly` + `openid email`, `access_type=offline&prompt=consent`. `GET /integrations/google/calendars`, `PUT /integrations/google/settings` {calendar_ids, board_id}, `POST /integrations/{provider}/sync`. Senkron: takvim başına `singleEvents=true`; ilk sefer `timeMin=−30g/timeMax=+180g`, sonra `syncToken` (hesap `settings.sync_tokens`); **410 → tam yeniden senkron** (pencerede artık görünmeyenler silinir); `cancelled` → silinir; etag aynıysa atlanır. Tekrarlayan Google etkinlikleri örnek örnek satır (yerel RRULE yok). Tüm gün: yerel gece yarısı, bitiş haric. `external_id = "<takvim>|<etkinlik>"`, `external_parent_id` = takvim id.
+- **Sağlamlık:** bir takvimin hatası diğerlerini durdurmaz (hata `errors` listesinde ve `last_error`'da); takvim başına commit; yerelde silinen (örn. board silinmesi) etkinlik bir sonraki değişiklikte yeniden gelir ve bağlantı yeni etkinliğe taşınır (çoğalmaz). Seçimden çıkarılan takvimin etkinlikleri + sync token'ı silinir; hedef board değişince mevcut etkinlikler yeni board'a taşınır; bağlantı kesilince Google etkinlikleri de silinir (yerel olanlar kalır).
+- **Salt okunur:** `EventResponse.external` / `CalendarItem.external = {provider, url}`; `EventService.update/delete` → 409 `EVENT_READ_ONLY`. Etkinlikler `created_by="integration"`.
+- **Zamanlayıcı (`scheduler.py`):** `lifespan`'da `asyncio` görevi, ilk tur açılıştan 30 sn sonra, sonra 15 dk'da bir (`sync_all_accounts`); bir hesabın/turun hatası döngüyü durdurmaz. Aynı kullanıcı için `asyncio.Lock` (elle + otomatik çakışmaz).
+- **Frontend:** Ayarlar → Bağlantılar'da Google satırı ("Google ile bağlan" → yönlendirme, takvim çoklu seçimi, etkinliklerin board'u/rengi, "Kaydet" (kayıt sonrası otomatik senkron), "Şimdi senkronla" + sonuç özeti, son senkron zamanı, hata/"Yeniden bağlan", "Bağlantıyı kes"); OAuth dönüş bildirimi (URL sonra temizlenir). `EventDialog` dış etkinlikte salt okunur görünüm + "Google Takvim'te aç" bağlantısı; `CalendarPage` dış etkinlikte sürükleme/boyutlandırma kapalı. `api-schema.d.ts`'e `ExternalRef`/`external` elle eklendi (`npm run gen:api` çalışan sunucu ister, çıktısı aynı olmalı).
+- **Testler:** task-api 176 → **210** (`tests/integration/test_integrations_google.py`, 34 test: state sahteciliği/süresi/yanlış sağlayıcı, şifreli saklama, token yenileme + iptal edilmiş yetki, takvim/ayar sahipliği, ilk/artımlı senkron, 410, etag atlama, iptal, başlıksız/sıfır süreli etkinlik, yerelde silinen etkinliğin yeniden gelmesi, tek takvim hatası, kullanıcı yalıtımı, salt okunur 409, seçim kaldırma/board taşıma/bağlantı kesme, zamanlayıcı); `npm run build` temiz. Ruff'ta yeni dosyalarda sadece E501. `.env.example`'a `GOOGLE_CLIENT_ID/SECRET` eklendi.
+- **Doğrulanmadı:** gerçek Google hesabıyla bağlanma/senkron (Cloud Console kimlik bilgileri verilmedi) ve tarayıcıda Ayarlar → Bağlantılar / dış etkinlik penceresi görsel kontrolü (8000/5173 çalışan uygulamada dolu). Kabul ölçütünün gerçek-hesap kısmı kullanıcıda: `.env`'e kimlik bilgileri → Ayarlar → Google ile bağlan → takvim seç → `/calendar`'da etkinlikler; Google'da silinen etkinlik sonraki senkronda kaybolmalı. Çözülemeyen bir OAuth/refresh hatası çıkarsa yalnızca o iş için Opus hata ayıklama oturumu.
+
+### Faz 7c'de yapılanlar (ayrıntı)
+- **OAuth:** `oauth.PROVIDERS["microsoft"]` (yalnızca tanım): `login.microsoftonline.com/consumers/oauth2/v2.0`, kapsam `openid email offline_access User.Read Tasks.ReadWrite`, `response_mode=query`. Hesap etiketi `id_token`'daki `email`, yoksa `preferred_username`. Microsoft her yenilemede yeni refresh token verir; mevcut `_stored_tokens` bunu zaten saklıyor (testle doğrulandı). `.env.example`'a `MICROSOFT_CLIENT_ID/SECRET` eklendi (config'te zaten vardı). **Migration yok** (7a tabloları yetti).
+- **İçeri (`app/integrations/microsoft_todo.py`):** `GraphClient` (httpx, `timeout=20`, `HTTP_TRANSPORT` ile sahte ağ), liste başına `…/tasks/delta` (`@odata.nextLink` takip edilir, `deltaLink` `settings.delta_links[liste]`'de), 410 → tam yeniden senkron (uzakta artık olmayan görevlerin kartları arşivlenir). Yeni açık görev → **Gelen Kutusu** kartı (`CardService(actor="integration")`: etkinlik/cache/aktivite yolları çalışır); `external_links` (card, `external_id`=görev id, `external_parent_id`=liste id, `url`=To Do ana sayfası). `@removed` → arşiv (silinmez). Uzakta tamamlandı/yeniden açıldı → kart `CardService` ile tamamlanır/açılır (unblock + seri mantığı çalışır). Yerelde silinen kart geri gelmez.
+- **Yankı koruması:** `link.etag = "<sürüm>|<içerik parmak izi>"`; başlık/açıklama/tarih/öncelik yalnız uzak **içerik** gerçekten değiştiyse yazılır. Böylece kendi geri yazmamızın yankısı (To Do'nun yeni sürüm numarası) yerel düzenlemeleri (ör. yerelde yeniden adlandırma) ezmez.
+- **Geri yazma (outbox):** `CardService._flag_external_push()` — kartın microsoft bağlantısı varsa ve actor `integration` değilse aynı transaction'da `pending_push=True`; `_apply_status` (kart penceresi, kanban, gün değerlendirmesi, AI) ve `move()` (bitti listesine taşıma) kapsanır. Commit sonrası `microsoft_todo.schedule_push()` (asyncio arka plan, kendi oturumu) hemen dener; her senkron turu **önce** bekleyenleri gönderir, sonra delta çeker. Gönderilen değer kartın o anki durumudur (`completed`/`notStarted`) → art arda aç/kapa tek PATCH. Hata → `push_error` + sonraki turda tekrar; 404 (To Do'da silinmiş) → bir daha denenmez; 401/`invalid_grant` → hesap `error` ("Yeniden bağlan"). Bekleyen push varken uzak durum yerel tamamlamayı ezmez.
+- **API:** `GET /integrations/microsoft/lists`, `PUT /integrations/microsoft/settings` {list_ids|null=hepsi}, `GET /integrations/microsoft/status` {pending_push, failed_push}; `POST /integrations/{provider}/sync` artık microsoft'u da çalıştırır. `CardDetail.external = {provider, url, pending_push, push_error}` (Trello kartları da dolar). Liste seçimden çıkarılırsa bağlantıları + delta'sı silinir, **kartlar kalır**. Zamanlayıcı (`scheduler.run_once`) Google'dan sonra Microsoft'u da döndürür.
+- **Frontend:** Ayarlar → Bağlantılar'da Microsoft satırı (Bağlan/Yeniden bağlan, liste çoklu seçimi + Kaydet, "Şimdi senkronla" + sonuç, bekleyen/hatalı geri yazma sayısı — bekleyen varken 10 sn'de bir yoklar, Bağlantıyı kes); OAuth dönüş bildirimi sağlayıcıya göre; kart penceresinde "Microsoft To Do'dan / Trello'dan" rozeti (+ "geri yazılıyor… / geri yazılamadı"). `api-schema.d.ts`'e `external`/`pending_push`/`push_error` elle eklendi.
+- **Testler:** task-api 210 → **247** (`tests/integration/test_integrations_microsoft.py`, 37 test: eşleme birimleri [HTML gövde, 7 haneli kesir, Windows saat dilimi adı, tarih→yerel 23:59], OAuth/yenileme/iptal, sayfalı delta, idempotent, uzak güncelleme/tamamlama+unblock/yeniden açma/`@removed`, yerelde silinen kart, 410, tek liste hatası, yerel tamamlama→PATCH, bitti listesine taşıma, bekleyen push önceliği, hata→tekrar, 404 bırakma, `push_now`, yankı koruması, AI actor, liste seçimi, bağlantıyı kesme, kullanıcı yalıtımı, zamanlayıcı); `npm run build` temiz.
+- **Doğrulanmadı:** gerçek Microsoft hesabıyla bağlanma/senkron/geri yazma (Azure kimlik bilgileri verilmedi; kabul ölçütünün gerçek-hesap kısmı kullanıcıda: Azure uygulaması + `.env` → Ayarlar → Microsoft ile bağlan → telefonda hatırlatıcı ekle ≤15 dk içinde Gelen Kutusu'nda; kartı bitirince To Do'da tamamlanmış görünür) ve tarayıcıda Ayarlar → Bağlantılar / kart rozeti görsel kontrolü. Samsung Reminder'ın To Do'ya senkron açılımı ve görevlerin gerçekten `consumers` uç noktasında göründüğü hâlâ gerçek hesapla teyit edilmeli.
+- **Commit/push (Haiku oturumu, yapıldı):** 7a–7c tek commit `b8b46d1` (dosyalar fazlar arasında ortak: `api/v1/integrations.py`, `config.py`, `main.py`, `IntegrationsSettings.tsx`, `SettingsPage.tsx`; faz bazlı bölünürse ara commit'ler import edemez). Push: `origin/feature/ai-life-manager`.
+
+### Faz 7d'de yapılanlar (ayrıntı)
+- **Backend (`services/assistant-service`):** `app/agent/inbox_triage.py` (`day_review` deseni). Adaylar: Gelen Kutusu'ndaki (`system_kind=inbox`) açık, üst düzey kartlar; son 14 günde bekleyen/reddedilmiş `triage_inbox` önerisinde geçenler elenir; en fazla 20. Kart başına açıklama (200 karakter) ve hedef board'ların ad + `scope_description` + listeleri isteme girer. Model JSON `{"moves":[{card_id, board_id, list_id?, reason}]}` döndürür; `pick()` bilinmeyen kart/board, tekrar, Gelen Kutusu'nun kendisi ve gizli/arşivli board'u atar, geçersiz/eksik liste → board'un ilk bitmemiş listesi. Reddedilenlerin nedeni isteme eklenir.
+- **Gizlilik:** Gelen Kutusu varsayılan `local_only` → bulut modelle çalıştırılırsa model hiç çağrılmaz, "gizli" notu döner; kullanıcı Gelen Kutusu'nu `cloud_allowed` yaparsa bile `local_only` hedef board'lar ve kullanıcının serbest notu gönderilmez.
+- **İşlem türü `triage_inbox`** (`write_tools.py`: `ACTION_TYPES`, `_prepare_triage_inbox`, `_execute_triage`, `triage_summary`, `without_cards`): prepare id'leri çözer (kart/board/liste adı), yürütücü her madde için `POST /cards/{id}/move` (`X-Actor: ai`). **Onay anında kart hâlâ Gelen Kutusu'ndaysa taşınır; arada elle başka yere taşınmışsa atlanır** (`skipped`); bir kartın hatası diğerlerini durdurmaz. İzin modu ask/auto/never (Ayarlar → Asistan izinleri'nde etiketi otomatik gelir; `SettingsPage.tsx` değişmedi çünkü etiketler backend'den geliyor).
+- **Madde madde onay:** `POST /actions/{id}/approve` gövdesine `exclude_card_ids` eklendi; çıkarılanlar `args`'tan düşülür, özet yeniden kurulur, hepsi çıkarılırsa 422.
+- **İş:** `ai_jobs.kind=inbox_triage`; `POST/GET /assistant/inbox-triage` (güne bağlı değil: süren iş varsa o döner). Model = arka plan modeli (`start_job` mevcut yolu). Migration yok.
+- **Frontend:** `components/InboxTriage.tsx` — Gelen Kutusu board sayfasında üst şerit (iş durumu yoklaması, "Asistan dağıtsın", `ActionCard` ile onay) ve `useAutoInboxTriage()` (Layout; açılışta Gelen Kutusu'nda kart varsa günde en fazla bir kez, localStorage `ajanda.inboxTriageDay`, hata sessiz). `ActionCard`'a isteğe bağlı `items` (onay kutulu maddeler, "Seçili N kartı onayla", atlanan/başarısız sayısı). `api/assistant.ts`: `useInboxTriageJob`, `useStartInboxTriage`, `approve` `excludeCardIds`.
+- **Testler:** assistant-service 96 → **120** (`tests/test_inbox_triage.py`, 18 test: saf yardımcılar, aday sınırı/elemeler, geçersiz id eleme, gizlilik [bulut + açık inbox + gizli board], boş inbox'ta model çağrılmaz, ayrıştırılamayan cevap, bekleyen/reddedilen önerinin 14 gün tekrar gelmemesi + ret nedeninin isteme girmesi, izin modları, iş → onay → madde çıkarma, hepsini çıkarma 422, arada taşınan kartın atlanması, izin listesi). `npm run build` temiz.
+- **Doğrulanmadı:** gerçek gemma4:26b ile 5 örnek kart (kabul ölçütünün gerçek-model kısmı; istem zayıf çıkarsa önce örnekli istem eklenir) ve tarayıcıda Gelen Kutusu şeridi görsel kontrolü (8000/5173 çalışan uygulama gerçek veritabanıyla dolu; açılışta otomatik tetik gerçek modeli çalıştıracağı için önizleme açılmadı). Gerçek denemede: Gelen Kutusu'na birkaç kart ekle → board sayfasında "Asistan dağıtsın" → onay kartı → madde çıkar/onayla.
+- **Commit/push (Haiku oturumu, yapıldı):** 7d tek commit `b21b062`. Push: `origin/feature/ai-life-manager`. Ruff: yeni dosyalarda yalnız E501 (5 satır; depoda zaten yaygın).
+
 ### Plandan bilinçli sapmalar
 | Plan | Yapılan | Neden |
 |---|---|---|
+| Model `[{card_id, board_id, list_id?, reason}]` seçer (§4.1 adım 2) | Aynen; ayrıca kart/board'un kendisi de modele gerçek id'siyle gösterilir | Numara eşlemesi yerine doğrudan id + kodla doğrulama yeterli |
+| Tek onay kartı, kullanıcı tek tek çıkarabilir (adım 3) | `ActionCard` `items` + `exclude_card_ids` (onay anında `args` süzülür) | Madde seçimi için backend'de ayrı uç gerekmedi |
+| Yürütücü kartı taşır (adım 3) | + onay anında kart hâlâ Gelen Kutusu'ndaysa taşır, değilse atlar | Öneri ile onay arasında kullanıcı kartı elle taşımış olabilir |
+| Tetik: açılış + düğme (adım 5) | Aynı; ek olarak bekleyen/yakında reddedilmiş kartlar için model hiç çağrılmaz | GPU'yu boşuna meşgul etmesin |
 | Ollama için OpenAI-uyumlu adaptör | Ollama **native** `/api/chat` adaptörü | `/v1` `num_ctx`'i yok sayıyor: 4B model 14.3 GB / %38 GPU → native + 16K: 3.6 GB / %100 GPU (~3.5× hız) |
 | Hatırlatıcılar: notification-service + APScheduler + Web Push | Frontend `Reminders.tsx` (uygulama açıkken tarayıcı bildirimi + şerit) | Bu makinede Docker/RabbitMQ yok. Gerçek push Docker kurulunca |
 | `daily_stats` / `card_stats` tabloları | Her istekte hesaplanan `/analytics/summary` | Kişisel ölçekte veri küçük; önbellek tablo eskiyebilirdi |
@@ -92,7 +142,19 @@
 | `series` tablosu (kart ve etkinlik ortak) | Kartlar için `card_series`; etkinlikte kural doğrudan `events.recurrence_rule` | Etkinlik tekrarları satır değil, sorgu anında açılıyor; seriye sadece kartların "kaçıncı" sayacı için gerek var |
 | Tekil tekrarı düzenleme/silme (istisnalar) | Değişiklik bütün seriye uygulanır | İlk sürümde sade tutuldu; EXDATE ile eklenebilir |
 | `propose_insight` sohbet aracı | Sadece haftalık analiz gözlem üretir | Model kalıp uydurmasın: gözlemler veriden hesaplanır |
+| Gelen Kutusu'nu çağıran yer yok (§4.1) | Entegrasyon hesabı kaydedilince `get_or_create_inbox()` çağrılır | Aksi halde board hiç oluşmuyordu; 7b/7c aynı yolu kullanır |
+| Trello etiketi için `external_links` | Etiket board içinde ada göre eşlenir (bağlantı yok) | Etiket idempotent zaten; ek tablo satırı gereksiz |
+| Google etkinlikleri `activity_log`'a yazılır ("actor=integration") | Yazılmıyor | Dış takvim gürültüsü "planlanan vs gerçekleşen" zaman bloğu istatistiğini bozardı; `created_by="integration"` ayırt etmeye yeter |
+| `PUT /integrations/google/settings` yalnızca takvim + board seçer (§4.1 adım 3) | Ek olarak seçimden çıkan takvimin etkinlikleri silinir, board değişince etkinlikler taşınır, bağlantı kesilince Google etkinlikleri de silinir | Aksi halde salt okunur kalan "yetim" etkinlikler düzenlenemez/silinemez kalırdı |
+| Takvimde Google ikonu (§4.1 adım 7) | Pencerede kaynak adı + "Google Takvim'te aç" bağlantısı; takvim ızgarasında ikon yok | Görsel kontrol edilemedi; board rengi + sürükleme kilidi yeterli ayrım |
+| To Do `dueDateTime`/`reminderDateTime` → `due_date` (§4.1 adım 3) | Bitiş tarihi varsa **tarihi** alınıp kullanıcının yerel gününde 23:59 yapılır (arayüzdeki tarih seçiciyle aynı kural); yoksa hatırlatıcı anı. Bilinmeyen (Windows) saat dilimi adı UTC sayılır | To Do bitişi aslında tarihtir (00:00 UTC yollar); saat dilimi çevirisi günü kaydırırdı |
+| Yeni görev → kart (§4.1 adım 3) | Zaten **tamamlanmış** yeni görevler alınmaz | İlk delta tüm geçmişi getirir; bitmiş yüzlerce kart Gelen Kutusu'nu boğardı. Bilinen görev uzakta tamamlanırsa kart yine tamamlanır |
+| Alan güncellemesi: her etag değişiminde (§4.1 adım 3) | Yalnız uzak içerik parmak izi değiştiyse | Kendi PATCH'imizin yankısı yerel düzenlemeleri ezmesin |
+| Outbox kancası yalnız `_apply_status`'ta (§4.1 adım 4) | `_apply_status` + `move()` (bitti listesine taşıma) | Kanban sürüklemesi `_apply_status`'tan geçmiyor |
+| Kapsam `offline_access User.Read Tasks.ReadWrite` | + `openid email` | Hesap etiketi (e-posta) için `id_token` gerekir |
+| Gün değerlendirmesinde tamamlanan kart anında push (ihtimal) | Anında push yalnız `CardService` commit yolunda; gün değerlendirmesi sonrası 15 dk'lık turda gider | `day_plan` kendi commit'ini yapıyor; ayrıca kanca eklemeye değmedi |
 | Bulut modellerle gerçek test | Sadece birim/entegrasyon testleri (sahte istemci); gerçek API'ye istek atılmadı | Kullanıcı kararı: API maliyeti |
+| Faz 7 push: 4 ayrı commit (7a, 7b, 7c, 7d) | 2 commit: 7a–7c `b8b46d1`, 7d `b21b062` | 7a–7c dosyaları ortak (`api/v1/integrations.py`, `config.py`, `main.py`, `IntegrationsSettings.tsx`, `SettingsPage.tsx`); faz bazlı bölünürse ara commit'ler import hatası verirdi. 7d dosyaları ayrı, bağımsız |
 
 ### Bilinen sorunlar / dikkat
 - **qwen3.5:4b** hızlı ve araç çağrılarında doğru ama çok adımlı işte zayıf: onay beklerken "ekledim" diyebiliyor, anlam hataları yapıyor (koşu etkinliğini "ayakkabı al" kartına bağladı). Onay kartları gerçeği gösteriyor; Faz 6'da görev bazlı yönlendirme (planlama → gemma4:26b) bunun için.
@@ -106,7 +168,7 @@
 - **Asistan veritabanı:** sadece `ASSISTANT_DATABASE_URL` okur (eskiden `DATABASE_URL` sızınca boş `task_management.db` açıyordu).
 - **Profil temizliği:** sohbette "profilimi temizle" → kod tekrarları, tek güne ait ve anlamsız bilgileri bulur, tek onay kartıyla pasife alır.
 - **Çalıştırma:** `./scripts/dev.ps1` ya da önizleme (`task api project/.claude/launch.json`: task-api 8000, assistant 8100, web 5173).
-- **Testler:** `services/task-api`: `uv run pytest -q` (153) · `services/assistant-service`: `uv run pytest -q` (96) · `apps/web`: `npm run build`.
+- **Testler:** `services/task-api`: `uv run pytest -q` (247) · `services/assistant-service`: `uv run pytest -q` (120) · `apps/web`: `npm run build`.
 - **Bulut model anahtarı:** `ASSISTANT_SECRET_KEY` yoksa ilk kayıtta `services/assistant-service/.secret_key` üretilir (git'te yok). Silinirse kayıtlı API anahtarları çözülemez, yeniden girilmeli.
 - **Test hesabı:** `apps/web/README.md`.
 - **Benchmark:** `services/assistant-service`: `uv run python -m scripts.benchmark_models` (rapor `benchmark_results/`, git'te yok).
@@ -132,7 +194,7 @@ Hedef: bu altyapıyı atmadan genişleterek Trello benzeri board'lar, birbirine 
 | Planlama zamanı | Kullanıcı ayarlar: planlama saati (sabah ya da akşam) ve değerlendirme saati, ikisine de hatırlatma |
 | Kartlar | Ana görev → alt görevler (tam kart), checklist, kartlar arası **bağımlılık ipleri**, grafik görünüm. AI parçalayıp bağlayabilir, biri bitince sıradakini atar/planlar |
 | Tekrarlayan işler | Acelesi yok → Faz 6. Ama "kaçıncı sefer" istatistiği için `series` kavramı veri modeline baştan konur |
-| Entegrasyonlar | Önce kendi içinde çalışsın; Faz 7'de Trello (tek seferlik import), Google (Calendar/Gmail), Outlook/Microsoft To Do (Samsung Reminders buradan) |
+| Entegrasyonlar | Önce kendi içinde çalışsın; Faz 7'de Trello (tek seferlik import), Google Calendar (Gmail kapsam dışı), Microsoft To Do (Samsung Reminders buradan) |
 | Local modeller | Elindeki modellerden benchmark ile seçim; görev bazlı yönlendirme (hızlı model sohbet, büyük model arka plan planlaması) — bkz. §8 |
 
 > ⚠️ Proaktif uyarılar
@@ -324,7 +386,132 @@ Uygulamanın geri kalanı yalnızca nötr tipleri (`Msg`, `ToolSpec`, `ToolCall`
 | ✅ **4 — AI Çekirdek** | **local model benchmark'ı (§8) ve model seçimi**; assistant-service; provider katmanı (OpenAICompatible → Ollama + GPT); ModelRouter + gizlilik filtresi; ContextBuilder; okuma tool'ları; SSE chat; chat paneli + **mesaj bazında model seçici** | Verilerini gören, yorumlayan sohbet asistanı (local model öncelikli) |
 | 🟡 **5 — AI Aksiyonları & Hafıza** (5a ✅, 5b ✅ + tasarım yenilemesi, **5c ⏳**: AnthropicProvider + model ayarları) | yazma + yapı kurma tool'ları; `ai_permissions` + onay kartları + "otomatik yapayım mı?" akışı; user_facts, goals, profil ekranı; onboarding sohbeti; AnthropicProvider; Ayarlar: provider/model, şifreli key, board varsayılan modeli | AI plan yapıp kart/etkinlik/zincir oluşturuyor, seni hatırlıyor; Claude/GPT/local geçişi |
 | ✅ **6 — Proaktif & Öğrenen Asistan** | review/plan event'i → AI gün özeti + plan önerisi; zincirde sıradakini otomatik atama; haftalık değerlendirme + ai_insights; kişisel tahmin katsayısı; tekrarlayan kart/etkinlik (series + RRULE); ops. pgvector semantik arama | Kullandıkça seni daha iyi tanıyan, hedeflerine yönlendiren asistan |
-| ⏳ **7 — Dış Entegrasyonlar** | `IntegrationConnector` arayüzü (provider katmanıyla aynı fikir) + Gelen Kutusu board'u; sırasıyla **Trello** (tek seferlik import, API key+token), **Google Calendar/Gmail** ve **Microsoft (Outlook/To Do, Graph API — Samsung Reminder → To Do senkronu üzerinden)** OAuth ile | Dış kaynaklardaki güncel işler uygulamaya akıyor, AI doğru board'a dağıtıyor |
+| 🟡 **7 — Dış Entegrasyonlar** (7a–7d ✅ commit'lendi, push edildi; Opus denetimi bekliyor) | `IntegrationConnector` arayüzü (provider katmanıyla aynı fikir) + Gelen Kutusu board'u; sırasıyla **Trello** (tek seferlik import, API key+token), **Google Calendar** (Gmail kapsam dışı) ve **Microsoft (Outlook/To Do, Graph API — Samsung Reminder → To Do senkronu üzerinden)** OAuth ile | Dış kaynaklardaki güncel işler uygulamaya akıyor, AI doğru board'a dağıtıyor |
+
+## 4.1 Faz 7 — Detay Plan
+
+> Kullanıcı kararları (2026-11-08): Trello = **API key + token** ile tek seferlik import · Google = **sadece Calendar** (Gmail yok) · Microsoft To Do = **içeri al + tamamlamayı geri yaz**.
+
+### Genel kararlar (tüm alt fazlar)
+- **Entegrasyonlar task-api içinde** (`app/integrations/`): veriyi sahiplenen servis o, sahiplik/aktivite/tekrar/unblock yolları aynen çalışır. AI sınıflandırması (7d) assistant-service'te.
+- **Zamanlayıcı yok, RabbitMQ yok:** task-api `lifespan`'ında bir `asyncio` döngüsü 15 dk'da bir aktif hesapları senkronlar + elle "Şimdi senkronla". Aynı kullanıcı/sağlayıcı için `asyncio.Lock`.
+- **Token şifreleme:** task-api'ye `cryptography` eklenir; `app/core/crypto.py` = assistant-service `app/security.py`'nin kopyası (`TASK_API_SECRET_KEY` ya da `services/task-api/.secret_key`, `.gitignore`'a eklenir).
+- **HTTP:** `httpx` dev'den ana bağımlılığa taşınır; her dış çağrı `timeout=20`. Testlerde gerçek ağ yok: `httpx.MockTransport`.
+- **Kaynak etiketi:** entegrasyondan gelen kart/etkinlikte `created_by="integration"`, activity_log `actor="integration"`. Entegrasyonun yaptığı değişiklik geri yazmayı tetiklemez (döngü önlemi).
+- **Gelen Kutusu:** `boards.system_kind` (`NULL`/`"inbox"`), `BoardService.get_or_create_inbox()` (`get_or_create_default` deseniyle; tek liste "Gelen", gizlilik varsayılanı `local_only`). Silinemez (409), yeniden adlandırılabilir.
+- **Kullanıcının elle yapacakları** her alt fazın "Ön koşul" maddesinde; kod bunlar olmadan da testlerle bitirilebilir.
+
+### Veri modeli (7a'da tek migration, sonraki fazlar sadece kullanır)
+| Tablo / kolon | Alanlar |
+|---|---|
+| `integration_accounts` | id, user_id, provider (`trello`/`google`/`microsoft`), account_label, tokens_encrypted (Fernet, JSON: access/refresh/expires_at ya da key/token), scopes, status (`active`/`error`), settings (JSON: seçili takvim/liste id'leri, sync/delta token'ları), last_synced_at, last_error · unique(user_id, provider) |
+| `external_links` | id, user_id, provider, entity_type (`board`/`list`/`card`/`event`/`note`/`checklist_item`), entity_id, external_id, external_parent_id (ör. To Do liste id'si), etag, url, **pending_push** (bool), push_error, last_synced_at · unique(user_id, provider, entity_type, external_id) · index(entity_type, entity_id) |
+| `boards.system_kind` | nullable String(20) |
+
+Ortak modül yapısı (`services/task-api/app/integrations/`): `base.py` (`SyncResult` dataclass: created/updated/removed/errors), `accounts.py` (hesap CRUD + şifreleme), `links.py` (external_links repo yardımcıları), `oauth.py` (7b'de: authorize URL, code→token, refresh, `state` = 10 dk'lık imzalı JWT içinde user_id+provider), `scheduler.py` (lifespan döngüsü), `trello.py`, `google_calendar.py`, `microsoft_todo.py`. API: `app/api/v1/integrations.py` (`/integrations/...`).
+
+---
+
+### Faz 7a — Altyapı + Trello tek seferlik import ✅ (commit `b8b46d1`; gerçek hesapla doğrulama bekliyor)
+**Ön koşul (kullanıcı):** https://trello.com/power-ups/admin → Power-Up oluştur → API key. Token arayüzdeki "Token al" bağlantısından (`https://trello.com/1/authorize?expiration=never&scope=read&response_type=token&key=<KEY>&name=Ajanda`).
+
+**Adımlar**
+1. ✅ Migration + entity'ler + repo'lar (`IntegrationAccountEntity`, `ExternalLinkEntity`, `boards.system_kind`); UoW'ye ekle; `core/crypto.py`; `cryptography`, `httpx` bağımlılıkları; `.gitignore`.
+2. ✅ `BoardService.get_or_create_inbox()`; inbox board silme → 409; `BoardResponse`'a `system_kind`.
+3. ✅ Trello istemcisi (`trello.py`): `GET /1/members/me` (doğrulama), `GET /1/members/me/boards?filter=open`, board başına tek istek `GET /1/boards/{id}?lists=open&cards=open&card_checklists=all&labels=all&actions=commentCard&actions_limit=1000&card_attachments=true`.
+4. ✅ Eşleme: board→board (ad, Trello rengi→en yakın palet rengi), list→list (`Done/Bitti/Tamamlandı/Tamamlanan` → `is_done_list`), kart→kart (name, desc, due, dueComplete→done, sıra `pos`'a göre, etiketler, ekler açıklamanın sonuna link listesi), checklist→checklist_items, yorum→card_notes (`"<yazar>, <tarih>: "` önekiyle). Arşivli liste/kart alınmaz.
+5. ✅ **Idempotent:** her nesne external_links'e yazılır; tekrar import mevcutları atlar (güncellemez), yeni olanları ekler. Tek transaction/board.
+6. ✅ API: `PUT /integrations/trello` {api_key, token} (doğrula → şifreli kaydet, yanıtta maskeli) · `GET /integrations` (tüm hesaplar, maskeli) · `DELETE /integrations/{provider}` · `GET /integrations/trello/boards` (zaten import edilenler işaretli) · `POST /integrations/trello/import` {board_ids} → board başına sayımlar.
+7. ✅ Frontend: Ayarlar'a **"Bağlantılar"** bölümü (`components/IntegrationsSettings.tsx`, mevcut `Section`/`Row` desenleri): Trello satırı (key/token girişi, "Token al" linki, board seçim listesi, "İçe aktar", sonuç özeti, "Bağlantıyı kaldır"). Inbox board'u board listesinde ikonla, silme menüsü gizli.
+8. ✅ Testler (task-api): eşleme birim testleri (örnek Trello JSON fixture'ı `tests/fixtures/trello_board.json`), idempotent tekrar import, sahiplik (başkasının hesabı/board'u), şifreli saklama (DB'de düz metin yok), inbox silinemez.
+
+**Kabul:** örnek fixture'la import → board/list/kart/checklist/not sayıları doğru; ikinci import 0 yeni; arayüzden gerçek Trello board'u (kullanıcı key verdiyse) içeri alınır. — *Durum: fixture ile import/idempotent testleri geçti; gerçek Trello board'u ve arayüz görsel kontrolü kullanıcıda bekliyor.*
+
+**Önerilen model:** **Sonnet** (tüm adımlar; desenler hazır: entity/repo/UoW/servis/`ApiResponse`). Adım 1'deki migration tek sahip olarak backend-agent kuralına uyar; ayrı agent başlatmaya gerek yok, tek oturum sırayla yapar.
+
+---
+
+### Faz 7b — OAuth altyapısı + Google Calendar (tek yönlü) ✅ (commit `b8b46d1`; gerçek hesapla doğrulama bekliyor)
+**Ön koşul (kullanıcı):** Google Cloud Console → proje → Calendar API'yi aç → OAuth izin ekranı (External, kendi hesabını test kullanıcısı ekle; **"In production"a al** — test modunda refresh token 7 günde düşer; doğrulanmamış uygulama uyarısı bir kez görülür, kişisel kullanımda sorun değil) → OAuth istemcisi "Web application", yönlendirme `http://localhost:8000/api/v1/integrations/google/callback`. `services/task-api/.env`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+
+**Adımlar**
+1. `oauth.py` (sağlayıcıdan bağımsız): `POST /integrations/{provider}/connect` → `{authorize_url}` (state JWT) · `GET /integrations/{provider}/callback?code&state` (auth header yok, state doğrulanır) → token kaydı → `http://localhost:5173/settings?connected=<provider>#baglantilar`'a 302. `ensure_fresh_token()` (bitişe <60 sn → refresh; `invalid_grant` → status `error`, last_error "Yeniden bağlan"). Ayarlar `config.py`'ye (`google_client_id`, `microsoft_client_id`, … `web_base_url`).
+2. Kapsam: `https://www.googleapis.com/auth/calendar.readonly` (+ `openid email` hesap etiketi için), `access_type=offline&prompt=consent`.
+3. `GET /integrations/google/calendars` (calendarList) · `PUT /integrations/google/settings` {calendar_ids, board_id?}.
+4. Senkron (`google_calendar.py`): takvim başına `events.list(singleEvents=true)`; ilk sefer `timeMin=şimdi-30g, timeMax=şimdi+180g`, sonra `syncToken` (settings'te); 410 → tam yeniden senkron. Eşleme: summary→title, start.date→all_day, dateTime→UTC, location, description→notes, htmlLink→external_links.url; `status=cancelled` → yerel etkinlik silinir; etag aynıysa atla. Tekrarlayan Google etkinlikleri pencere içinde örnek örnek satır olur (yerel RRULE kullanılmaz).
+5. Google'dan gelen etkinlik **salt okunur**: `EventResponse.external = {provider, url}`; `EventService.update/delete` → 409 "Google Takvim'de düzenleyin". Takvimde sürükleme kapalı, pencerede "Google'da aç" bağlantısı.
+6. `scheduler.py`: lifespan'da 15 dk döngüsü (ilk tur açılıştan 30 sn sonra), `POST /integrations/{provider}/sync` elle.
+7. Frontend: Bağlantılar'da Google satırı (Bağlan → yönlendirme, takvim çoklu seçimi, hedef board seçimi, son senkron zamanı/hata, "Şimdi senkronla", "Bağlantıyı kes"); `EventDialog` salt okunur mod + Google ikonu; `CalendarPage` `editable:false` (external).
+8. Testler: state sahteciliği reddi, token yenileme, syncToken akışı, 410 yeniden senkron, iptal edilen etkinliğin silinmesi, salt okunur 409, MockTransport ile.
+
+**Kabul:** testler yeşil; (kimlik bilgileri verildiyse) gerçek hesapla bağlan → seçili takvimin etkinlikleri `/calendar`'da görünür, Google'da silinen etkinlik sonraki senkronda kaybolur.
+
+**Önerilen model:** **Sonnet** (adım 2–8). **Adım 1 (OAuth/state/refresh)** yine Sonnet ile yazılır; gerçek hesapla bağlanırken çözülemeyen bir hata çıkarsa (redirect_uri_mismatch dışı, token/refresh döngüsü) **o noktada yeni bir Opus oturumu** sadece hata ayıklama için açılır — baştan Opus kullanılmaz.
+
+---
+
+### Faz 7c — Microsoft To Do (Samsung Reminder) iki yönlü tamamlama ✅ (commit `b8b46d1`; gerçek hesapla doğrulama bekliyor)
+**Ön koşul (kullanıcı):** Telefonda Samsung Reminder → Ayarlar → "Microsoft To Do ile senkronize et" açık. Azure portal → App registrations → "Personal Microsoft accounts only" → platform **Web**, yönlendirme `http://localhost:8000/api/v1/integrations/microsoft/callback` → client secret. `.env`: `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`. Kapsam: `offline_access User.Read Tasks.ReadWrite`, uç nokta `login.microsoftonline.com/consumers/oauth2/v2.0`.
+
+**Adımlar**
+1. 7b'deki `oauth.py`'ye Microsoft yapılandırması (yeni kod değil, sağlayıcı tanımı).
+2. `GET /integrations/microsoft/lists` (`/me/todo/lists`) · `PUT /integrations/microsoft/settings` {list_ids} (varsayılan: hepsi).
+3. Senkron (`microsoft_todo.py`): liste başına `/me/todo/lists/{id}/tasks/delta` (deltaLink settings'te). Yeni görev → **Gelen Kutusu** board'unda kart (title, body.content→description, dueDateTime/reminderDateTime → due_date (kullanıcı saat dilimiyle), importance high→priority high); güncel görev → başlık/açıklama/tarih güncellenir; `status=completed` → kart `CardService` yoluyla tamamlanır (unblock/seri mantığı çalışsın, actor=integration); `@removed` → kart arşivlenir (silinmez).
+4. **Geri yazma (outbox):** `CardService._apply_status` içinde, kartın microsoft external_link'i varsa ve actor `integration` değilse aynı transaction'da `pending_push=True`. Commit sonrası arka planda hemen + her senkron turunda: `PATCH /me/todo/lists/{listId}/tasks/{taskId}` {status: completed | notStarted}. Başarı → `pending_push=False`; hata → `push_error`, sonraki turda tekrar.
+5. Çatışma kuralı: aynı turda iki taraf değiştiyse önce bekleyen push'lar gönderilir, sonra delta çekilir (yerel tamamlama kaybolmaz).
+6. Frontend: Bağlantılar'da Microsoft satırı (Bağlan, liste seçimi, son senkron, bekleyen/hatalı geri yazma sayısı); kart penceresinde "Microsoft To Do'dan" rozeti.
+7. Testler: delta akışı, tamamlanan uzak görev → kart done + `card.unblocked` yolu, yerel tamamlama → pending_push → PATCH, integration actor'u geri yazmaz (döngü yok), push hatası tekrar denenir, @removed → arşiv.
+
+**Kabul:** testler yeşil; (kimlik bilgileri verildiyse) telefonda eklenen hatırlatıcı ≤15 dk içinde Gelen Kutusu'nda; uygulamada bitirilince To Do'da tamamlanmış görünür.
+
+**Önerilen model:** **Sonnet**. Adım 4–5 (outbox + çatışma) bu fazın en riskli kısmı; plan net olduğu için Sonnet yeterli, gerçek testte döngü/çift tamamlama görülürse ayrı Opus hata ayıklama oturumu.
+
+---
+
+### Faz 7d — Asistan Gelen Kutusu'nu dağıtır ✅ (commit `b21b062`; gerçek modelle doğrulama bekliyor)
+**Adımlar (assistant-service)**
+1. `app/agent/inbox_triage.py` (`day_review.py` deseni): adaylar = Gelen Kutusu'ndaki açık kartlar, son 14 günde bekleyen/reddedilmiş bir `triage_inbox` önerisinde geçmeyenler, en fazla 20. Board listesi: ad + `scope_description` + listeler; bulut modelde `local_only` board'lar ve Gelen Kutusu içeriği gönderilmez (inbox varsayılan `local_only` olduğundan pratikte local model).
+2. Model **sadece seçer** (JSON: `[{card_id, board_id, list_id?, reason}]`); kod doğrular (bilinmeyen id, inbox'ın kendisi → atılır; list yoksa board'un ilk listesi). Emin olmadığı kart önerilmez.
+3. Yeni işlem türü `triage_inbox` (izinler: ask/auto/never; Ayarlar → Asistan izinleri'nde etiketiyle) → tek onay kartı, madde madde (kullanıcı tek tek çıkarabilir). Yürütücü `write_tools.execute` içinde: her madde için task-api `POST /cards/{id}/move` (`X-Actor: ai`).
+4. `ai_jobs` `kind=inbox_triage`; `POST /assistant/inbox-triage`; model = arka plan modeli (`background_model_id`, yoksa gemma4:26b).
+5. Tetik: frontend, Gelen Kutusu'nda dağıtılmamış kart varsa uygulama açılışında (günde en fazla bir kez, localStorage) ve Gelen Kutusu board sayfasındaki **"Asistan dağıtsın"** düğmesiyle.
+6. Frontend: Gelen Kutusu board sayfasında üst şerit (iş durumu yoklama — `DayDigest` deseni, onay kartı `ActionCard` ile).
+7. Testler (assistant-service, sahte provider): aday seçimi, geçersiz id eleme, gizlilik filtresi, reddedilen önerinin 14 gün tekrar gelmemesi, izin modları.
+
+**Kabul:** testler yeşil; gerçek gemma4:26b ile 5 örnek inbox kartı → anlamlı board önerileri + gerekçe; onay → kartlar taşınır.
+
+**Önerilen model:** **Sonnet** (desen birebir `day_review`/`insights`'ta var). İstem ayarı gerçek modelle zayıf çıkarsa önce örnekli istem eklenir (Sonnet), Opus'a gerek yok.
+
+---
+
+### Sıra, oturumlar ve usage verimliliği
+| # | Oturum | Model | Kapsam | Not |
+|---|---|---|---|---|
+| 1 | ✅ 7a kodlama | Sonnet | Altyapı + Trello | Migration burada, tek seferde |
+| 2 | ✅ 7a push | Haiku | commit + push | 7a–7c tek commit `b8b46d1` (ortak dosyalar; bkz. §0 sapmalar) |
+| 3 | ✅ 7b kodlama | Sonnet | OAuth + Google Calendar | 7a'ya bağımlı |
+| 4 | ✅ 7a+7b+7c push | Haiku | commit + push | `b8b46d1` |
+| 5 | ✅ 7c kodlama | Sonnet | Microsoft To Do | 7b'nin `oauth.py`'sine bağımlı |
+| 6 | ✅ 7d kodlama | Sonnet | Inbox triage | 7c'den **bağımsız** (Gelen Kutusu 7a'da) → istenirse 7b'den sonra 7c ile **ayrı oturumda paralel** (farklı servis, çakışan dosya yok; tek ortak dosya `SettingsPage.tsx` izin etiketleri → 7d bunu en sona bıraksın) |
+| 7 | ✅ 7a–7d push | Haiku | commit + push | 7d tek commit `b21b062` (`inbox_triage.py`, `jobs.py`, `actions.py`, `write_tools.py`, test, web `InboxTriage.tsx`/`ActionCard.tsx`/`BoardPage.tsx`/`Layout.tsx`/`assistant.ts`); tüm testler + web build geçti (task-api 247, assistant 120) |
+| 8 | Faz 7 denetimi | Opus | plan ↔ kod karşılaştırması | §4.1 kabul ölçütlerine göre |
+| (gerekirse) | OAuth/senkron hata ayıklama | Opus | yalnızca çözülemeyen gerçek-hesap hatası | |
+
+Verimlilik kuralları (kodlama oturumlarına):
+- Oturum başında yalnızca bu dosyanın **§0 (Hızlı başlangıç) + §4.1 ilgili alt faz** bölümünü oku; diğer bölümleri okuma.
+- Subagent/paralel agent açma (her biri bağlamı baştan kurar); tek oturum sırayla yapsın. reviewer agent yerine oturum sonunda testler + 8. satırdaki tek Opus denetimi.
+- Test çalıştırırken önce yeni test dosyasını (`uv run pytest -q tests/.../test_integrations_*.py`), en sonda bir kez tüm paketi çalıştır; `npm run build` faz sonunda bir kez.
+- Gerçek hesapla deneme, kullanıcı kimlik bilgilerini verdiyse ve sadece bir kez (kabul ölçütü); vermediyse MockTransport testleriyle bitir, §0'a "gerçek hesapla doğrulanmadı" yaz.
+- Faz sonunda §0 tablosunu ve "Faz 7x'te yapılanlar" kısa ayrıntısını güncelle (sapmalar tablosuna ekle).
+- Oturum uzarsa (≈ büyük bir alt faz bitip diğeri başlayacaksa) yeni oturuma geç.
+
+### Doğrulama (her alt faz)
+- `services/task-api`: `uv run pytest -q` (247 + yeni) · `uv run ruff check app tests`
+- `services/assistant-service` (7d): `uv run pytest -q` (96 + yeni)
+- `apps/web`: `npm run build`
+- Önizleme (`.claude/launch.json`: task-api 8000, assistant 8100, web 5173): Ayarlar → Bağlantılar akışı tarayıcıda gezilir.
+
+---
 
 ---
 
@@ -377,14 +564,14 @@ Faz 7:    backend-agent (connector'lar) ∥ frontend-agent (entegrasyon ayarlar�
 - Faz 1–3: tarayıcıda uçtan uca — board oluştur → ana kart + alt kartlar + ip bağla → 1. alt kartı bitir, 2.'sinin açıldığını gör → takvime sürükle → timer başlat/durdur → hatırlatıcı gelsin → değerlendirmeyi doldur → istatistik sayfasında gör.
 - Faz 4–5: provider kontrat testleri (aynı senaryo üç adaptörle mock'lu); gerçek Ollama ile "yarın için plan yap" → öneri kartı → onay → takvimde etkinlik; "bu eğitimi 9 parçaya böl" → zincir oluşur; local_only board + cloud model → verinin gitmediğini test et; mesajda modeli değiştirip aynı senaryoyu tekrarla.
 - Faz 6: değerlendirme → event → ertesi gün plan önerisi; haftalık insight üretimi.
-- Faz 7: Trello'dan import → Gelen Kutusu → AI'ın board önerisi.
+- Faz 7: alt faz kabul ölçütleri §4.1'de (Trello import, Google takvim senkronu, To Do iki yönlü tamamlama, Gelen Kutusu dağıtımı).
 
 ---
 
 ## 8. Son Kararlar (açık soru kalmadı)
 
 1. **Samsung Reminders (Faz 7):** Samsung Reminder → Microsoft To Do senkronizasyonu açılacak; uygulama Microsoft Graph API üzerinden To Do görevlerini çeker.
-2. **Trello (Faz 7):** Tek seferlik içeri aktarma (board → board, list → list, kart + açıklama + checklist + yorumlar → kart + not). İki yönlü senkron yok; Trello zamanla bırakılacak.
+2. **Trello (Faz 7):** Tek seferlik içeri aktarma (board → board, list → list, kart + açıklama + checklist + yorumlar → kart + not). İki yönlü senkron yok; Trello zamanla bırakılacak. Yöntem: API key + token (kullanıcı kararı 2026-11-08).
 3. **Local model seçimi (Faz 4 başı):** Elindeki modeller arasından **benchmark script'iyle** seçim yapılır.
 
 ### Local model değerlendirme planı
