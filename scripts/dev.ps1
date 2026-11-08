@@ -7,8 +7,9 @@
      Docker yoksa: task-api SQLite ile calisir; Redis/RabbitMQ yoksa cache ve
      event'ler devre disi kalir (uygulama yine calisir - graceful degradation).
   2. task-api migration'larini uygular ve 8000 portunda baslatir.
-  3. RabbitMQ ayaktaysa notification-service consumer'ini baslatir.
-  4. Frontend'i (Vite) 5173 portunda baslatir.
+  3. assistant-service'i (AI) 8100 portunda baslatir (Ollama gerekir).
+  4. RabbitMQ ayaktaysa notification-service consumer'ini baslatir.
+  5. Frontend'i (Vite) 5173 portunda baslatir.
 
 .EXAMPLE
   ./scripts/dev.ps1
@@ -23,6 +24,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $taskApi = Join-Path $root "services/task-api"
 $notification = Join-Path $root "services/notification-service"
 $web = Join-Path $root "apps/web"
+$assistant = Join-Path $root "services/assistant-service"
 
 function Test-Command($name) { [bool](Get-Command $name -ErrorAction SilentlyContinue) }
 
@@ -49,6 +51,15 @@ $jobs = @()
 Write-Host "task-api -> http://localhost:8000/docs" -ForegroundColor Green
 $jobs += Start-Process -PassThru -NoNewWindow -WorkingDirectory $taskApi `
     -FilePath "uv" -ArgumentList "run", "uvicorn", "app.main:app", "--reload", "--port", "8000"
+
+Write-Host "assistant-service -> http://localhost:8100/docs" -ForegroundColor Green
+Push-Location $assistant
+try { uv run alembic upgrade head } finally { Pop-Location }
+$jobs += Start-Process -PassThru -NoNewWindow -WorkingDirectory $assistant `
+    -FilePath "uv" -ArgumentList "run", "uvicorn", "app.main:app", "--reload", "--port", "8100"
+if (-not (Test-Command "ollama")) {
+    Write-Host "Ollama bulunamadi: local modeller calismaz (https://ollama.com)." -ForegroundColor Yellow
+}
 
 $rabbitUp = $false
 try { $rabbitUp = (Test-NetConnection localhost -Port 5672 -WarningAction SilentlyContinue).TcpTestSucceeded } catch {}
