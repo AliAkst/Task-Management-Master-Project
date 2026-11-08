@@ -54,7 +54,8 @@
 `uv run pytest -q tests/test_card_content_tools.py` → tüm paket; task-api `uv run pytest -q`; `npm run build`; 5175'te panel bağlam çipi ekran görüntüsü.
 
 ## İlerleme
-**Durum: ✅ Kodlandı (2026-11-08, Sonnet) — commit/push bekliyor (Haiku oturumu). Gerçek-model kabulü kullanıcıyla yapılacak.**
+**Durum: ✅ Kodlandı (2026-11-08, Sonnet) · ✅ Commit'lendi `6b7e2337f91a7c5ad1511cc8806f0d39cb97a609` (2026-11-09, Haiku; push YAPILMADI). Gerçek-model kabulü kullanıcıyla yapılacak.**
+Testler (commit öncesi): task-api 267 geçti · assistant-service 147 geçti · `npm run build` yeşil.
 
 ### Yapılanlar
 - **A. task-api:** `app/services/palette.py` (`BOARD_PALETTE` + `next_free_color`); `trello.py` buradan import ediyor; `LabelCreate.color` opsiyonel → `BoardService.create_label` board'da kullanılmayan ilk palet rengini seçer (hepsi doluysa ilk renk). `api-schema.d.ts` elle güncellendi. 2 yeni test (`tests/integration/test_boards_cards.py`).
