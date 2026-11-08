@@ -9,10 +9,15 @@ Akis:
 2. handle_callback(): code -> token degisimi, sifreli kayit.
 3. ensure_fresh_token(): bitise <60 sn kala yeniler; `invalid_grant` -> hesap
    `error` durumuna alinir ("Yeniden bagla").
+
+Uygulama kimligi (client id/secret) kullanici basinadir: once arayuzdeki kurulum
+sihirbazindan girilen (`oauth_clients`, sir sifreli), yoksa `.env`'deki
+GOOGLE_/MICROSOFT_CLIENT_ID/SECRET.
 """
 
 import base64
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -21,10 +26,13 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
+from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.core import crypto
+from app.core.exceptions import ValidationException
 from app.core.logging import get_logger
-from app.db.entities import IntegrationAccountEntity
+from app.db.entities import IntegrationAccountEntity, OAuthClientEntity
 from app.db.unit_of_work import TaskUnitOfWork
 from app.integrations.accounts import IntegrationAccountService
 from app.integrations.base import IntegrationError
@@ -40,6 +48,7 @@ REFRESH_MARGIN_SEC = 60
 @dataclass(frozen=True)
 class OAuthProvider:
     name: str
+    label: str
     authorize_url: str
     token_url: str
     scopes: tuple[str, ...]
@@ -48,12 +57,12 @@ class OAuthProvider:
     extra_authorize_params: dict[str, str] = field(default_factory=dict)
 
     @property
-    def client_id(self) -> str | None:
-        return getattr(settings, self.client_id_setting)
+    def env_client_id(self) -> str | None:
+        return getattr(settings, self.client_id_setting) or None
 
     @property
-    def client_secret(self) -> str | None:
-        return getattr(settings, self.client_secret_setting)
+    def env_client_secret(self) -> str | None:
+        return getattr(settings, self.client_secret_setting) or None
 
     @property
     def redirect_uri(self) -> str:
@@ -64,6 +73,7 @@ class OAuthProvider:
 PROVIDERS: dict[str, OAuthProvider] = {
     "google": OAuthProvider(
         name="google",
+        label="Google",
         authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
         token_url="https://oauth2.googleapis.com/token",
         scopes=(
@@ -79,6 +89,7 @@ PROVIDERS: dict[str, OAuthProvider] = {
     # Faz 7c: kisisel Microsoft hesaplari (Samsung Reminder -> To Do)
     "microsoft": OAuthProvider(
         name="microsoft",
+        label="Microsoft",
         authorize_url="https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
         token_url="https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
         scopes=("openid", "email", "offline_access", "User.Read", "Tasks.ReadWrite"),
@@ -100,15 +111,140 @@ def get_provider(name: str) -> OAuthProvider:
     return provider
 
 
-def _require_configured(provider: OAuthProvider) -> None:
-    if not provider.client_id or not provider.client_secret:
+# ---------------- uygulama kimligi (client id / secret) ----------------
+@dataclass(frozen=True)
+class OAuthClient:
+    client_id: str
+    client_secret: str
+    source: str  # "app" (arayuzden girildi) | "env" (.env)
+
+
+class OAuthClientInfo(BaseModel):
+    """Arayuzdeki kurulum sihirbazi icin; sir hicbir zaman donmez."""
+
+    provider: str
+    configured: bool
+    source: str | None  # app / env / None
+    client_id: str | None
+    redirect_uri: str
+
+
+class OAuthClientSave(BaseModel):
+    client_id: str = Field(min_length=1, max_length=300)
+    client_secret: str = Field(min_length=1, max_length=500)
+
+
+_GUID = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def validate_client(provider: str, client_id: str, client_secret: str) -> tuple[str, str]:
+    """Bicim denetimi + sik yapilan kopyalama hatalarina yol gosteren mesajlar."""
+    client_id, client_secret = client_id.strip(), client_secret.strip()
+    if not client_id or not client_secret:
+        raise ValidationException("İstemci kimliği ve sırrı boş olamaz")
+    if any(c.isspace() for c in client_id + client_secret):
+        raise ValidationException(
+            "Kimlik ya da sırda boşluk var; değeri eksiksiz ve tek parça kopyala"
+        )
+    if provider == "google":
+        if not client_id.endswith(".apps.googleusercontent.com"):
+            raise ValidationException(
+                "Google istemci kimliği “….apps.googleusercontent.com” ile biter; "
+                "Google Cloud → Clients sayfasındaki “Client ID”yi kopyala"
+            )
+        if client_secret.endswith(".apps.googleusercontent.com"):
+            raise ValidationException(
+                "Sır alanına istemci kimliği yapıştırılmış; “Client secret”ı kopyala"
+            )
+    elif provider == "microsoft":
+        if not _GUID.match(client_id):
+            raise ValidationException(
+                "Microsoft istemci kimliği 8-4-4-4-12 biçiminde bir GUID’dir; uygulamanın "
+                "Overview sayfasındaki “Application (client) ID”yi kopyala"
+            )
+        if _GUID.match(client_secret):
+            raise ValidationException(
+                "Bu “Secret ID” gibi görünüyor. Certificates & secrets sayfasında "
+                "“Value” sütunundaki değeri kopyala (yalnızca oluşturulduğu an görünür)"
+            )
+    return client_id, client_secret
+
+
+async def resolve_client(
+    uow: TaskUnitOfWork, user_id: int, provider: OAuthProvider
+) -> OAuthClient | None:
+    saved = await uow.oauth_clients.get_for_provider(user_id, provider.name)
+    if saved is not None:
+        try:
+            secret = crypto.decrypt(saved.client_secret_encrypted)
+        except crypto.SecretError:
+            secret = None  # ana anahtar degismis: yeniden girilmeli
+        if secret:
+            return OAuthClient(saved.client_id, secret, "app")
+    if provider.env_client_id and provider.env_client_secret:
+        return OAuthClient(provider.env_client_id, provider.env_client_secret, "env")
+    return None
+
+
+async def require_client(
+    uow: TaskUnitOfWork, user_id: int, provider: OAuthProvider
+) -> OAuthClient:
+    client = await resolve_client(uow, user_id, provider)
+    if client is None:
         raise IntegrationError(
-            f"{provider.name} için istemci kimliği/sırrı ayarlanmamış "
-            f"(services/task-api/.env içinde {provider.client_id_setting.upper()} "
-            f"ve {provider.client_secret_setting.upper()}).",
+            f"{provider.label} bağlantısı için önce uygulama kimliğini gir: "
+            f"Ayarlar → Bağlantılar → {provider.label} → “Kurulumu başlat”.",
             "OAUTH_NOT_CONFIGURED",
             status_code=422,
         )
+    return client
+
+
+async def client_info(
+    uow: TaskUnitOfWork, user_id: int, provider_name: str
+) -> OAuthClientInfo:
+    provider = get_provider(provider_name)
+    client = await resolve_client(uow, user_id, provider)
+    return OAuthClientInfo(
+        provider=provider.name,
+        configured=client is not None,
+        source=client.source if client else None,
+        client_id=client.client_id if client else None,
+        redirect_uri=provider.redirect_uri,
+    )
+
+
+async def save_client(
+    uow: TaskUnitOfWork, user_id: int, provider_name: str, data: OAuthClientSave
+) -> OAuthClientInfo:
+    provider = get_provider(provider_name)
+    client_id, secret = validate_client(provider.name, data.client_id, data.client_secret)
+    saved = await uow.oauth_clients.get_for_provider(user_id, provider.name)
+    if saved is None:
+        await uow.oauth_clients.create(
+            OAuthClientEntity(
+                user_id=user_id,
+                provider=provider.name,
+                client_id=client_id,
+                client_secret_encrypted=crypto.encrypt(secret),
+            )
+        )
+    else:
+        saved.client_id = client_id
+        saved.client_secret_encrypted = crypto.encrypt(secret)
+    await uow.commit()
+    return await client_info(uow, user_id, provider.name)
+
+
+async def delete_client(uow: TaskUnitOfWork, user_id: int, provider_name: str) -> None:
+    """Arayuzden girilen kimligi siler (varsa .env'deki yine kullanilir)."""
+    provider = get_provider(provider_name)
+    saved = await uow.oauth_clients.get_for_provider(user_id, provider.name)
+    if saved is not None:
+        await uow.oauth_clients.delete(saved)
+        await uow.commit()
 
 
 # ---------------- state ----------------
@@ -143,11 +279,11 @@ def read_state(state: str, provider: str) -> int:
         ) from e
 
 
-def connect_url(user_id: int, provider_name: str) -> str:
+async def connect_url(uow: TaskUnitOfWork, user_id: int, provider_name: str) -> str:
     provider = get_provider(provider_name)
-    _require_configured(provider)
+    client = await require_client(uow, user_id, provider)
     params = {
-        "client_id": provider.client_id,
+        "client_id": client.client_id,
         "redirect_uri": provider.redirect_uri,
         "response_type": "code",
         "scope": " ".join(provider.scopes),
@@ -158,10 +294,12 @@ def connect_url(user_id: int, provider_name: str) -> str:
 
 
 # ---------------- token istekleri ----------------
-async def _token_request(provider: OAuthProvider, data: dict[str, str]) -> dict[str, Any]:
+async def _token_request(
+    provider: OAuthProvider, client: OAuthClient, data: dict[str, str]
+) -> dict[str, Any]:
     body = {
-        "client_id": provider.client_id,
-        "client_secret": provider.client_secret,
+        "client_id": client.client_id,
+        "client_secret": client.client_secret,
         **data,
     }
     try:
@@ -169,17 +307,40 @@ async def _token_request(provider: OAuthProvider, data: dict[str, str]) -> dict[
             res = await http.post(provider.token_url, data=body)
     except httpx.HTTPError as e:
         raise IntegrationError(
-            f"{provider.name} sunucusuna ulaşılamadı; biraz sonra tekrar dene.",
+            f"{provider.label} sunucusuna ulaşılamadı; biraz sonra tekrar dene.",
             "OAUTH_UNREACHABLE",
         ) from e
     try:
         payload = res.json()
     except ValueError:
         payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
     if res.status_code >= 400:
-        error = payload.get("error") if isinstance(payload, dict) else None
+        error = payload.get("error")
+        if error in ("invalid_client", "unauthorized_client"):
+            raise IntegrationError(
+                f"{provider.label} uygulama kimliğini ya da sırrını kabul etmedi. "
+                "Ayarlar → Bağlantılar → “Kimlik bilgilerini değiştir” ile kontrol et "
+                "(Microsoft’ta sırrın “Value” değeri olmalı ve süresi dolmamış olmalı).",
+                "OAUTH_INVALID_CLIENT",
+                status_code=400,
+            )
+        if error == "redirect_uri_mismatch":
+            raise IntegrationError(
+                f"Yönlendirme adresi eşleşmiyor. {provider.label} uygulamasına tam olarak "
+                f"şunu ekle: {provider.redirect_uri}",
+                "OAUTH_REDIRECT_MISMATCH",
+                status_code=400,
+            )
+        description = payload.get("error_description")
+        detail = (
+            f": {str(description).splitlines()[0][:200]}"
+            if description and error != "invalid_grant"
+            else ""
+        )
         raise IntegrationError(
-            f"{provider.name} yetkilendirmeyi reddetti ({error or res.status_code}).",
+            f"{provider.label} yetkilendirmeyi reddetti ({error or res.status_code}){detail}.",
             "OAUTH_INVALID_GRANT" if error == "invalid_grant" else "OAUTH_FAILED",
             status_code=400 if error == "invalid_grant" else 502,
         )
@@ -212,10 +373,11 @@ async def handle_callback(
     uow: TaskUnitOfWork, provider_name: str, code: str, state: str
 ) -> IntegrationAccountEntity:
     provider = get_provider(provider_name)
-    _require_configured(provider)
     user_id = read_state(state, provider.name)
+    client = await require_client(uow, user_id, provider)
     payload = await _token_request(
         provider,
+        client,
         {
             "grant_type": "authorization_code",
             "code": code,
@@ -253,24 +415,28 @@ async def ensure_fresh_token(uow: TaskUnitOfWork, account: IntegrationAccountEnt
         return tokens["access_token"]
 
     provider = get_provider(account.provider)
-    _require_configured(provider)
+    client = await require_client(uow, account.user_id, provider)
     try:
         payload = await _token_request(
             provider,
+            client,
             {"grant_type": "refresh_token", "refresh_token": tokens["refresh_token"]},
         )
     except IntegrationError as e:
-        if e.error_code == "OAUTH_INVALID_GRANT":
+        if e.error_code in ("OAUTH_INVALID_GRANT", "OAUTH_INVALID_CLIENT"):
             account.status = "error"
-            account.last_error = "Yeniden bağlan: erişim izni geri alınmış ya da süresi dolmuş."
+            account.last_error = (
+                "Yeniden bağlan: erişim izni geri alınmış ya da süresi dolmuş."
+                if e.error_code == "OAUTH_INVALID_GRANT"
+                # Kimlik degistiyse eski refresh token yeni istemciyle calismaz
+                else "Yeniden bağlan: uygulama kimliği değişmiş ya da sırrın süresi dolmuş."
+            )
             await uow.commit()
             raise IntegrationError(
                 account.last_error, "INTEGRATION_RECONNECT", status_code=409
             ) from e
         raise
     new_tokens = _stored_tokens(payload, tokens.get("refresh_token"))
-    from app.core import crypto
-
     account.tokens_encrypted = crypto.encrypt_json(new_tokens)
     await uow.commit()
     return new_tokens["access_token"]

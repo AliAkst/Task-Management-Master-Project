@@ -24,6 +24,7 @@ from app.db.repositories.event import EventRepository
 from app.db.repositories.integration import (
     ExternalLinkRepository,
     IntegrationAccountRepository,
+    OAuthClientRepository,
 )
 from app.db.repositories.series import SeriesRepository
 from app.db.repositories.task import TaskRepository
@@ -92,6 +93,7 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.series = SeriesRepository(session)
         self.integration_accounts = IntegrationAccountRepository(session)
         self.external_links = ExternalLinkRepository(session)
+        self.oauth_clients = OAuthClientRepository(session)
     
     @with_db_retry
     async def commit(self):

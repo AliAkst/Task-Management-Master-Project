@@ -2,7 +2,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.resilience import with_db_retry
-from app.db.entities.integration import ExternalLinkEntity, IntegrationAccountEntity
+from app.db.entities.integration import (
+    ExternalLinkEntity,
+    IntegrationAccountEntity,
+    OAuthClientEntity,
+)
 
 from .base import BaseRepository
 
@@ -167,3 +171,20 @@ class ExternalLinkRepository(BaseRepository[ExternalLinkEntity]):
                 ExternalLinkEntity.provider == provider,
             )
         )
+
+
+class OAuthClientRepository(BaseRepository[OAuthClientEntity]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, OAuthClientEntity)
+
+    @with_db_retry
+    async def get_for_provider(
+        self, user_id: int, provider: str
+    ) -> OAuthClientEntity | None:
+        result = await self.session.execute(
+            select(OAuthClientEntity).where(
+                OAuthClientEntity.user_id == user_id,
+                OAuthClientEntity.provider == provider,
+            )
+        )
+        return result.scalar_one_or_none()

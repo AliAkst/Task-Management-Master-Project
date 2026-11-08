@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Check, ExternalLink, Loader2, RefreshCw, Unplug } from 'lucide-react'
 import {
   useIntegrationMutations,
@@ -6,14 +6,17 @@ import {
   useIntegrations,
   useMicrosoftLists,
   useMicrosoftStatus,
+  useOAuthClients,
   useTrelloBoards,
   type IntegrationAccount,
+  type OAuthClientInfo,
   type SyncSummary,
   type TrelloImportResult,
 } from '../api/integrations'
 import { useBoards } from '../api/boards'
 import { formatDateTime } from '../lib/format'
 import { Row } from './Page'
+import OAuthSetup from './OAuthSetup'
 
 const input = 'rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm'
 
@@ -269,33 +272,67 @@ function GoogleCalendars({ account }: { account: IntegrationAccount }) {
   )
 }
 
-function GoogleRow({ account }: { account: IntegrationAccount | undefined }) {
-  const { connectOAuth, disconnect } = useIntegrationMutations()
+/**
+ * Google / Microsoft satırı: uygulama kimliği yoksa "Kurulumu başlat" → adım adım
+ * sihirbaz; varsa "… ile bağlan". Bağlıyken içerik (`children`) gösterilir.
+ */
+function OAuthRow({
+  provider,
+  title,
+  idleHint,
+  disconnectConfirm,
+  account,
+  info,
+  children,
+}: {
+  provider: 'google' | 'microsoft'
+  title: string
+  idleHint: string
+  disconnectConfirm: string
+  account: IntegrationAccount | undefined
+  info: OAuthClientInfo | undefined
+  children: (account: IntegrationAccount) => ReactNode
+}) {
+  const { connectOAuth, disconnect, deleteOAuthClient } = useIntegrationMutations()
+  const [setupOpen, setSetupOpen] = useState(false)
   const reconnect = account?.status === 'error'
+  const canConnect = !account || reconnect
+  const configured = info?.configured ?? false
+  const label = provider === 'google' ? 'Google' : 'Microsoft'
   const hint = !account
-    ? 'Takvim etkinliklerini (salt okunur) buraya getir; 15 dakikada bir kendiliğinden güncellenir.'
+    ? idleHint
     : [
         `Bağlı: ${account.account_label ?? 'hesap'}`,
         account.last_synced_at ? `son senkron ${formatDateTime(account.last_synced_at)}` : 'henüz senkronlanmadı',
       ].join(' · ')
+  const showSetup = canConnect && info && setupOpen
+
   return (
     <div>
-      <Row title="Google Takvim" hint={hint}>
+      <Row title={title} hint={hint}>
         <div className="flex items-center gap-4">
-          {(!account || reconnect) && (
+          {canConnect && info && !configured && !setupOpen && (
+            <button
+              onClick={() => setSetupOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700"
+            >
+              Kurulumu başlat
+            </button>
+          )}
+          {canConnect && configured && !setupOpen && (
             <button
               disabled={connectOAuth.isPending}
-              onClick={() => connectOAuth.mutate('google')}
+              onClick={() => connectOAuth.mutate(provider)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700 disabled:opacity-40"
             >
               {connectOAuth.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
-              {reconnect ? 'Yeniden bağlan' : 'Google ile bağlan'}
+              {reconnect ? 'Yeniden bağlan' : `${label} ile bağlan`}
             </button>
           )}
           {account && (
             <button
               onClick={() => {
-                if (confirm('Google Takvim bağlantısı kesilsin mi? Oradan gelen etkinlikler buradan silinir (Google’daki etkinliklere dokunulmaz).')) disconnect.mutate('google')
+                if (confirm(disconnectConfirm)) disconnect.mutate(provider)
               }}
               className="inline-flex items-center gap-1.5 text-sm text-red-700 hover:underline"
             >
@@ -304,10 +341,33 @@ function GoogleRow({ account }: { account: IntegrationAccount | undefined }) {
           )}
         </div>
       </Row>
-      {connectOAuth.error && <p className="pb-2 text-[14px] text-red-700">{connectOAuth.error.message}</p>}
+      {canConnect && configured && !setupOpen && info?.client_id && (
+        <p className="-mt-2 pb-3 text-[13px] text-slate-500">
+          Uygulama kimliği: <span className="font-mono">{info.client_id.length > 28 ? `${info.client_id.slice(0, 12)}…${info.client_id.slice(-14)}` : info.client_id}</span>
+          {info.source === 'env' ? ' (.env dosyasından)' : ''} ·{' '}
+          <button onClick={() => setSetupOpen(true)} className="underline hover:text-slate-700">
+            Kimlik bilgilerini değiştir
+          </button>
+          {info.source === 'app' && (
+            <>
+              {' · '}
+              <button
+                onClick={() => {
+                  if (confirm(`${label} uygulama kimliği silinsin mi? Bağlanmak için yeniden kurulum gerekir.`)) deleteOAuthClient.mutate(provider)
+                }}
+                className="underline hover:text-red-700"
+              >
+                Sil
+              </button>
+            </>
+          )}
+        </p>
+      )}
+      {showSetup && <OAuthSetup info={info} onCancel={() => setSetupOpen(false)} />}
+      {connectOAuth.error && !setupOpen && <p className="pb-2 text-[14px] text-red-700">{connectOAuth.error.message}</p>}
       {disconnect.error && <p className="pb-2 text-[14px] text-red-700">{disconnect.error.message}</p>}
       {account?.last_error && <p className="pb-2 text-[14px] text-red-700">{account.last_error}</p>}
-      {account && !reconnect && <GoogleCalendars account={account} />}
+      {account && !reconnect && children(account)}
     </div>
   )
 }
@@ -390,49 +450,6 @@ function MicrosoftLists({ account }: { account: IntegrationAccount }) {
   )
 }
 
-function MicrosoftRow({ account }: { account: IntegrationAccount | undefined }) {
-  const { connectOAuth, disconnect } = useIntegrationMutations()
-  const reconnect = account?.status === 'error'
-  const hint = !account
-    ? 'Samsung Reminder / To Do görevlerini Gelen Kutusu’na getir; kartı bitirince To Do’da da biter. 15 dakikada bir güncellenir.'
-    : [
-        `Bağlı: ${account.account_label ?? 'hesap'}`,
-        account.last_synced_at ? `son senkron ${formatDateTime(account.last_synced_at)}` : 'henüz senkronlanmadı',
-      ].join(' · ')
-  return (
-    <div>
-      <Row title="Microsoft To Do" hint={hint}>
-        <div className="flex items-center gap-4">
-          {(!account || reconnect) && (
-            <button
-              disabled={connectOAuth.isPending}
-              onClick={() => connectOAuth.mutate('microsoft')}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700 disabled:opacity-40"
-            >
-              {connectOAuth.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
-              {reconnect ? 'Yeniden bağlan' : 'Microsoft ile bağlan'}
-            </button>
-          )}
-          {account && (
-            <button
-              onClick={() => {
-                if (confirm('Microsoft To Do bağlantısı kesilsin mi? Gelen Kutusu’ndaki kartlar silinmez, To Do’ya dokunulmaz.')) disconnect.mutate('microsoft')
-              }}
-              className="inline-flex items-center gap-1.5 text-sm text-red-700 hover:underline"
-            >
-              <Unplug size={14} aria-hidden /> Bağlantıyı kes
-            </button>
-          )}
-        </div>
-      </Row>
-      {connectOAuth.error && <p className="pb-2 text-[14px] text-red-700">{connectOAuth.error.message}</p>}
-      {disconnect.error && <p className="pb-2 text-[14px] text-red-700">{disconnect.error.message}</p>}
-      {account?.last_error && <p className="pb-2 text-[14px] text-red-700">{account.last_error}</p>}
-      {account && !reconnect && <MicrosoftLists account={account} />}
-    </div>
-  )
-}
-
 /** OAuth dönüşü: ?connected=google ya da ?connect_error=google&message=… */
 function useOAuthReturn() {
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
@@ -463,6 +480,8 @@ export default function IntegrationsSettings() {
   const google = accounts.data?.find((a) => a.provider === 'google')
   const microsoft = accounts.data?.find((a) => a.provider === 'microsoft')
   const notice = useOAuthReturn()
+  const clients = useOAuthClients()
+  const clientInfo = (p: string) => clients.data?.find((c) => c.provider === p)
   return (
     <section id="baglantilar" className="scroll-mt-6">
       <h2 className="text-[22px]">Bağlantılar</h2>
@@ -476,8 +495,30 @@ export default function IntegrationsSettings() {
       )}
       {accounts.error && <p className="text-[14px] text-red-700">{accounts.error.message}</p>}
       <div className="divide-y divide-slate-200 border-y border-slate-200">
-        {accounts.data && <GoogleRow account={google} />}
-        {accounts.data && <MicrosoftRow account={microsoft} />}
+        {accounts.data && (
+          <OAuthRow
+            provider="google"
+            title="Google Takvim"
+            idleHint="Takvim etkinliklerini (salt okunur) buraya getir; 15 dakikada bir kendiliğinden güncellenir."
+            disconnectConfirm="Google Takvim bağlantısı kesilsin mi? Oradan gelen etkinlikler buradan silinir (Google’daki etkinliklere dokunulmaz)."
+            account={google}
+            info={clientInfo('google')}
+          >
+            {(a) => <GoogleCalendars account={a} />}
+          </OAuthRow>
+        )}
+        {accounts.data && (
+          <OAuthRow
+            provider="microsoft"
+            title="Microsoft To Do"
+            idleHint="Samsung Reminder / To Do görevlerini Gelen Kutusu’na getir; kartı bitirince To Do’da da biter. 15 dakikada bir güncellenir."
+            disconnectConfirm="Microsoft To Do bağlantısı kesilsin mi? Gelen Kutusu’ndaki kartlar silinmez, To Do’ya dokunulmaz."
+            account={microsoft}
+            info={clientInfo('microsoft')}
+          >
+            {(a) => <MicrosoftLists account={a} />}
+          </OAuthRow>
+        )}
         {accounts.data && <TrelloRow account={trello} />}
       </div>
     </section>

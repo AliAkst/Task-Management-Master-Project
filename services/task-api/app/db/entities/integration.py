@@ -62,3 +62,22 @@ class ExternalLinkEntity(Base, TimestampMixin):
     last_synced_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(), nullable=True
     )
+
+
+class OAuthClientEntity(Base, TimestampMixin):
+    """
+    Kullanicinin arayuzden girdigi OAuth uygulama kimligi (Google Cloud / Azure).
+    Kullanici basina saglayici basina tek kayit; sir Fernet ile sifreli.
+    Yoksa `.env`'deki GOOGLE_/MICROSOFT_CLIENT_ID/SECRET kullanilir.
+    """
+
+    __tablename__ = "oauth_clients"
+    __table_args__ = (UniqueConstraint("user_id", "provider"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    provider: Mapped[str] = mapped_column(String(20))  # google / microsoft
+    client_id: Mapped[str] = mapped_column(String(300))
+    client_secret_encrypted: Mapped[str] = mapped_column(Text)
