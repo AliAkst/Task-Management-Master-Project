@@ -12,6 +12,8 @@ import {
 } from 'react'
 import { Bold, Braces, Code, Link2, List, ListChecks, Loader2, Paperclip } from 'lucide-react'
 import type { Attachment } from '../lib/types'
+import { prepareDictated } from '../lib/dictation'
+import { DictationStatus, useMic } from './MicButton'
 
 const LANGS: [string, string][] = [
   ['', 'Düz metin'],
@@ -45,6 +47,8 @@ interface Props {
   submitLabel?: string
   cancelLabel?: string
   toolbarExtra?: ReactNode
+  /** Mikrofon dugmesi (sesli dikte); varsayilan acik. Tarayici desteklemiyorsa gorunmez. */
+  dictation?: boolean
   /** Dosya yapistirma/birakma/📎: yukler, ekleri dondurur; editor imlece baglanti ekler. */
   onFiles?: (files: File[]) => Promise<Attachment[]>
 }
@@ -53,7 +57,7 @@ const tool = 'rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-9
 const FENCE = '```'
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function MarkdownEditor(
-  { value, onChange, onSubmit, onCancel, placeholder, autoFocus, minRows = 3, submitLabel = 'Kaydet', cancelLabel = 'Vazgeç', toolbarExtra, onFiles },
+  { value, onChange, onSubmit, onCancel, placeholder, autoFocus, minRows = 3, submitLabel = 'Kaydet', cancelLabel = 'Vazgeç', toolbarExtra, onFiles, dictation = true },
   ref,
 ) {
   const ta = useRef<HTMLTextAreaElement>(null)
@@ -63,6 +67,14 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
   valueRef.current = value
   const fileInput = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(0)
+  const dictate = (text: string) => {
+    const v = valueRef.current
+    const s = ta.current?.selectionStart ?? v.length
+    insertLatest(prepareDictated(v.slice(0, s), text))
+  }
+  const dictateRef = useRef(dictate)
+  dictateRef.current = dictate
+  const mic = useMic((text) => dictateRef.current(text))
 
   /** Asenkron islerden sonra da guncel metne/imlece gore ekler (kapanis degerleri eskiyebilir). */
   const insertLatest = useCallback(
@@ -188,7 +200,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
 
   const onKeyDown = (ev: KeyboardEvent<HTMLTextAreaElement>) => {
     const mod = ev.ctrlKey || ev.metaKey
-    if (mod && ev.key === 'Enter') {
+    if (dictation && ev.ctrlKey && ev.key.toLowerCase() === 'm') {
+      mic.onKey(ev)
+    } else if (mod && ev.key === 'Enter') {
       ev.preventDefault()
       onSubmit()
     } else if (ev.key === 'Escape' && onCancel) {
@@ -268,6 +282,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
               />
             </>
           )}
+          {dictation && mic.button}
           {toolbarExtra}
           {langMenu && (
             <ul
@@ -297,6 +312,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
           onDrop={onDrop}
           aria-label={placeholder ?? 'Markdown metni'}
         />
+        {dictation && <DictationStatus mic={mic} className="px-3 pb-1" />}
       </div>
       <div className="flex items-center gap-3">
         <button type="button" onClick={onSubmit} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-on-ink">
