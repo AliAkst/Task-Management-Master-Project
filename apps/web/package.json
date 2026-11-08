@@ -11,14 +11,22 @@
     "gen:api": "openapi-typescript http://localhost:8000/openapi.json -o src/lib/api-schema.d.ts"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^1.1.8",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@fullcalendar/core": "^6.1.22",
+    "@fullcalendar/daygrid": "^6.1.22",
+    "@fullcalendar/interaction": "^6.1.22",
+    "@fullcalendar/react": "^6.1.22",
+    "@fullcalendar/timegrid": "^6.1.22",
     "@tanstack/react-query": "^5.107.1",
+    "@xyflow/react": "^12.12.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.5",
+    "recharts": "^2.15.4",
     "zustand": "^5.1.0"
   },
   "devDependencies": {

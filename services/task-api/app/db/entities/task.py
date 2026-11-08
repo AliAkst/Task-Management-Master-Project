@@ -23,9 +23,7 @@ class TaskEntity(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[TaskStatus] = mapped_column(SQLEnum(TaskStatus))
     priority: Mapped[TaskPriority] = mapped_column(SQLEnum(TaskPriority))
-    due_date: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), nullable=True
-    )
+    due_date: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     # --- Kanban alanlari (Faz 1a) ---
     board_id: Mapped[int | None] = mapped_column(
@@ -35,12 +33,20 @@ class TaskEntity(Base, TimestampMixin):
         ForeignKey("board_lists.id", ondelete="SET NULL"), nullable=True, index=True
     )
     position: Mapped[float] = mapped_column(Float, default=0)
-    start_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), nullable=True
-    )
+    start_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     estimated_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), nullable=True
-    )
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[str] = mapped_column(String(20), default="user")
+
+    # --- Hiyerarsi & grafik (Faz 1b) ---
+    # Ust kart silinirse alt kartlar silinmez, bagimsiz kart olur (SET NULL)
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Ileride coklu kullanici icin; simdilik sadece kullanicinin kendisi
+    assigned_to: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    graph_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    graph_y: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -9,18 +9,21 @@ import {
   toDateInput,
 } from '../lib/format'
 import type { BoardDetail, TaskPriority } from '../lib/types'
+import CardSchedule from './CardSchedule'
+import CardTime, { CardTimerButton } from './CardTime'
 import Modal from './Modal'
 
 interface Props {
   cardId: number
   board: BoardDetail
   onClose: () => void
+  onOpenCard: (id: number) => void
 }
 
 const section = 'mt-6'
 const sectionTitle = 'mb-2 text-sm font-medium text-slate-700'
 
-export default function CardModal({ cardId, board, onClose }: Props) {
+export default function CardModal({ cardId, board, onClose, onOpenCard }: Props) {
   const card = useCard(cardId)
   const activity = useCardActivity(cardId)
   const m = useCardMutations(cardId, board.board.id)
@@ -31,6 +34,12 @@ export default function CardModal({ cardId, board, onClose }: Props) {
   const [note, setNote] = useState('')
   const [item, setItem] = useState('')
   const [showHistory, setShowHistory] = useState(false)
+  const [subtask, setSubtask] = useState('')
+  const [splitOpen, setSplitOpen] = useState(false)
+  const [splitParts, setSplitParts] = useState('3')
+  const [splitHours, setSplitHours] = useState('')
+  const [splitChain, setSplitChain] = useState(true)
+  const [depChoice, setDepChoice] = useState('')
 
   useEffect(() => {
     if (!card.data) return
@@ -73,6 +82,26 @@ export default function CardModal({ cardId, board, onClose }: Props) {
     e.preventDefault()
     if (note.trim()) m.addNote.mutate(note.trim(), { onSuccess: () => setNote('') })
   }
+  const addSubtask = (e: FormEvent) => {
+    e.preventDefault()
+    if (subtask.trim()) m.addSubtask.mutate(subtask.trim(), { onSuccess: () => setSubtask('') })
+  }
+  const submitSplit = (e: FormEvent) => {
+    e.preventDefault()
+    const hours = parseFloat(splitHours.replace(',', '.'))
+    m.split.mutate(
+      {
+        parts: Number(splitParts),
+        total_minutes: Number.isFinite(hours) ? Math.round(hours * 60) : null,
+        chain: splitChain,
+      },
+      { onSuccess: () => setSplitOpen(false) },
+    )
+  }
+  const depCandidates = board.cards.filter(
+    (x) => x.id !== c.id && !c.depends_on.some((d) => d.id === x.id) && x.status !== 'completed',
+  )
+  const hours = (min: number) => Math.round(min / 6) / 10
   const addItem = (e: FormEvent) => {
     e.preventDefault()
     if (item.trim()) m.addItem.mutate(item.trim(), { onSuccess: () => setItem('') })
@@ -102,10 +131,19 @@ export default function CardModal({ cardId, board, onClose }: Props) {
           />
           <p className="px-1 text-xs text-slate-500">
             {list ? `“${list.name}” listesinde` : 'Listesiz'}
+            {c.parent && (
+              <>
+                {' · '}
+                <button className="text-blue-600 hover:underline" onClick={() => onOpenCard(c.parent!.id)}>
+                  ↑ {c.parent.title}
+                </button>
+              </>
+            )}
             {c.created_by === 'ai' && ' · AI tarafından oluşturuldu'}
             {c.completed_at && ` · ${formatDateTime(c.completed_at)} tarihinde tamamlandı`}
           </p>
         </div>
+        <CardTimerButton cardId={c.id} />
         <button onClick={onClose} aria-label="Kapat" className="text-xl text-slate-400 hover:text-slate-700">
           ×
         </button>
@@ -219,6 +257,110 @@ export default function CardModal({ cardId, board, onClose }: Props) {
         <form onSubmit={addItem} className="mt-2">
           <input className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm" placeholder="+ Madde ekle" maxLength={500} value={item} onChange={(e) => setItem(e.target.value)} />
         </form>
+      </div>
+
+      <CardTime card={c} />
+
+      <CardSchedule cardId={c.id} estimatedMinutes={c.estimated_minutes} />
+
+      {/* Alt kartlar */}
+      <div className={section}>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-medium text-slate-700">
+            Alt kartlar{' '}
+            {c.subtask_total > 0 && (
+              <span className="font-normal text-slate-400">
+                ({c.subtask_done}/{c.subtask_total}
+                {c.subtask_estimated_minutes > 0 && ` · ${hours(c.subtask_estimated_minutes)} saat`})
+              </span>
+            )}
+          </h3>
+          <button onClick={() => setSplitOpen((o) => !o)} className="text-xs text-blue-600 hover:underline">
+            Parçalara böl
+          </button>
+        </div>
+        {splitOpen && (
+          <form onSubmit={submitSplit} className="mb-3 flex flex-wrap items-end gap-3 rounded-md bg-slate-50 p-3 text-sm">
+            <label className="space-y-1">
+              <span className="block text-xs text-slate-500">Parça sayısı</span>
+              <input type="number" min={1} max={50} required className="w-20 rounded border border-slate-300 px-2 py-1" value={splitParts} onChange={(e) => setSplitParts(e.target.value)} />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-xs text-slate-500">Toplam süre (saat)</span>
+              <input inputMode="decimal" className="w-24 rounded border border-slate-300 px-2 py-1" placeholder={c.estimated_minutes ? String(hours(c.estimated_minutes)) : 'ör. 20'} value={splitHours} onChange={(e) => setSplitHours(e.target.value)} />
+            </label>
+            <label className="flex items-center gap-1.5 pb-1">
+              <input type="checkbox" checked={splitChain} onChange={(e) => setSplitChain(e.target.checked)} />
+              Sırayla bağla
+            </label>
+            <button disabled={m.split.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-white disabled:opacity-50">Böl</button>
+            {m.split.error && <span className="text-red-600">{m.split.error.message}</span>}
+          </form>
+        )}
+        <ul className="space-y-1">
+          {c.subtasks.map((st) => (
+            <li key={st.id} className="flex items-center gap-2 text-sm">
+              <span className={st.status === 'completed' ? 'text-green-600' : st.blocked ? 'text-amber-500' : 'text-slate-300'}>
+                {st.status === 'completed' ? '✓' : st.blocked ? '⛓' : '○'}
+              </span>
+              <button onClick={() => onOpenCard(st.id)} className={`flex-1 text-left hover:underline ${st.status === 'completed' ? 'text-slate-400 line-through' : ''}`}>
+                {st.title}
+              </button>
+              {st.estimated_minutes != null && <span className="text-xs text-slate-400">{st.estimated_minutes} dk</span>}
+            </li>
+          ))}
+        </ul>
+        <form onSubmit={addSubtask} className="mt-2">
+          <input className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm" placeholder="+ Alt kart ekle" maxLength={200} value={subtask} onChange={(e) => setSubtask(e.target.value)} />
+        </form>
+      </div>
+
+      {/* Bagimliliklar */}
+      <div className={section}>
+        <h3 className={sectionTitle}>
+          Önce bitmesi gerekenler{' '}
+          {c.blocked && <span className="font-normal text-amber-600">· bu kart bekliyor</span>}
+        </h3>
+        <ul className="space-y-1 text-sm">
+          {c.depends_on.map((d) => (
+            <li key={d.id} className="group flex items-center gap-2">
+              <span className={d.status === 'completed' ? 'text-green-600' : 'text-amber-500'}>
+                {d.status === 'completed' ? '✓' : '⛓'}
+              </span>
+              <button onClick={() => onOpenCard(d.id)} className="flex-1 text-left hover:underline">{d.title}</button>
+              <button onClick={() => m.removeDependency.mutate(d.id)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-600" aria-label="Bağı kaldır">×</button>
+            </li>
+          ))}
+        </ul>
+        {depCandidates.length > 0 && (
+          <div className="mt-2 flex gap-2">
+            <select className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm" value={depChoice} onChange={(e) => setDepChoice(e.target.value)}>
+              <option value="">Ön koşul seç…</option>
+              {depCandidates.map((x) => (
+                <option key={x.id} value={x.id}>{x.title}</option>
+              ))}
+            </select>
+            <button
+              disabled={!depChoice}
+              onClick={() => m.addDependency.mutate(Number(depChoice), { onSuccess: () => setDepChoice('') })}
+              className="rounded-md bg-slate-200 px-3 py-1 text-sm disabled:opacity-50"
+            >
+              Bağla
+            </button>
+          </div>
+        )}
+        {m.addDependency.error && <p className="mt-1 text-sm text-red-600">{m.addDependency.error.message}</p>}
+        {c.dependents.length > 0 && (
+          <p className="mt-2 text-xs text-slate-500">
+            Bu kartı bekleyenler:{' '}
+            {c.dependents.map((d, i) => (
+              <span key={d.id}>
+                {i > 0 && ', '}
+                <button onClick={() => onOpenCard(d.id)} className="hover:underline">{d.title}</button>
+              </span>
+            ))}
+          </p>
+        )}
       </div>
 
       {/* Notlar */}

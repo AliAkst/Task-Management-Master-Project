@@ -2,7 +2,12 @@ from sqlalchemy import case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.resilience import with_db_retry
-from app.db.entities import ActivityLogEntity, CardNoteEntity, ChecklistItemEntity
+from app.db.entities import (
+    ActivityLogEntity,
+    CardDependencyEntity,
+    CardNoteEntity,
+    ChecklistItemEntity,
+)
 
 from .base import BaseRepository
 
@@ -96,3 +101,53 @@ class ActivityRepository(BaseRepository[ActivityLogEntity]):
             .limit(limit)
         )
         return list(result.scalars().all())
+
+
+class DependencyRepository(BaseRepository[CardDependencyEntity]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, CardDependencyEntity)
+
+    @with_db_retry
+    async def edges_for_user(self, user_id: int) -> list[tuple[int, int]]:
+        """(card_id, depends_on_id) ciftleri - dongu kontrolu icin tum grafik."""
+        result = await self.session.execute(
+            select(
+                CardDependencyEntity.card_id, CardDependencyEntity.depends_on_id
+            ).where(CardDependencyEntity.user_id == user_id)
+        )
+        return [(a, b) for a, b in result.all()]
+
+    @with_db_retry
+    async def edges_touching(self, card_ids: list[int]) -> list[tuple[int, int]]:
+        """Verilen kartlardan cikan VEYA onlara giren ipler."""
+        if not card_ids:
+            return []
+        result = await self.session.execute(
+            select(
+                CardDependencyEntity.card_id, CardDependencyEntity.depends_on_id
+            ).where(
+                CardDependencyEntity.card_id.in_(card_ids)
+                | CardDependencyEntity.depends_on_id.in_(card_ids)
+            )
+        )
+        return [(a, b) for a, b in result.all()]
+
+    @with_db_retry
+    async def get_edge(
+        self, card_id: int, depends_on_id: int
+    ) -> CardDependencyEntity | None:
+        result = await self.session.execute(
+            select(CardDependencyEntity).where(
+                CardDependencyEntity.card_id == card_id,
+                CardDependencyEntity.depends_on_id == depends_on_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def delete_for_card(self, card_id: int) -> None:
+        await self.session.execute(
+            delete(CardDependencyEntity).where(
+                (CardDependencyEntity.card_id == card_id)
+                | (CardDependencyEntity.depends_on_id == card_id)
+            )
+        )

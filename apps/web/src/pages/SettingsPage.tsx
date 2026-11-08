@@ -5,6 +5,34 @@ import type { UserSettings, UserSettingsUpdate } from '../lib/types'
 
 const toInput = (t: string | null | undefined) => (t ? t.slice(0, 5) : '')
 
+/** Tarayici bildirim izni (hatirlaticilar uygulama aciktayken bildirim olarak da gelir). */
+function NotificationPermission() {
+  const supported = typeof window !== 'undefined' && 'Notification' in window
+  const [perm, setPerm] = useState(supported ? Notification.permission : 'denied')
+  if (!supported) return <p className="text-xs text-slate-400">Bu tarayıcı bildirimleri desteklemiyor.</p>
+  return (
+    <div className="flex items-center justify-between gap-4 text-sm">
+      <span>
+        Tarayıcı bildirimleri{' '}
+        <span className="text-xs text-slate-400">(uygulama açıkken çalışır)</span>
+      </span>
+      {perm === 'granted' ? (
+        <span className="text-green-600">Açık ✓</span>
+      ) : perm === 'denied' ? (
+        <span className="text-xs text-slate-500">Engellendi — tarayıcı ayarlarından izin ver</span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => Notification.requestPermission().then(setPerm)}
+          className="rounded-md bg-slate-200 px-3 py-1"
+        >
+          İzin ver
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const qc = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<UserSettings>('/settings/') })
@@ -40,8 +68,8 @@ export default function SettingsPage() {
       {settings.data && (
         <form onSubmit={submit} className="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
           <p className="text-sm text-slate-500">
-            Günü ne zaman planlamak ve ne zaman değerlendirmek istediğini seç. Hatırlatmalar bu
-            saatlere göre gönderilecek (Faz 3b).
+            Günü ne zaman planlamak ve ne zaman değerlendirmek istediğini seç. Bu saatlerde
+            uygulama içinde ve (izin verirsen) tarayıcı bildirimiyle hatırlatma yapılır.
           </p>
           <label className="flex items-center justify-between gap-4">
             <span>Planlama saati</span>
@@ -55,6 +83,7 @@ export default function SettingsPage() {
             <span>Hatırlatmalar</span>
             <input type="checkbox" checked={reminders} onChange={(e) => setReminders(e.target.checked)} />
           </label>
+          <NotificationPermission />
           <p className="text-xs text-slate-400">Saat dilimi: {settings.data.timezone}</p>
           <div className="flex items-center justify-end gap-3">
             {save.isSuccess && <span className="text-sm text-green-600">Kaydedildi</span>}

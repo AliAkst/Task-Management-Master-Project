@@ -7,9 +7,11 @@ import type {
   BoardDetail,
   BoardList,
   BoardUpdate,
+  BoardGraph,
   BoardWithCounts,
   CardCreate,
   CardDetail,
+  CardSplit,
   CardUpdate,
   ChecklistItem,
   Label,
@@ -19,6 +21,7 @@ import type {
 export const keys = {
   boards: ['boards'] as const,
   board: (id: number) => ['board', id] as const,
+  graph: (id: number) => ['board', id, 'graph'] as const,
   card: (id: number) => ['card', id] as const,
   activity: (id: number) => ['card', id, 'activity'] as const,
 }
@@ -32,6 +35,14 @@ export function useBoards() {
 
 export function useBoard(id: number) {
   return useQuery({ queryKey: keys.board(id), queryFn: () => api<BoardDetail>(`/boards/${id}`) })
+}
+
+export function useBoardGraph(id: number, enabled = true) {
+  return useQuery({
+    queryKey: keys.graph(id),
+    queryFn: () => api<BoardGraph>(`/boards/${id}/graph`),
+    enabled,
+  })
 }
 
 export function useCard(id: number | null) {
@@ -118,6 +129,26 @@ export function useBoardMutations(boardId: number) {
         api<CardDetail>(`/cards/${id}/move`, { method: 'POST', ...json({ list_id, index }) }),
       onSettled: refresh,
     }),
+    /** Grafik gorunumde dugum konumu (gecmise yazilmaz). */
+    savePosition: useMutation({
+      mutationFn: ({ id, x, y }: { id: number; x: number; y: number }) =>
+        api<CardDetail>(`/cards/${id}`, { method: 'PATCH', ...json({ graph_x: x, graph_y: y }) }),
+      // Sadece grafigi tazele (kanban'i gereksiz yere yeniden cekme)
+      onSuccess: () => qc.invalidateQueries({ queryKey: keys.graph(boardId), exact: true }),
+    }),
+    addDependency: useMutation({
+      mutationFn: ({ id, dependsOn }: { id: number; dependsOn: number }) =>
+        api<CardDetail>(`/cards/${id}/dependencies`, {
+          method: 'POST',
+          ...json({ depends_on_id: dependsOn }),
+        }),
+      onSettled: refresh,
+    }),
+    removeDependency: useMutation({
+      mutationFn: ({ id, dependsOn }: { id: number; dependsOn: number }) =>
+        api<CardDetail>(`/cards/${id}/dependencies/${dependsOn}`, { method: 'DELETE' }),
+      onSettled: refresh,
+    }),
     createLabel: useMutation({
       mutationFn: (data: { name: string; color: string }) =>
         api<Label>(`/boards/${boardId}/labels`, { method: 'POST', ...json(data) }),
@@ -170,6 +201,29 @@ export function useCardMutations(cardId: number, boardId: number) {
     updateItem: useMutation({
       mutationFn: ({ id, ...data }: { id: number; text?: string; is_done?: boolean }) =>
         api<ChecklistItem>(`/checklist/${id}`, { method: 'PATCH', ...json(data) }),
+      onSuccess: refresh,
+    }),
+    addSubtask: useMutation({
+      mutationFn: (title: string) =>
+        api<CardDetail>('/cards', { method: 'POST', ...json({ parent_id: cardId, title }) }),
+      onSuccess: refresh,
+    }),
+    split: useMutation({
+      mutationFn: (data: CardSplit) =>
+        api<CardDetail>(`/cards/${cardId}/split`, { method: 'POST', ...json(data) }),
+      onSuccess: refresh,
+    }),
+    addDependency: useMutation({
+      mutationFn: (dependsOn: number) =>
+        api<CardDetail>(`/cards/${cardId}/dependencies`, {
+          method: 'POST',
+          ...json({ depends_on_id: dependsOn }),
+        }),
+      onSuccess: refresh,
+    }),
+    removeDependency: useMutation({
+      mutationFn: (dependsOn: number) =>
+        api<CardDetail>(`/cards/${cardId}/dependencies/${dependsOn}`, { method: 'DELETE' }),
       onSuccess: refresh,
     }),
     deleteItem: useMutation({

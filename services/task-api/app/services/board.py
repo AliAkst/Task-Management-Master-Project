@@ -174,6 +174,9 @@ class BoardService:
             board_id=board.id,
             changes={"name": board.name},
         )
+        await self.uow.day_plan_items.detach_board(board.id)
+        await self.uow.events.delete_for_board(board.id)
+        await self.uow.time_sessions.detach_board_cards(board.id)
         await self.uow.boards.delete_cascade(board)
         await self.uow.commit()
 

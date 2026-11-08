@@ -57,3 +57,36 @@ class TaskRepository(BaseRepository[TaskEntity]):
             .where(TaskEntity.list_id == list_id, TaskEntity.is_archived.is_(False))
         )
         return result.scalar() or 0
+
+    @with_db_retry
+    async def get_many(self, ids: list[int]) -> list[TaskEntity]:
+        if not ids:
+            return []
+        result = await self.session.execute(
+            select(TaskEntity).where(TaskEntity.id.in_(ids))
+        )
+        return list(result.scalars().all())
+
+    @with_db_retry
+    async def children_of(self, parent_ids: list[int]) -> list[TaskEntity]:
+        """Arsivlenmemis alt kartlar, sirali."""
+        if not parent_ids:
+            return []
+        result = await self.session.execute(
+            select(TaskEntity)
+            .where(
+                TaskEntity.parent_id.in_(parent_ids), TaskEntity.is_archived.is_(False)
+            )
+            .order_by(TaskEntity.position, TaskEntity.id)
+        )
+        return list(result.scalars().all())
+
+    async def detach_children(self, parent_id: int) -> None:
+        """Ust kart silinirken alt kartlari bagimsiz yapar (SQLite FK kapali)."""
+        from sqlalchemy import update
+
+        await self.session.execute(
+            update(TaskEntity)
+            .where(TaskEntity.parent_id == parent_id)
+            .values(parent_id=None)
+        )

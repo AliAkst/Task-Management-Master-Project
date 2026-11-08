@@ -18,6 +18,10 @@ from app.db.unit_of_work import TaskUnitOfWork
 from app.services.auth import AuthService
 from app.services.board import BoardService
 from app.services.card import CardService
+from app.services.analytics import AnalyticsService
+from app.services.day_plan import DayPlanService
+from app.services.event import EventService
+from app.services.time_session import TimeSessionService
 from app.services.task import TaskService
 from app.services.user_settings import UserSettingsService
 
@@ -61,6 +65,30 @@ async def get_card_service(
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
 ) -> CardService:
     return CardService(uow)
+
+
+async def get_event_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+) -> EventService:
+    return EventService(uow)
+
+
+async def get_time_session_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+) -> TimeSessionService:
+    return TimeSessionService(uow)
+
+
+async def get_day_plan_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+) -> DayPlanService:
+    return DayPlanService(uow)
+
+
+async def get_analytics_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+) -> AnalyticsService:
+    return AnalyticsService(uow)
 
 
 async def get_auth_service(uow: TaskUnitOfWork = Depends(get_unit_of_work)):
@@ -122,3 +150,9 @@ AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 UserSettingsServiceDep = Annotated[UserSettingsService, Depends(get_user_settings_service)]
 BoardServiceDep = Annotated[BoardService, Depends(get_board_service)]
 CardServiceDep = Annotated[CardService, Depends(get_card_service)]
+EventServiceDep = Annotated[EventService, Depends(get_event_service)]
+TimeSessionServiceDep = Annotated[
+    TimeSessionService, Depends(get_time_session_service)
+]
+DayPlanServiceDep = Annotated[DayPlanService, Depends(get_day_plan_service)]
+AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
