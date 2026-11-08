@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { Lock, LockOpen, Plus, Sparkles, Trash2, User, Bot } from 'lucide-react'
+import { Lock, LockOpen, Plus, Sparkles, Trash2, User, Bot, Lightbulb } from 'lucide-react'
+import InsightsSection from '../components/InsightsSection'
 import { useBoards } from '../api/boards'
 import { useFactMutations, useFacts, useGoalMutations, useGoals, type Fact, type GoalStatus } from '../api/profile'
 import { useAssistantUi } from '../stores/assistant'
@@ -12,6 +13,12 @@ const GOAL_STATUS: Record<GoalStatus, string> = {
 
 const ACQUAINT_MESSAGE =
   'Merhaba! Beni daha iyi tanıman için bana birkaç soru sorar mısın? Her seferinde bir soru sor.'
+
+const SOURCE: Record<Fact['source'], string> = {
+  ai_learned: 'Asistan öğrendi',
+  user_entered: 'Sen ekledin',
+  insight_confirmed: 'Onayladığın gözlem',
+}
 
 function FactRow({ fact }: { fact: Fact }) {
   const m = useFactMutations()
@@ -27,8 +34,14 @@ function FactRow({ fact }: { fact: Fact }) {
 
   return (
     <li className="group flex items-start gap-2 py-1.5">
-      <span className="mt-1 text-slate-400" title={fact.source === 'ai_learned' ? 'Asistan öğrendi' : 'Sen ekledin'}>
-        {fact.source === 'ai_learned' ? <Bot size={14} aria-label="Asistan öğrendi" /> : <User size={14} aria-label="Sen ekledin" />}
+      <span className="mt-1 text-slate-400" title={SOURCE[fact.source]}>
+        {fact.source === 'ai_learned' ? (
+          <Bot size={14} aria-label={SOURCE[fact.source]} />
+        ) : fact.source === 'insight_confirmed' ? (
+          <Lightbulb size={14} aria-label={SOURCE[fact.source]} />
+        ) : (
+          <User size={14} aria-label={SOURCE[fact.source]} />
+        )}
       </span>
       {editing ? (
         <input
@@ -221,6 +234,9 @@ export default function ProfilePage() {
       <div className="grid gap-10 lg:grid-cols-2">
         <GoalsSection />
         <FactsSection />
+      </div>
+      <div className="mt-10 border-t border-slate-200 pt-8">
+        <InsightsSection />
       </div>
     </div>
   )

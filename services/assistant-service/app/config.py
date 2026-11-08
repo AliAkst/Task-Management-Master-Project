@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # ama daha iyi planlayan buyuk local model. Kurulu degilse sohbet modeli
     background_model: str = "ollama:gemma4:26b"
     background_timeout_seconds: float = 1800.0
+    # Gun sonu isinden sonra, son 7 gunde yapilmadiysa haftalik analiz
+    weekly_insights_auto: bool = True
     max_tool_rounds: int = 6
     # Sohbetten sonra ayri, odakli hafiza cikarimi (bkz. app/agent/memory_extractor.py)
     memory_extraction: bool = True

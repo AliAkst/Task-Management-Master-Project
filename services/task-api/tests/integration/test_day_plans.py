@@ -440,3 +440,38 @@ class TestAiSummary:
         )
         res = await client.get(f"{API}/day-plans/{D}", headers=other_headers)
         assert res.json()["data"].get("ai_summary") is None
+
+
+class TestNextInChain:
+    """Faz 6b: zincirde onceki is bitince siradaki kart onerilere duser."""
+
+    async def test_unblocked_card_suggested(self, client, auth_headers, spor):
+        list_id = spor["lists"][0]["id"]
+        a = await create_card(client, auth_headers, list_id, "Bölüm 1")
+        b = await create_card(
+            client, auth_headers, list_id, "Bölüm 2", estimated_minutes=90
+        )
+        c = await create_card(client, auth_headers, list_id, "Bölüm 3")
+        for card, dep in ((b, a), (c, b)):
+            res = await client.post(
+                f"{API}/cards/{card['id']}/dependencies",
+                json={"depends_on_id": dep["id"]},
+                headers=auth_headers,
+            )
+            assert res.status_code in (200, 201), res.text
+        tomorrow = local_today(TZ) + timedelta(days=1)
+        kinds = {
+            s["card_id"]: s["kind"]
+            for s in await suggestions(client, auth_headers, tomorrow)
+        }
+        assert b["id"] not in kinds and c["id"] not in kinds  # henuz bloke
+
+        res = await client.patch(
+            f"{API}/cards/{a['id']}", json={"status": "completed"}, headers=auth_headers
+        )
+        assert res.status_code == 200, res.text
+        items = await suggestions(client, auth_headers, tomorrow)
+        nxt = [s for s in items if s["card_id"] == b["id"]]
+        assert nxt and nxt[0]["kind"] == "next_in_chain"
+        assert nxt[0]["planned_minutes"] == 90 and not nxt[0]["blocked"]
+        assert c["id"] not in {s["card_id"] for s in items}  # Bölüm 3 hala bekliyor

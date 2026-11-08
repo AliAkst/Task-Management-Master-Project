@@ -46,6 +46,9 @@ OUTCOME_ACTION = {
 }
 
 
+UNBLOCK_WINDOW = timedelta(days=14)
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -235,6 +238,9 @@ class DayPlanService:
             and not any(ch.parent_id == c.id for ch in cards)  # parcalanmis ana kart
         ]
         blocked = await self._blocked_ids([c.id for c in open_cards])
+        recently_unblocked = await self._recently_unblocked(
+            [c.id for c in open_cards if c.id not in blocked], start
+        )
         for c in sorted(open_cards, key=lambda c: c.due_date or end):
             if c.due_date is not None and start <= c.due_date < end:
                 kind = "due"
@@ -242,6 +248,8 @@ class DayPlanService:
                 kind = "overdue"
             elif c.status == TaskStatus.IN_PROGRESS:
                 kind = "in_progress"
+            elif c.id in recently_unblocked:
+                kind = "next_in_chain"  # zincirde onceki is bitti, sira bunda
             else:
                 continue
             add(
@@ -282,6 +290,32 @@ class DayPlanService:
             if s.card_id is not None:
                 s.tracked_sec = tracked.get(s.card_id, 0)
         return DaySuggestions(date=day, items=result)
+
+    async def _recently_unblocked(
+        self, card_ids: list[int], start: datetime
+    ) -> set[int]:
+        """
+        On kosullarinin hepsi bitmis ve sonuncusu son UNBLOCK_WINDOW icinde
+        bitmis kartlar: zincirde "siradaki" is (orn. 9 parcalik egitimin 2. parcasi).
+        """
+        edges = [
+            (c, d)
+            for c, d in await self.uow.dependencies.edges_touching(card_ids)
+            if c in card_ids
+        ]
+        if not edges:
+            return set()
+        prereqs = {
+            t.id: t for t in await self.uow.tasks.get_many(list({d for _, d in edges}))
+        }
+        latest: dict[int, datetime] = {}
+        for c, d in edges:
+            p = prereqs.get(d)
+            if p is None or p.completed_at is None:
+                continue
+            if c not in latest or p.completed_at > latest[c]:
+                latest[c] = p.completed_at
+        return {c for c, t in latest.items() if t >= start - UNBLOCK_WINDOW}
 
     async def _blocked_ids(self, card_ids: list[int]) -> set[int]:
         edges = await self.uow.dependencies.edges_touching(card_ids)

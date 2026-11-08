@@ -41,6 +41,7 @@ KIND_LABEL = {
     "due": "son günü yarın",
     "overdue": "son günü geçti",
     "in_progress": "devam ediyor",
+    "next_in_chain": "zincirde önceki iş bitti, sıra bunda",
     "worked": "bugün üzerinde çalışıldı",
 }
 OUTCOME_LABEL = {
@@ -57,8 +58,9 @@ Görevin:
 1) Bugünün kısa özeti: 2-4 cümle, Türkçe. Ne yapıldı, ne kaldı, fark ettiğin bir kalıp
    varsa onu söyle. Dürüst ve destekleyici ol; abartılı övgü ya da suçlama yok.
 2) Yarın için gerçekçi bir plan: SADECE aşağıdaki aday listesinden numara seç; listede
-   olmayan iş uydurma. Takvimdeki etkinlikleri seç. Son günü gelen/geçen ve ertelenmiş
-   işlere öncelik ver. Toplam süre yaklaşık {cap} dakikayı geçmesin; günü doldurma.
+   olmayan iş uydurma. Takvimdeki etkinlikleri seç. Son günü gelen/geçen, ertelenmiş ve
+   zincirde sırası gelen işlere öncelik ver. Toplam süre yaklaşık {cap} dakikayı
+   geçmesin; günü doldurma.
    Her seçim için tek cümlelik gerekçe yaz.
 Yalnızca şu biçimde JSON döndür, başka hiçbir şey yazma:
 {{"summary": "...", "plan": [{{"n": 1, "reason": "..."}}],

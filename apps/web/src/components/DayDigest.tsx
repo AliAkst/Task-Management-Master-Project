@@ -9,6 +9,7 @@ import ActionCard from './ActionCard'
 const KIND: Record<string, string> = {
   event: 'takvimde',
   carry_over: 'ertelenmişti',
+  next_in_chain: 'zincirde sıradaki',
   due: 'son günü',
   overdue: 'son günü geçti',
   in_progress: 'devam ediyor',

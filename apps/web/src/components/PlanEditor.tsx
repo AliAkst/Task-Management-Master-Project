@@ -18,6 +18,7 @@ interface Draft {
 const KIND_LABEL: Record<PlanSuggestion['kind'], string> = {
   event: 'Takvimde',
   carry_over: 'Ertelenen',
+  next_in_chain: 'Sıradaki',
   due: 'Son tarihi bugün',
   overdue: 'Gecikmiş',
   in_progress: 'Devam eden',

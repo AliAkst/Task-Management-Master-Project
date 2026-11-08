@@ -131,7 +131,7 @@ class UserFactEntity(Base):
     Asistanin kullanici hakkinda bildikleri (seni tanimasi). Kullanici profil
     ekraninda gorur, duzeltir, siler. is_private: bulut modellere gonderilmez
     (saglik ve iliski kategorilerinde varsayilan).
-    source: ai_learned | user_entered
+    source: ai_learned | user_entered | insight_confirmed
     """
 
     __tablename__ = "user_facts"
@@ -207,6 +207,31 @@ class AiJobEntity(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class AiInsightEntity(Base):
+    """
+    Haftalik analizin gozlemi (Faz 6b): "Sali gunleri planlarinin yarisini
+    bitirebiliyorsun". Kod veriden sinyali hesaplar (evidence), model cumleyi
+    yazar. Kullanici onaylarsa user_facts'e (source=insight_confirmed) donusur.
+    key: ayni gozlemin tekrar onerilmemesi icin (orn. "weekday_low:1").
+    status: new | confirmed | rejected
+    """
+
+    __tablename__ = "ai_insights"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    key: Mapped[str] = mapped_column(String(100), index=True)
+    category: Mapped[str] = mapped_column(String(30), default="routine")
+    observation: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="new", index=True)
+    user_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fact_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 engine = create_async_engine(settings.database_url)
