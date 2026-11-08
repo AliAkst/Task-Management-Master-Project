@@ -68,9 +68,13 @@ class EventService:
     async def _assert_editable(self, event: EventEntity) -> None:
         external = (await self._externals([event.id])).get(event.id)
         if external is not None:
+            source = (
+                "Outlook/Teams takviminden"
+                if external.provider == "microsoft"
+                else "Google Takvim'den"
+            )
             raise ConflictException(
-                "EVENT_READ_ONLY",
-                "Bu etkinlik Google Takvim'den geliyor; orada düzenleyin.",
+                "EVENT_READ_ONLY", f"Bu etkinlik {source} geliyor; orada düzenleyin."
             )
 
     @staticmethod
@@ -270,6 +274,7 @@ class EventService:
                     card_id=e.card_id,
                     card_status=card.status if card is not None else None,
                     location=e.location,
+                    meeting_url=e.meeting_url,
                     recurrence_rule=e.recurrence_rule,
                     external=externals.get(e.id),
                 )

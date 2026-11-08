@@ -712,6 +712,7 @@ class TestScheduler:
             return None
 
         monkeypatch.setattr("app.integrations.microsoft_todo.sync_all_accounts", noop)
+        monkeypatch.setattr("app.integrations.microsoft_calendar.sync_all_accounts", noop)
         task = asyncio.create_task(scheduler.sync_loop(first_delay=0, interval=0.01))
         await asyncio.sleep(0.1)
         task.cancel()

@@ -11,6 +11,29 @@ export interface IntegrationAccount {
   last_error: string | null
   masked_credentials: Record<string, string>
   settings: Record<string, unknown> | null
+  /** Yalniz Microsoft: Calendars.Read izni verilmis mi (Teams toplantilari). */
+  calendar_consent?: boolean | null
+}
+
+/** Microsoft takvim (Teams toplantilari) ayarlari: account.settings.calendar. */
+export interface MicrosoftCalendarSettings {
+  enabled: boolean
+  teams_only: boolean
+  board_id: number | null
+  weeks_ahead: number
+  last_synced_at?: string | null
+  last_error?: string | null
+}
+
+export const CALENDAR_DEFAULTS: MicrosoftCalendarSettings = {
+  enabled: false,
+  teams_only: true,
+  board_id: null,
+  weeks_ahead: 2,
+}
+
+export function calendarSettings(account: IntegrationAccount | undefined): MicrosoftCalendarSettings {
+  return { ...CALENDAR_DEFAULTS, ...((account?.settings?.calendar as Partial<MicrosoftCalendarSettings> | undefined) ?? {}) }
 }
 
 export interface GoogleCalendarInfo {
@@ -82,6 +105,13 @@ export function useIntegrations() {
     queryKey: keys.all,
     queryFn: () => api<IntegrationAccount[]>('/integrations'),
   })
+}
+
+/** Takvimi acik, izinli Microsoft hesabi var mi (takvim sayfasindaki "Toplantilari cek" icin). */
+export function useMicrosoftCalendarEnabled() {
+  const accounts = useIntegrations()
+  const ms = accounts.data?.find((a) => a.provider === 'microsoft')
+  return !!ms && ms.status === 'active' && !!ms.calendar_consent && calendarSettings(ms).enabled
 }
 
 export function useOAuthClients() {
@@ -187,6 +217,21 @@ export function useIntegrationMutations() {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: keys.all })
         qc.invalidateQueries({ queryKey: keys.microsoftLists })
+      },
+    }),
+    saveMicrosoftCalendar: useMutation({
+      mutationFn: (data: { enabled: boolean; teams_only: boolean; board_id: number | null; weeks_ahead: number }) =>
+        api<IntegrationAccount>('/integrations/microsoft/calendar', { method: 'PUT', body: JSON.stringify(data) }),
+      onSettled: () => {
+        qc.invalidateQueries({ queryKey: keys.all })
+        qc.invalidateQueries({ queryKey: ['calendar'] })
+      },
+    }),
+    syncMicrosoftCalendar: useMutation({
+      mutationFn: () => api<SyncSummary>('/integrations/microsoft/calendar/sync', { method: 'POST' }),
+      onSettled: () => {
+        qc.invalidateQueries({ queryKey: keys.all })
+        qc.invalidateQueries({ queryKey: ['calendar'] })
       },
     }),
     syncNow: useMutation({

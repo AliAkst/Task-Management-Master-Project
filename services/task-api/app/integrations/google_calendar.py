@@ -11,7 +11,6 @@ Google Takvim tek yonlu senkron (Faz 7b).
   "planlanan vs gerceklesen" istatistigini bozmasin).
 """
 
-from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -21,11 +20,12 @@ from pydantic import BaseModel, Field
 
 from app.core.exceptions import ValidationException
 from app.core.logging import get_logger
-from app.db.entities import EventEntity, ExternalLinkEntity, IntegrationAccountEntity
+from app.db.entities import IntegrationAccountEntity
 from app.db.unit_of_work import TaskUnitOfWork
-from app.integrations import oauth
+from app.integrations import calendar_common, oauth
 from app.integrations.accounts import IntegrationAccountService
 from app.integrations.base import IntegrationError, SyncResult, lock_for
+from app.integrations.calendar_common import MappedEvent
 from app.services.board import BoardService
 from app.services.timeutil import day_bounds, user_tz
 
@@ -140,17 +140,6 @@ class GoogleCalendarClient:
 # ====================================================================
 # Esleme (saf fonksiyonlar)
 # ====================================================================
-@dataclass
-class MappedEvent:
-    title: str
-    start_at: datetime
-    end_at: datetime
-    all_day: bool
-    location: str | None
-    notes: str | None
-    url: str | None
-
-
 def _parse_date(value: str) -> date:
     return date.fromisoformat(value)
 
@@ -278,37 +267,20 @@ class GoogleCalendarService:
 
     async def disconnect(self, user_id: int) -> None:
         """Baglantiyi keser; Google'dan gelen (salt okunur) etkinlikler de silinir."""
-        for link in await self.uow.external_links.list_for_provider(
-            user_id, PROVIDER, "event"
-        ):
-            await self._delete_linked_event(link)
+        await calendar_common.purge_events(self.uow, user_id, PROVIDER)
         await self.accounts.remove(user_id, PROVIDER)
 
     async def _purge_calendar(self, user_id: int, calendar_id: str) -> int:
-        links = await self.uow.external_links.for_parent(
-            user_id, PROVIDER, "event", calendar_id
+        return await calendar_common.purge_events(
+            self.uow, user_id, PROVIDER, calendar_id
         )
-        for link in links:
-            await self._delete_linked_event(link)
-        return len(links)
 
     async def _rehome(
         self, user_id: int, calendar_ids: list[str], board_id: int | None
     ) -> None:
-        for cal_id in calendar_ids:
-            for link in await self.uow.external_links.for_parent(
-                user_id, PROVIDER, "event", cal_id
-            ):
-                event = await self.uow.events.get_by_id(link.entity_id)
-                if event is not None:
-                    event.board_id = board_id
-
-    async def _delete_linked_event(self, link: ExternalLinkEntity) -> None:
-        event = await self.uow.events.get_by_id(link.entity_id)
-        if event is not None:
-            await self.uow.day_plan_items.detach_event(event.id)
-            await self.uow.events.delete(event)
-        await self.uow.external_links.delete(link)
+        await calendar_common.rehome_events(
+            self.uow, user_id, PROVIDER, board_id, calendar_ids
+        )
 
     # ---------------- senkron ----------------
     async def sync(self, user_id: int) -> SyncResult:
@@ -438,12 +410,14 @@ class GoogleCalendarService:
 
         if full:
             # Tam senkron: pencerede artik gorunmeyen (Google'da silinmis) etkinlikler
-            for link in await self.uow.external_links.for_parent(
-                user_id, PROVIDER, "event", calendar_id
-            ):
-                if link.external_id not in seen:
-                    await self._delete_linked_event(link)
-                    result.removed += 1
+            await calendar_common.delete_unseen_in_window(
+                self.uow,
+                user_id=user_id,
+                provider=PROVIDER,
+                parent_id=calendar_id,
+                seen=seen,
+                result=result,
+            )
         return next_sync
 
     async def _apply_item(
@@ -461,64 +435,25 @@ class GoogleCalendarService:
         )
         if item.get("status") == "cancelled":
             if link is not None:
-                await self._delete_linked_event(link)
+                await calendar_common.delete_linked_event(self.uow, link)
                 result.removed += 1
             return
 
         mapped = map_event(item, tz)
         if mapped is None:
             return
-        etag = item.get("etag")
-        now = datetime.now(UTC)
-
-        event = await self.uow.events.get_by_id(link.entity_id) if link else None
-        if event is not None and link is not None:
-            if link.etag == etag and event.board_id == board_id:
-                link.last_synced_at = now
-                return
-            self._fill(event, mapped, board_id)
-            link.etag = etag
-            link.url = mapped.url
-            link.last_synced_at = now
-            result.updated += 1
-            return
-
-        event = EventEntity(user_id=user_id, created_by="integration")
-        self._fill(event, mapped, board_id)
-        await self.uow.events.create(event)
-        await self.uow.flush()
-        if link is None:
-            await self.uow.external_links.create(
-                ExternalLinkEntity(
-                    user_id=user_id,
-                    provider=PROVIDER,
-                    entity_type="event",
-                    entity_id=event.id,
-                    external_id=ext,
-                    external_parent_id=calendar_id,
-                    etag=etag,
-                    url=mapped.url,
-                    last_synced_at=now,
-                )
-            )
-        else:  # yerelde silinmis (ornegin board silindi): baglanti yeni etkinlige
-            link.entity_id = event.id
-            link.etag = etag
-            link.url = mapped.url
-            link.last_synced_at = now
-        result.created += 1
-
-    @staticmethod
-    def _fill(event: EventEntity, mapped: MappedEvent, board_id: int | None) -> None:
-        event.title = mapped.title
-        event.start_at = mapped.start_at
-        event.end_at = mapped.end_at
-        event.all_day = mapped.all_day
-        event.location = mapped.location
-        event.notes = mapped.notes
-        event.board_id = board_id
-        event.card_id = None
-        event.recurrence_rule = None
+        await calendar_common.upsert_external_event(
+            self.uow,
+            user_id=user_id,
+            provider=PROVIDER,
+            parent_id=calendar_id,
+            ext=ext,
+            board_id=board_id,
+            mapped=mapped,
+            etag=item.get("etag"),
+            result=result,
+            link=link,
+        )
 
 
 async def sync_all_accounts() -> None:

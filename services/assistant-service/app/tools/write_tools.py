@@ -10,7 +10,7 @@ Boylece onay kartinda gordugun sey, onaylayinca yapilan seyin TA KENDISIDIR.
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -46,6 +46,7 @@ from app.tools.schedule_day import (
     SCHEDULE_SPEC,
     build_timeline,
     find_board,
+    find_conflict,
     hhmm,
     resolve_day,
     to_datetime,
@@ -782,6 +783,23 @@ class WriteTools:
             "triage_inbox", {"moves": resolved}, triage_summary(resolved)
         )
 
+    async def _check_calendar_conflicts(self, target: date, timeline: list) -> None:
+        """Yeni bloklar o gunun saatli etkinlikleriyle (Teams toplantisi...) cakismasin."""
+        start = datetime.combine(target, time(0), tzinfo=self.tz)
+        # Bloklar gece yarisini gecebilir: ertesi gunun sonuna kadar bak
+        cal = await self.api.get(
+            "/calendar",
+            start=start.isoformat(),
+            end=(start + timedelta(days=2)).isoformat(),
+        )
+        events = [
+            i if self.privacy.keep(i) else {**i, "title": "Başka bir etkinlik"}
+            for i in cal.get("items", [])
+        ]
+        conflict = find_conflict(timeline, target, self.tz, events)
+        if conflict:
+            raise ValueError(conflict)
+
     async def _prepare_schedule_day(
         self, day: Any, blocks: list[dict[str, Any]]
     ) -> PreparedAction:
@@ -789,6 +807,7 @@ class WriteTools:
         if target < datetime.now(self.tz).date():
             raise ValueError(f"{_fmt_day(target)} geçmişte kaldı; ileri bir gün ver")
         timeline = build_timeline(blocks if isinstance(blocks, list) else [])
+        await self._check_calendar_conflicts(target, timeline)
         boards = [
             b
             for b in await self.api.get("/boards")

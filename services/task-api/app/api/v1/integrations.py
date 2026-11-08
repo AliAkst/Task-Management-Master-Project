@@ -24,6 +24,10 @@ from app.integrations.google_calendar import (
     GoogleSettingsUpdate,
     SyncSummary,
 )
+from app.integrations.microsoft_calendar import (
+    MicrosoftCalendarService,
+    MicrosoftCalendarUpdate,
+)
 from app.integrations.microsoft_todo import (
     MicrosoftSettingsUpdate,
     MicrosoftStatus,
@@ -64,6 +68,10 @@ def _google(uow: TaskUnitOfWork = Depends(get_unit_of_work)):
 
 def _microsoft(uow: TaskUnitOfWork = Depends(get_unit_of_work)):
     return MicrosoftTodoService(uow)
+
+
+def _ms_calendar(uow: TaskUnitOfWork = Depends(get_unit_of_work)):
+    return MicrosoftCalendarService(uow)
 
 
 # ---------------- OAuth uygulama kimligi (kurulum sihirbazi) ----------------
@@ -111,10 +119,13 @@ async def disconnect(
     user: CurrentUserDep,
     accounts: IntegrationAccountService = Depends(_accounts),
     google: GoogleCalendarService = Depends(_google),
+    ms_calendar: MicrosoftCalendarService = Depends(_ms_calendar),
 ):
-    """Baglantiyi kaldirir; ice aktarilmis kartlar kalir (Google etkinlikleri silinir)."""
+    """Baglantiyi kaldirir; kartlar kalir (Google/Teams takvim etkinlikleri silinir)."""
     if provider == "google":
         await google.disconnect(user.id)
+    elif provider == "microsoft":
+        await ms_calendar.disconnect(user.id)
     else:
         await accounts.remove(user.id, provider)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -226,6 +237,37 @@ async def microsoft_status(
 ):
     """Geri yazilmayi bekleyen / hata almis tamamlama sayisi."""
     return ApiResponse(success=True, data=await microsoft.status(user.id))
+
+
+# ---------------- Microsoft takvim (Teams toplantilari, Faz 8d) ----------------
+@integrations_router.put(
+    "/microsoft/calendar", response_model=ApiResponse[IntegrationResponse]
+)
+async def microsoft_calendar_settings(
+    data: MicrosoftCalendarUpdate,
+    user: CurrentUserDep,
+    ms_calendar: MicrosoftCalendarService = Depends(_ms_calendar),
+):
+    """Takvimi ac/kapat + ayarlar; aciksa kayittan sonra hemen senkronlanir."""
+    account = await ms_calendar.update_settings(user.id, data)
+    if data.enabled:
+        try:
+            await ms_calendar.sync(user.id)  # sonuc/hata ayarlarda (last_error)
+        except AppException:
+            pass  # ayar kaydedildi; hata 'Bu haftanin toplantilarini cek' ile gorunur
+    return ApiResponse(success=True, data=to_response(account))
+
+
+@integrations_router.post(
+    "/microsoft/calendar/sync", response_model=ApiResponse[SyncSummary]
+)
+async def microsoft_calendar_sync(
+    user: CurrentUserDep,
+    ms_calendar: MicrosoftCalendarService = Depends(_ms_calendar),
+):
+    """Elle 'Bu haftanin toplantilarini cek'."""
+    result = await ms_calendar.sync(user.id)
+    return ApiResponse(success=True, data=SyncSummary(**asdict(result)))
 
 
 # ---------------- Google Takvim ----------------

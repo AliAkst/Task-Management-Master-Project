@@ -16,11 +16,12 @@ INTERVAL_SEC = 15 * 60
 
 async def run_once() -> None:
     """Tum entegrasyonlari bir kez senkronlar (biri hata verirse digerleri surer)."""
-    from app.integrations import google_calendar, microsoft_todo
+    from app.integrations import google_calendar, microsoft_calendar, microsoft_todo
 
     for name, job in (
         ("google", google_calendar.sync_all_accounts),
         ("microsoft", microsoft_todo.sync_all_accounts),
+        ("microsoft-takvim", microsoft_calendar.sync_all_accounts),
     ):
         try:
             await job()

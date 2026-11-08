@@ -42,4 +42,42 @@ Pencere hesabı (pazartesi/pazar hafta başı, saat dilimi, weeks_ahead); sayfal
 - **Risk:** kişisel hesapta Teams toplantısı `isOnlineMeeting=false` dönerse ama `joinUrl` gövdede/konumda geçiyorsa tespit genişletilir; hiç görünmüyorsa **ICS aboneliği yedeği** ayrı küçük alt faz (8d-ek, Sonnet) olarak planlanır.
 
 ## İlerleme
-_(oturum sonunda doldurulur)_
+**Durum: ✅ Kod tamam, commit YOK (2026-11-09; commit/push ayrı Haiku oturumu).** Migration `b6d2f8a4c1e9_event_meeting_url.py` (down = `a5c9e1b3d7f2`).
+
+### Yapılanlar
+- **Migration/model:** `events.meeting_url` (String(1000), nullable); `EventEntity.meeting_url`, `EventResponse.meeting_url`, `CalendarItem.meeting_url`. Salt okunur 409 mesajı sağlayıcıya göre ("…Outlook/Teams takviminden geliyor…"; Google metni aynen).
+- **`app/integrations/calendar_common.py` (yeni):** `MappedEvent` (+`meeting_url`), `fill_event`, `delete_linked_event`, `purge_events(user, provider, parent_id=None)`, `rehome_events(user, provider, board_id, parent_ids=None)`, `upsert_external_event(...)` (oluştur/güncelle/etag+board aynıysa atla), `delete_unseen_in_window(..., window_start=None)`. `GoogleCalendarService` bunlara bağlandı (sync token akışı Google'da kaldı); **Google testleri (34) değişmeden yeşil**.
+- **OAuth:** `oauth.PROVIDERS["microsoft"]` kapsamına `Calendars.Read`; zaten bağlı ama takvim izni olmayan hesapta `connect_url` `prompt=consent` ekler. `IntegrationResponse.calendar_consent` (yalnız Microsoft) + `settings.calendar` varsayılanları (`enabled:false, teams_only:true, board_id:null, weeks_ahead:2`). `accounts.has_calendar_scope()` ("Calendars.Read"/"…ReadWrite", `https://…/` önekli de olur).
+- **`app/integrations/microsoft_calendar.py` (yeni):** `week_window`, `is_teams`, `map_event`, `MicrosoftCalendarService` (`update_settings`, `disconnect`, `sync`), `sync_all_accounts()`. `GraphClient.get_all()` (sayfalı GET, `@odata.nextLink`). `calendarView` isteği: `Prefer: outlook.timezone="UTC"`, `$top=100`, `$select=…`; her tur pencerenin tamamı; iptal edilen silinir, pencerede dönmeyen silinir, pencereden önce başlayan (geçmiş) dokunulmaz; To Do ile aynı kilit (`lock_for(user, "microsoft")`). Görülen `onlineMeetingProvider` değerleri DEBUG log'a.
+- **API:** `PUT /integrations/microsoft/calendar` (kayıt + `enabled` ise hemen senkron; kapatınca etkinlikler silinir; yabancı board → 404/403; izin yoksa 409 `CALENDAR_CONSENT_REQUIRED`), `POST /integrations/microsoft/calendar/sync` → `SyncSummary`, `DELETE /integrations/microsoft` takvim etkinliklerini de siler (To Do kartları kalır). `scheduler.run_once`: Google → Microsoft To Do → Microsoft takvim (her biri kendi try/except).
+- **assistant-service:** `schedule_day.find_conflict()` + `WriteTools._check_calendar_conflicts` — `_prepare_schedule_day` zaman çizelgesini kurduktan sonra günün (+ertesi gün, gece yarısını aşan bloklar için) `/calendar`'ını okur; saatli bir etkinlikle çakışan blok `ValueError`: «Haftalık toplantı» 14:00–15:00 ile çakışıyor; 'Blok' bloğunu toplantıdan sonraya kaydır.
+- **Frontend:** `IntegrationsSettings` Microsoft satırı "Microsoft To Do ve Teams" + `MicrosoftTeams` alt bölümü (izin yoksa "Teams toplantıları için izin ver"; varsa aç/kapa, Sadece Teams, kaç hafta ileri 1–4, board, Kaydet, "Bu haftanın toplantılarını çek" + özet, son senkron/hata); `OAuthSetup` Microsoft sihirbazına Calendars.Read adımı; `CalendarPage` başlıkta "Toplantıları çek" (Microsoft takvimi açıksa) + `meeting_url`'li etkinlikte `Video` ikonu (`eventContent`); `EventDialog` dış etkinlikte "Teams'te katıl" (yalnız https) + "Outlook'ta aç"; `Reminders` bugünün `/calendar`'ından (60 sn'de bir) toplantı başlamasına ≤5 dk kalınca şerit + "Katıl" + tarayıcı bildirimi. Yeni UI'da `text-on-ink` kuralı uygulandı.
+- `api-schema.d.ts`: uygulamanın `app.openapi()` çıktısından `openapi-typescript` ile üretildi (diff yalnız 8d eklemeleri).
+
+### Sapmalar
+| Planda | Yapılan | Neden |
+|---|---|---|
+| `PrepareError` | `ValueError` | assistant-service'te `PrepareError` yok; tüm `_prepare_*` `ValueError` fırlatıyor (odaklı planlayıcının geri bildirim döngüsü onu yakalıyor) |
+| Çakışma: "aynı kartın zaten var olan bloğu çakışma sayılmaz" | Mevcut etkinliğin başlığı yeni bloğunkiyle aynıysa (büyük/küçük harf duyarsız) çakışma sayılmaz | `schedule_day` blokları kart id'si taşımıyor; aynı planı yeniden vermek (kart bloğu ya da sabit etkinlik) kendiyle çakışmasın |
+| `schedule_day` testleri: 3 | 4 (ek: bulutta gizli board etkinliğinin başlığı sızmıyor — «Başka bir etkinlik») | `local_only` kuralı |
+| Çakışma sorgusu yalnız o gün | Gün + ertesi gün (48 sa) | Bloklar gece yarısını aşabiliyor (mevcut `build_timeline` davranışı) |
+| `rehome_events(user, provider, board_id)` | + isteğe bağlı `parent_ids` | Google yalnız seçili takvimleri taşıyordu (davranış korunsun) |
+| `delete_unseen_in_window` | `window_start` isteğe bağlı; Google `None` geçer (eski davranış: görünmeyen hepsi silinir), Microsoft hafta başını geçer | Plan: Microsoft'ta geçmişe dokunulmaz; Google'ın tam senkron davranışı değişmesin |
+| Graph 403 → "To Do izin vermedi" (ortak `_request`) | Takvimde Graph 403'ü `CALENDAR_CONSENT_REQUIRED` olarak yeniden eşlenir | Mesaj To Do'ya özgüydü; kayıtlı kapsam yanlış olsa bile kullanıcıya doğru yönlendirme |
+| Takvim son senkron/hata durumu | `account.settings["calendar"].last_synced_at / last_error` (hesabın `last_synced_at/last_error` alanı değil) | To Do `_finish`'i aynı alanları ezerdi |
+| Tüm gün tarihi `microsoft_todo` yardımcısıyla | Tüm gün için `start/end.dateTime`'ın **tarih kısmı** alınır; saatliler `_parse_graph_dt` ile | Graph `Prefer: UTC` ile tüm gün etkinliğini gece yarısı UTC döndürür; tarih kısmı etkinliğin günüdür (gerçek hesapta doğrulanmadı) |
+| Google testleri "hiç değişmeden" | `test_loop_survives_failures`a 1 satır (takvim işini sahtele) | Sahtelenmezse döngü gerçek DB'ye sürekli istek atıp takılıyordu |
+| Eski `test_integrations_microsoft.py::TestScheduler` | Sıra beklentisi `["google","microsoft","takvim"]` (üçüncü iş sahte) | `run_once`'a yeni iş eklendi; sahte olmazsa gerçek DB'ye bakardı |
+| Tarayıcı doğrulaması (8001/5175 kopya) | **Yapılmadı**; migration yalnız `%TEMP%\f8d\copy.db` kopyasında denendi | Arayüz bölümü izinli Microsoft hesabı gerektiriyor (gerçek hesap yasak); kopya DB'ye hesap tohumlamak kapsam dışı bırakıldı |
+| Yönlendirme sonrası bildirim metni | "Microsoft bağlandı. To Do listelerini seçip kaydet; Teams toplantıları için aşağıdaki bölümden aç." | Metin artık takvimi de kapsıyor |
+
+### Doğrulanmayanlar
+- **Gerçek Microsoft hesabı:** Azure'da `Calendars.Read` eklenmesi, "Teams toplantıları için izin ver" akışı (`prompt=consent`), gerçek `calendarView` yanıtları, `onlineMeetingProvider` değerleri (kişisel hesapta `teamsForBusiness` mı `skypeForConsumer` mı?), `isOnlineMeeting=false` dönme riski, tüm gün etkinliğin tarihi, "Teams'te katıl" bağlantısının Teams'i açması — hepsi kullanıcıda. Risk gerçekleşirse (hiç toplantı görünmezse) plandaki **ICS aboneliği yedeği** ayrı küçük alt faz (8d-ek).
+- **Arayüz tarayıcıda görülmedi** (Ayarlar alt bölümü, takvimde video ikonu, EventDialog düğmesi, Reminders şeridi): yalnız `tsc -b && vite build` temiz.
+- Gerçek modelle `schedule_day` çakışma geri bildirim döngüsü (3 deneme) denenmedi; yalnız birim/entegrasyon testleri.
+- Microsoft token yenilemede kapsam değişimi: yenileme kayıtlı `scopes`'u güncellemez; izin yalnız yeniden bağlanınca kaydedilir.
+
+### Test sayıları
+- task-api: 333 geçti (önceki 298 + 35 yeni: `tests/integration/test_integrations_microsoft_calendar.py`; Google 34 test aynı, yalnız `test_loop_survives_failures`a takvim işi için bir `monkeypatch` satırı eklendi). assistant-service: 152 geçti (önceki 148 + 4: `tests/test_schedule_day.py`). `npm run build` temiz.
+- Migration (DB kopyasında): `upgrade` → `downgrade -1` → `upgrade`, `alembic current` = `b6d2f8a4c1e9 (head)`.
+- Ruff: yeni/değişen dosyalarda yalnız E501.
