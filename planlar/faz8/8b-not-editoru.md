@@ -31,4 +31,32 @@
 5175'te kart penceresi: not ekle (kod bloklu), çift tıkla düzenle, kaydet; ekran görüntüsü. `read_console_messages` hatasız.
 
 ## İlerleme
-_(oturum sonunda doldurulur)_
+**Durum: ✅ Kod tamam, commit edilmedi (2026-11-09).**
+
+### Yapılanlar
+- `index.css`: `--color-surface`, `--color-on-ink` (`@theme`), `--code-*` değişkenleri ve `.hljs-*` kuralları (highlight.js hazır CSS'i kullanılmadı).
+- `npm i remark-gfm rehype-highlight`.
+- `components/MarkdownView.tsx` (GFM + rehype-highlight `detect:false, ignoreMissing:true`, `CodeBlock` dil etiketi + Kopyala/“Kopyalandı” 1,5 sn, `a` → `_blank noopener noreferrer`, tablo yatay kaydırma, satır içi kod, salt okunur görev kutuları).
+- `components/MarkdownEditor.tsx` (forwardRef: `insert`, `focus`; otomatik yükselen textarea; araç çubuğu: kalın/satır içi kod/kod bloğu dil menüsü (13 dil)/liste/görev listesi/bağlantı; Ctrl+B, Ctrl+E; çit içinde Tab = 2 boşluk, Shift+Tab girinti azaltır; Ctrl+Enter kaydet, Esc vazgeç; `toolbarExtra`).
+- `CardModal`: açıklama `MarkdownView`/`MarkdownEditor` (tıkla + çift tıkla düzenle); notlar: yeni not `MarkdownEditor`, çift tıkla yerinde düzenleme (tek not), hover/odakta “Düzenle”/“Sil”, “(düzenlendi)” (>5 sn), Esc'te değişiklik varsa `confirm`, `a,button` üzerinde çift tık düzenlemeyi açmaz. `api/boards.ts` → `updateNote`.
+- `AssistantPanel`: mesajlar `MarkdownView`.
+- Backend: `update_note` → `("note", id, "updated")`, `delete_note` → `("note", id, "deleted")`; 2 yeni test.
+
+### Sapmalar
+| Planda | Yapılan | Neden |
+|---|---|---|
+| Not Esc: yalnız notta onay | Açıklama düzenleyicisinde de değişiklik varsa aynı `confirm` | Tutarlılık; kaybolmasın |
+| Geçmişte not satırı hep “not eklendi” | “not eklendi/düzenlendi/silindi” (`NOTE_ACTION`) | Yeni activity eylemleri görünsün |
+| Notta mevcut “Notu kaydet” yalnız doluyken görünürdü | Kaydet düğmesi `MarkdownEditor`'da hep görünür | Editör bileşeni ortak |
+| `attachments?` prop (8c) | Eklenmedi | 8c'de eklenecek |
+| `delete_note` activity kartı silinmiş sayılmaz | Kart `get_owned_card` ile alınır | board_id/card_id için |
+
+### Doğrulanmayanlar
+- Ekran görüntüsü alınamadı (Claude penceresi gizliydi, screenshot zaman aşımı); davranış DOM/JS ile doğrulandı. Görsel kontrol kullanıcıda (koyu sürüm yok; kod renkleri, tablo, dil menüsü konumu).
+- Dil menüsü, Tab/Shift+Tab, Ctrl+B/E, “Kopyala” panoya gerçek yazma (clipboard izni) elle denenmedi; kod yazıldı, derleme temiz.
+- Asistan panelinde kod bloğu (gerçek model yanıtı) denenmedi.
+
+### Test sayıları
+- task-api: 269 geçti (+2). assistant-service: 147 geçti. `npm run build` temiz.
+- Tarayıcı (8001 DB kopyası / 5175): not ekle (python kod bloğu + tablo + görev listesi + ~~üstü çizili~~) → hljs sınıfları, tablo, checkbox, `del` var; çift tık → düzenle → Ctrl+Enter → “(düzenlendi)”; Esc'te `confirm` ile editör açık kaldı ve kart penceresi kapanmadı; konsolda yalnız sunucu açılırken oluşan geçici 500/401.
+- Ruff: bu fazda eklenen satırlarda hata yok (kalan E501'ler eski satırlar).

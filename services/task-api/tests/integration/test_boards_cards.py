@@ -345,6 +345,47 @@ class TestCards:
         actions = [a["action"] for a in res.json()["data"]]
         assert actions == ["deleted", "completed", "estimate_changed", "created"]
 
+    async def test_note_update_writes_activity(self, client, auth_headers):
+        detail = await create_board(client, auth_headers)
+        card = await create_card(client, auth_headers, detail["lists"][0]["id"], "Not")
+        note = (
+            await client.post(
+                f"{API}/cards/{card['id']}/notes",
+                json={"content": "ilk"},
+                headers=auth_headers,
+            )
+        ).json()["data"]
+        res = await client.patch(
+            f"{API}/notes/{note['id']}",
+            json={"content": "ikinci"},
+            headers=auth_headers,
+        )
+        assert res.status_code == 200
+        acts = (
+            await client.get(f"{API}/cards/{card['id']}/activity", headers=auth_headers)
+        ).json()["data"]
+        assert [(a["entity_type"], a["action"]) for a in acts][:2] == [
+            ("note", "updated"),
+            ("note", "created"),
+        ]
+
+    async def test_note_delete_writes_activity(self, client, auth_headers):
+        detail = await create_board(client, auth_headers)
+        card = await create_card(client, auth_headers, detail["lists"][0]["id"], "Not")
+        note = (
+            await client.post(
+                f"{API}/cards/{card['id']}/notes",
+                json={"content": "silinecek"},
+                headers=auth_headers,
+            )
+        ).json()["data"]
+        res = await client.delete(f"{API}/notes/{note['id']}", headers=auth_headers)
+        assert res.status_code in (200, 204)
+        acts = (
+            await client.get(f"{API}/cards/{card['id']}/activity", headers=auth_headers)
+        ).json()["data"]
+        assert (acts[0]["entity_type"], acts[0]["action"]) == ("note", "deleted")
+
     async def test_legacy_tasks_api_lands_in_default_board(self, client, auth_headers):
         res = await client.post(
             f"{API}/tasks/", json={"title": "Eski API"}, headers=auth_headers

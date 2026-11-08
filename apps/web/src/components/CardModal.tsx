@@ -1,5 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import Markdown from 'react-markdown'
+import { useEffect, useState, type FormEvent, type MouseEvent } from 'react'
 import { Check, Circle, CornerLeftUp, ExternalLink, Hourglass, X } from 'lucide-react'
 import { useCard, useCardActivity, useCardMutations } from '../api/boards'
 import {
@@ -12,6 +11,8 @@ import {
 import type { BoardDetail, TaskPriority } from '../lib/types'
 import CardSchedule from './CardSchedule'
 import CardTime, { CardTimerButton } from './CardTime'
+import MarkdownEditor from './MarkdownEditor'
+import MarkdownView from './MarkdownView'
 import Modal from './Modal'
 import RecurrencePicker from './RecurrencePicker'
 import { dayCodeOf } from '../lib/rrule'
@@ -28,6 +29,7 @@ const EXTERNAL_LABEL: Record<string, string> = {
   trello: 'Trello',
   google: 'Google',
 }
+const NOTE_ACTION: Record<string, string> = { created: 'eklendi', updated: 'düzenlendi', deleted: 'silindi' }
 const section = 'mt-7'
 const sectionTitle = 'mb-2 text-[15px] font-semibold text-slate-900'
 const fieldLabel = 'block text-[13px] text-slate-600'
@@ -49,6 +51,8 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   const [description, setDescription] = useState('')
   const [editingDesc, setEditingDesc] = useState(false)
   const [note, setNote] = useState('')
+  const [editingNote, setEditingNote] = useState<number | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
   const [item, setItem] = useState('')
   const [showHistory, setShowHistory] = useState(false)
   const [subtask, setSubtask] = useState('')
@@ -95,9 +99,30 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
     const next = c.label_ids.includes(id) ? c.label_ids.filter((x) => x !== id) : [...c.label_ids, id]
     m.update.mutate({ label_ids: next })
   }
-  const addNote = (e: FormEvent) => {
-    e.preventDefault()
+  const addNote = () => {
     if (note.trim()) m.addNote.mutate(note.trim(), { onSuccess: () => setNote('') })
+  }
+  const startEditNote = (id: number, content: string) => {
+    setEditingNote(id)
+    setNoteDraft(content)
+  }
+  const saveNote = (id: number, original: string) => {
+    const text = noteDraft.trim()
+    if (!text || text === original.trim()) return setEditingNote(null)
+    m.updateNote.mutate({ id, content: text }, { onSuccess: () => setEditingNote(null) })
+  }
+  const cancelNote = (original: string) => {
+    if (noteDraft !== original && !confirm('Değişiklikler kaybolsun mu?')) return
+    setEditingNote(null)
+  }
+  const cancelDescription = () => {
+    if (description !== (c.description ?? '') && !confirm('Değişiklikler kaybolsun mu?')) return
+    setDescription(c.description ?? '')
+    setEditingDesc(false)
+  }
+  const onNoteDoubleClick = (e: MouseEvent, id: number, content: string) => {
+    if ((e.target as HTMLElement).closest('a,button')) return
+    startEditNote(id, content)
   }
   const addSubtask = (e: FormEvent) => {
     e.preventDefault()
@@ -192,29 +217,25 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
           <div className="mt-5">
             <h3 className={sectionTitle}>Açıklama</h3>
             {editingDesc ? (
-              <div className="space-y-2">
-                <textarea
-                  autoFocus
-                  rows={8}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm"
-                  placeholder="Markdown destekli…"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <button onClick={saveDescription} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Kaydet</button>
-                  <button onClick={() => { setDescription(c.description ?? ''); setEditingDesc(false) }} className="text-sm text-slate-600">Vazgeç</button>
-                </div>
-              </div>
+              <MarkdownEditor
+                autoFocus
+                minRows={6}
+                placeholder="Markdown destekli…"
+                value={description}
+                onChange={setDescription}
+                onSubmit={saveDescription}
+                onCancel={cancelDescription}
+              />
             ) : (
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() => setEditingDesc(true)}
-                onKeyDown={(e) => e.key === 'Enter' && setEditingDesc(true)}
-                className="min-h-14 cursor-text rounded-md border border-transparent bg-slate-50 px-3 py-2 text-[15px] hover:border-slate-200 [&_a]:text-blue-700 [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc"
+                onClick={(e) => !(e.target as HTMLElement).closest('a,button') && setEditingDesc(true)}
+                onDoubleClick={(e) => !(e.target as HTMLElement).closest('a,button') && setEditingDesc(true)}
+                onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && setEditingDesc(true)}
+                className="min-h-14 cursor-text rounded-md border border-transparent bg-slate-50 px-3 py-2 text-[15px] hover:border-slate-200"
               >
-                {c.description ? <Markdown>{c.description}</Markdown> : <span className="text-slate-500">Açıklama eklemek için tıkla</span>}
+                {c.description ? <MarkdownView content={c.description} /> : <span className="text-slate-500">Açıklama eklemek için tıkla</span>}
               </div>
             )}
           </div>
@@ -298,28 +319,49 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
           {/* Notlar */}
           <div className={section}>
             <h3 className={sectionTitle}>Notlar</h3>
-            <form onSubmit={addNote} className="space-y-2">
-              <textarea
-                rows={2}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-[15px]"
-                placeholder="Not ekle (Ctrl+Enter ile kaydet)"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && e.ctrlKey && addNote(e)}
-              />
-              {note.trim() && <button className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Notu kaydet</button>}
-            </form>
+            <MarkdownEditor
+              minRows={2}
+              placeholder="Not ekle"
+              value={note}
+              onChange={setNote}
+              onSubmit={addNote}
+              submitLabel="Notu kaydet"
+            />
             <ul className="mt-3 space-y-3">
-              {c.notes.map((n) => (
-                <li key={n.id} className="group border-l-2 border-slate-300 pl-3 text-[15px]">
-                  <div className="mb-0.5 flex justify-between text-[12px] text-slate-500">
-                    <span>{formatDateTime(n.created_at)}</span>
-                    <button onClick={() => m.deleteNote.mutate(n.id)} className="opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-700">Sil</button>
-                  </div>
-                  <div className="[&_li]:ml-4 [&_ul]:list-disc"><Markdown>{n.content}</Markdown></div>
-                </li>
-              ))}
+              {c.notes.map((n) => {
+                const edited = new Date(n.updated_at).getTime() - new Date(n.created_at).getTime() > 5000
+                return (
+                  <li key={n.id} className="group border-l-2 border-slate-300 pl-3 text-[15px]">
+                    <div className="mb-0.5 flex justify-between text-[12px] text-slate-500">
+                      <span>
+                        {formatDateTime(n.created_at)}
+                        {edited && ' (düzenlendi)'}
+                      </span>
+                      {editingNote !== n.id && (
+                        <span className="flex gap-3 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+                          <button onClick={() => startEditNote(n.id, n.content)} className="hover:text-slate-900">Düzenle</button>
+                          <button onClick={() => m.deleteNote.mutate(n.id)} className="hover:text-red-700">Sil</button>
+                        </span>
+                      )}
+                    </div>
+                    {editingNote === n.id ? (
+                      <MarkdownEditor
+                        autoFocus
+                        value={noteDraft}
+                        onChange={setNoteDraft}
+                        onSubmit={() => saveNote(n.id, n.content)}
+                        onCancel={() => cancelNote(n.content)}
+                      />
+                    ) : (
+                      <div onDoubleClick={(e) => onNoteDoubleClick(e, n.id, n.content)} title="Düzenlemek için çift tıkla">
+                        <MarkdownView content={n.content} />
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
+            {m.updateNote.error && <p className="mt-1 text-sm text-red-700">{m.updateNote.error.message}</p>}
           </div>
 
           {/* Gecmis */}
@@ -333,7 +375,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                   <li key={a.id} className="flex gap-3">
                     <span className="shrink-0 text-slate-500 tabular-nums">{formatDateTime(a.occurred_at)}</span>
                     <span>
-                      {a.entity_type === 'note' ? 'not eklendi' : ACTION_LABEL[a.action] ?? a.action}
+                      {a.entity_type === 'note' ? `not ${NOTE_ACTION[a.action] ?? a.action}` : ACTION_LABEL[a.action] ?? a.action}
                       {a.actor !== 'user' && ` (${a.actor === 'ai' ? 'asistan' : a.actor})`}
                     </span>
                   </li>
