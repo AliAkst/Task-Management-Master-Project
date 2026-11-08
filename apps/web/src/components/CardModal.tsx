@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Markdown from 'react-markdown'
-import { Check, Circle, CornerLeftUp, Hourglass, X } from 'lucide-react'
+import { Check, Circle, CornerLeftUp, ExternalLink, Hourglass, X } from 'lucide-react'
 import { useCard, useCardActivity, useCardMutations } from '../api/boards'
 import {
   ACTION_LABEL,
@@ -23,6 +23,11 @@ interface Props {
   onOpenCard: (id: number) => void
 }
 
+const EXTERNAL_LABEL: Record<string, string> = {
+  microsoft: 'Microsoft To Do',
+  trello: 'Trello',
+  google: 'Google',
+}
 const section = 'mt-7'
 const sectionTitle = 'mb-2 text-[15px] font-semibold text-slate-900'
 const fieldLabel = 'block text-[13px] text-slate-600'
@@ -156,6 +161,22 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
               </button>
             )}
             <span>{meta.join(', ')}</span>
+            {c.external && (
+              <span className="inline-flex items-center gap-1">
+                {c.external.url ? (
+                  <a href={c.external.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">
+                    {EXTERNAL_LABEL[c.external.provider] ?? c.external.provider}’dan <ExternalLink size={11} aria-hidden />
+                  </a>
+                ) : (
+                  <>{EXTERNAL_LABEL[c.external.provider] ?? c.external.provider}’dan</>
+                )}
+                {c.external.push_error ? (
+                  <span className="text-red-700" title={c.external.push_error}>· geri yazılamadı</span>
+                ) : c.external.pending_push ? (
+                  <span>· geri yazılıyor…</span>
+                ) : null}
+              </span>
+            )}
           </p>
         </div>
         <CardTimerButton cardId={c.id} />

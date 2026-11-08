@@ -42,6 +42,8 @@ class BoardEntity(Base, TimestampMixin):
     # local_only board'da sadece local model olabilir.
     default_model_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Sistem board'u: NULL = normal, "inbox" = Gelen Kutusu (silinemez)
+    system_kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class BoardListEntity(Base, TimestampMixin):

@@ -14,3 +14,6 @@ dist/
 
 # start-app.ps1 kayitlari
 scripts/logs/
+
+# task-api entegrasyon token sifreleme anahtari
+services/task-api/.secret_key

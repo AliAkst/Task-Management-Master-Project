@@ -29,6 +29,7 @@ from app.models.card import (
     ActivityResponse,
     CardCreate,
     CardDetail,
+    CardExternalRef,
     CardRecurrence,
     CardRef,
     CardSummary,
@@ -56,6 +57,7 @@ class CardService:
         self.actor = actor
         self.activity = ActivityLogger(uow, actor)
         self.boards = BoardService(uow)
+        self._push_user_id: int | None = None  # Microsoft To Do geri yazma bekliyor
 
     @property
     def graph(self):
@@ -92,8 +94,29 @@ class CardService:
         ):
             raise ValidationException("Etiketler kartın board'una ait olmalı")
 
+    async def _flag_external_push(self, card: TaskEntity) -> None:
+        """
+        Outbox (Faz 7c): kartin Microsoft To Do baglantisi varsa tamamlama/yeniden
+        acma dis sisteme yazilmak uzere isaretlenir (ayni transaction, commit oncesi).
+        Entegrasyonun kendi degisiklikleri geri yazilmaz (dongu onlemi).
+        """
+        if self.actor == "integration":
+            return
+        link = (
+            await self.uow.external_links.for_entities("microsoft", "card", [card.id])
+        ).get(card.id)
+        if link is not None:
+            link.pending_push = True
+            link.push_error = None
+            self._push_user_id = card.user_id
+
     async def _after_change(self, user_id: int, event: str, card: TaskEntity) -> None:
         """Commit sonrasi: eski /tasks cache'ini temizle + event yayinla."""
+        if self._push_user_id is not None:
+            from app.integrations import microsoft_todo
+
+            microsoft_todo.schedule_push(self._push_user_id)
+            self._push_user_id = None
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))
         await domain_event_publisher.publish(
             event,
@@ -256,8 +279,21 @@ class CardService:
         }
         depends_on = [related[d] for c, d in edges if c == card.id and d in related]
         dependents = [related[c] for c, d in edges if d == card.id and c in related]
+        link = (await self.uow.external_links.for_entities(None, "card", [card.id])).get(
+            card.id
+        )
         return CardDetail(
             **summary.model_dump(),
+            external=(
+                CardExternalRef(
+                    provider=link.provider,
+                    url=link.url,
+                    pending_push=link.pending_push,
+                    push_error=link.push_error,
+                )
+                if link is not None
+                else None
+            ),
             user_id=card.user_id,
             description=card.description,
             created_by=card.created_by,
@@ -474,6 +510,7 @@ class CardService:
 
     async def _apply_status(self, card: TaskEntity, status: TaskStatus) -> None:
         """status alanini degistirir; gerekirse karti done/normal listeye tasir."""
+        await self._flag_external_push(card)
         lists = (
             await self.uow.lists.list_for_board(card.board_id) if card.board_id else []
         )
@@ -512,6 +549,8 @@ class CardService:
         after = snapshot()
 
         changes = {k: [before[k], after[k]] for k in before if before[k] != after[k]}
+        if "status" in changes:  # tamamlandi listesine tasima / listeden cikarma
+            await self._flag_external_push(card)
         action = self._action_for(changes) if "status" in changes else "moved"
         if changes:
             await self.activity.log(

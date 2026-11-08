@@ -1442,6 +1442,8 @@ export interface components {
             privacy: components["schemas"]["BoardPrivacy"];
             /** Default Model Id */
             default_model_id?: string | null;
+            /** System Kind */
+            system_kind?: string | null;
             /** Is Archived */
             is_archived: boolean;
             /**
@@ -1515,6 +1517,8 @@ export interface components {
             privacy: components["schemas"]["BoardPrivacy"];
             /** Default Model Id */
             default_model_id?: string | null;
+            /** System Kind */
+            system_kind?: string | null;
             /** Is Archived */
             is_archived: boolean;
             /**
@@ -1571,6 +1575,7 @@ export interface components {
             location?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: string | null;
+            external?: components["schemas"]["ExternalRef"] | null;
         };
         /** CalendarResponse */
         CalendarResponse: {
@@ -1728,6 +1733,7 @@ export interface components {
             depends_on?: components["schemas"]["CardRef"][];
             /** Dependents */
             dependents?: components["schemas"]["CardRef"][];
+            external?: components["schemas"]["CardExternalRef"] | null;
         };
         /**
          * CardMove
@@ -2162,6 +2168,33 @@ export interface components {
             /** Recurrence Rule */
             recurrence_rule?: string | null;
         };
+        /**
+         * ExternalRef
+         * @description Etkinligin geldigi dis sistem; varsa etkinlik salt okunurdur.
+         */
+        ExternalRef: {
+            /** Provider */
+            provider: string;
+            /** Url */
+            url?: string | null;
+        };
+        /**
+         * CardExternalRef
+         * @description Kartin geldigi dis sistem + geri yazma (outbox) durumu (Faz 7c).
+         */
+        CardExternalRef: {
+            /** Provider */
+            provider: string;
+            /** Url */
+            url?: string | null;
+            /**
+             * Pending Push
+             * @default false
+             */
+            pending_push?: boolean;
+            /** Push Error */
+            push_error?: string | null;
+        };
         /** EventResponse */
         EventResponse: {
             /** Id */
@@ -2190,6 +2223,7 @@ export interface components {
             notes: string | null;
             /** Recurrence Rule */
             recurrence_rule?: string | null;
+            external?: components["schemas"]["ExternalRef"] | null;
             /** Created By */
             created_by: string;
             /**
