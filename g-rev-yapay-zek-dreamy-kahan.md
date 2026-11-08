@@ -21,7 +21,7 @@
 | 5c — Claude + model ayarları + tasarım gözden geçirme | ✅ Tamam | `a6b5e34` | AnthropicProvider (resmi SDK), Claude/GPT/Gemini bağlantı ekranı (Fernet şifreli key), local-zorunlu varsayılan model, board varsayılan modeli + ModelRouter, ücret uyarısı; tüm sayfaların tasarım gözden geçirmesi (aşağıda) |
 | 6a — Gün sonu döngüsü | ✅ Tamam | `f5ae4e8` | değerlendirme → arka plan işi: gün özeti (`ai_summary`) + yarın plan önerisi (gemma4:26b), tahmin katsayısı, arka plan modeli ayarı |
 | 6b — Öğrenen asistan | ✅ Tamam | `ff08bce` | haftalık analiz → `ai_insights` (onay → kalıcı bilgi), zincirde sıradaki kart plan önerilerinde |
-| 6c — Tekrarlayan işler | ✅ Tamam | (bu commit) | tekrarlayan etkinlikler (RRULE, takvimde açılır), kart serileri (bitince sıradaki kart), ortak Tekrar seçici |
+| 6c — Tekrarlayan işler | ✅ Tamam | `3fa972e` | tekrarlayan etkinlikler (RRULE, takvimde açılır), kart serileri (bitince sıradaki kart), ortak Tekrar seçici |
 | 7 — Dış Entegrasyonlar | ⏳ Bekliyor | — | Trello (tek seferlik import), Google, Microsoft To Do (Samsung Reminder üzerinden) |
 
 ### Faz 5b'de yapılanlar (ayrıntı)
