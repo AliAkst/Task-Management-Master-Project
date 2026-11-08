@@ -68,6 +68,13 @@
 - **Tekrarlayan kart:** `card_series` (başlık, board, kural, aktif mi) + `tasks.series_id/series_index`. `PUT /cards/{id}/recurrence` ({rule} ya da null). Seri kartı tamamlanınca (kanban, kart penceresi, gün değerlendirmesi — hepsi aynı yoldan) bir kez sıradaki kart açılır: ilk normal listede, başlık/açıklama/öncelik/tahmin/etiketler ve checklist (işaretsiz) kopyalanır; son tarih eski son tarihin saatini koruyan, şimdiden sonraki ilk tekrar (kaçırılan günler atlanır). Kural bitince (`UNTIL`/`COUNT`) seri durur. Kartlarda `series_done_count` ("seri 14 kez tamamlandı").
 - **Frontend:** ortak `RecurrencePicker` (Tekrarlanmaz / Her gün / Hafta içi / Haftanın günleri / Her ay / Her yıl / Özel RRULE + bitiş tarihi, okunur Türkçe açıklama — `lib/rrule.ts`); etkinlik penceresinde ve kart penceresinin künyesinde; kanban kartında tekrar ikonu + serideki sıra.
 
+### Kullanıcı testi sonrası düzeltmeler (Faz 6 sonrası)
+- **Günü saat saat planlama (`schedule_day`, `app/tools/schedule_day.py`):** gerçek testte local model "kart oluştur → kartın id'siyle takvime koy" zincirini yapamıyordu (kart onaya kadar yok), günü yanlış hesaplıyor (çarşamba → perşembe), saatleri tutarsız diziyordu. Yeni araçta model sadece sırayı ve süreleri verir; günü ("salı", "yarın"), başlangıcı verilmeyen blokların saatini, sabit saatten öncekileri geriye doğru (işe yol 07:00–09:00) ve gece yarısı geçişini KOD hesaplar, çakışmayı modelin düzeltebileceği mesajla reddeder. Tek onay kartı → yapılacak işler kart + takvim bloğu, sabit şeyler (yol/iş) sadece etkinlik, kartlar günün planına.
+- **Odaklı planlama adımı (`app/agent/day_planner.py`):** "salı günü için … planla" gibi mesajlar (gün + planlama fiili, soru değil) sohbet modeli yerine tek görevli, tek araçlı, örnekli istemle ve hata geri bildirimiyle (3 deneme) işlenir. Model: panelde elle seçildiyse o; yoksa arka plan modeli (gemma4:26b, local ve kuruluysa). Ölçüm: qwen3.5:4b araç olsa da hiç çağırmadı; odaklı + örnekli istemle 4/4 geçerli çizelge ama anlam hataları (yol süresi, sıra); gemma4:26b daha doğru ama yine tutarsız olabiliyor → onay kartı şart.
+- **Hafıza:** sohbet modeli `remember_fact`/`forget_fact` görmez (gerçek testte planlama isteğinde ~20 yanlış/tekrar bilgi kaydetmişti); sadece ayrı hafıza adımı kullanır, o da işlem önerilen turlarda çalışmaz; aynı bilgi tekrar kaydedilmez.
+- **Sohbet silme:** SQLite'ta FK kapalı olduğu için silinen sohbetin `ai_actions` kayıtları aynı numarayı alan yeni sohbete karışıyordu; artık sohbetten koparılıyor.
+- **Kronometre (Focus To-Do gibi):** sol raydaki "Çalışmaya başla" → kart seçici (bugünün planı + açık kartlar, arama, kartsız çalış), çalışırken "başka karta geç"; isteğe bağlı odak süresi (25/50 dk, ilerleme çubuğu, dolunca bildirim; kayıt durmaz). Bugün → plan maddelerinde ▶.
+
 ### Plandan bilinçli sapmalar
 | Plan | Yapılan | Neden |
 |---|---|---|
@@ -96,7 +103,7 @@
 ### Yeni oturum için hızlı başlangıç
 - **Ortam:** Windows, Docker YOK (SQLite), uv: `C:\Users\alium\AppData\Roaming\Python\Python313\Scripts\uv.exe` (PATH'te değil). Ollama kurulu (qwen3.5:4b, gemma4:26b, qwen3.8:27b; deepseek-r1 ve coder listede gizli). GPU: RTX 4060 Laptop 8 GB.
 - **Çalıştırma:** `./scripts/dev.ps1` ya da önizleme (`task api project/.claude/launch.json`: task-api 8000, assistant 8100, web 5173).
-- **Testler:** `services/task-api`: `uv run pytest -q` (153) · `services/assistant-service`: `uv run pytest -q` (77) · `apps/web`: `npm run build`.
+- **Testler:** `services/task-api`: `uv run pytest -q` (153) · `services/assistant-service`: `uv run pytest -q` (96) · `apps/web`: `npm run build`.
 - **Bulut model anahtarı:** `ASSISTANT_SECRET_KEY` yoksa ilk kayıtta `services/assistant-service/.secret_key` üretilir (git'te yok). Silinirse kayıtlı API anahtarları çözülemez, yeniden girilmeli.
 - **Test hesabı:** `apps/web/README.md`.
 - **Benchmark:** `services/assistant-service`: `uv run python -m scripts.benchmark_models` (rapor `benchmark_results/`, git'te yok).

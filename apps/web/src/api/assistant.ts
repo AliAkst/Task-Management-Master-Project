@@ -158,6 +158,7 @@ export const TOOL_LABEL: Record<string, string> = {
   split_card: 'bölme önerdi',
   link_cards: 'bağlantı önerdi',
   plan_day: 'plan önerdi',
+  schedule_day: 'günü planlıyor',
 }
 
 // ---------------- islemler & izinler ----------------

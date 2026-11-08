@@ -159,7 +159,10 @@ async def test_never_manage_goal_hides_save_goal(client):
     await chat(client, "x")
     # FakeProvider arac listesini kaydeder
     tools = {t.name for t in provider.tools_seen[0]}
-    assert "save_goal" not in tools and "remember_fact" in tools
+    assert "save_goal" not in tools
+    # Hafiza bilgileri sohbet modeline hic gosterilmez (ayri hafiza adimi kullanir)
+    assert "remember_fact" not in tools and "forget_fact" not in tools
+    assert "schedule_day" in tools
 
 
 async def test_facts_api_crud_and_ownership(client):
@@ -255,3 +258,50 @@ async def test_extracted_proposals_survive_history_reload(client, extraction_on)
     msgs = (await client.get(f"{API}/conversations/{conv}/messages")).json()["data"]
     answer = next(m for m in msgs if m["role"] == "assistant")
     assert [a["action_type"] for a in answer["actions"]] == ["remember_fact"]
+
+
+async def test_duplicate_fact_is_not_proposed_again(client):
+    await client.post(
+        f"{API}/facts", json={"category": "routine", "content": "Sabah koşar"}
+    )
+    from app.tools.memory_tools import MemoryTools
+
+    tools = MemoryTools(client.db, USER["id"], cloud=False)
+    with pytest.raises(ValueError, match="zaten kayıtlı"):
+        await tools.prepare_remember("sabah koşar", "routine")
+
+
+async def test_no_memory_extraction_after_action_turn(client, extraction_on):
+    """Komut turunda (kart/plan onerisi) mesaj kisisel bilgi sayilmaz."""
+    provider = FakeProvider(
+        [
+            [call("create_card", board_id=1, title="Kuyumcu")],
+            [text("Önerdim.")],
+            [
+                call(
+                    "remember_fact",
+                    content="Salı kuyumcuya gidiyor",
+                    category="routine",
+                )
+            ],
+        ]
+    )
+    client.providers["fake:local"] = provider
+    events = await chat(client, "Salı iş çıkışı kuyumcuya uğramam lazım, kart aç")
+    kinds = [d["action_type"] for e, d in events if e == "action"]
+    assert kinds == ["create_card"]
+    assert len(provider.received) == 2  # hafiza cagrisi yapilmadi
+
+
+async def test_deleting_conversation_detaches_its_actions(client):
+    from app.db.models import AiActionEntity
+
+    client.providers["fake:local"] = FakeProvider(
+        [[call("create_card", board_id=1, title="X")], [text("ok")]]
+    )
+    events = await chat(client, "kart aç")
+    conv = next(d for e, d in events if e == "start")["conversation_id"]
+    await client.delete(f"{API}/conversations/{conv}")
+    async with client.db() as s:
+        action = await s.scalar(select(AiActionEntity))
+    assert action.conversation_id is None  # yeni sohbete karismaz

@@ -11,7 +11,7 @@ Hafiza (Faz 5b): asistanin kullanici hakkinda ogrendikleri + hedefler.
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import UserFactEntity
@@ -161,6 +161,16 @@ class MemoryTools:
                     args,
                     f"🧠 Bilgi güncellenir: «{_clip(fact.content, 50)}» → «{_clip(content)}»",
                 )
+        async with self.session_maker() as session:
+            same = await session.scalar(
+                select(UserFactEntity).where(
+                    UserFactEntity.user_id == self.user_id,
+                    UserFactEntity.is_active.is_(True),
+                    func.lower(UserFactEntity.content) == content.lower(),
+                )
+            )
+        if same is not None:
+            raise ValueError(f"Bu bilgi zaten kayıtlı ({same.id}); tekrar kaydetme")
         category = category or "other"
         private = category in PRIVATE_BY_DEFAULT
         args = {"content": content, "category": category, "is_private": private}

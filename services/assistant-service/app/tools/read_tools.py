@@ -68,6 +68,9 @@ class ToolBox:
         self.writer = WriteTools(api, privacy, tz)
         # Yazma araclari sadece izin kapisi baglaninca acilir (Faz 5)
         self.gate: ActionGate | None = None
+        # Bu turda modele gosterilmeyen araclar (orn. sohbette hafiza araclari:
+        # onlari ayri, odakli hafiza adimi kullanir)
+        self.hidden: set[str] = set()
         self._handlers: dict[str, Callable[..., Awaitable[Any]]] = {
             "list_boards": self.list_boards,
             "get_board": self.get_board,
@@ -101,13 +104,18 @@ class ToolBox:
 
     # ---------------- arac tanimlari ----------------
     def specs(self) -> list[ToolSpec]:
-        """Okuma araclari + (izin kapisi varsa) kullanicinin 'asla' demedigi yazma araclari."""
-        writes = (
-            [s for s in WRITE_SPECS if self.gate.allowed(action_type_of(s.name))]
-            if self.gate
-            else []
-        )
-        return self.read_specs() + writes
+        """Okuma araclari + (izin kapisi varsa) kullanicinin 'asla' demedigi yazma
+        araclari; `hidden` (orn. sohbette hafiza araclari) haric."""
+        return [
+            s
+            for s in self.read_specs() + self.write_specs()
+            if s.name not in self.hidden
+        ]
+
+    def write_specs(self) -> list[ToolSpec]:
+        if self.gate is None:
+            return []
+        return [s for s in WRITE_SPECS if self.gate.allowed(action_type_of(s.name))]
 
     @staticmethod
     def read_specs() -> list[ToolSpec]:

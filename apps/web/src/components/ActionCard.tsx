@@ -26,7 +26,7 @@ export default function ActionCard({ action }: { action: AiAction }) {
   return (
     <div className={`rounded-xl border bg-white p-2.5 text-sm ${current.status === 'proposed' ? 'border-amber-300' : 'border-slate-200'}`}>
       <div className="flex items-start gap-2">
-        <span className="flex-1">{current.summary}</span>
+        <span className="flex-1 whitespace-pre-line">{current.summary}</span>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${status.cls}`}>{status.label}</span>
       </div>
       {failure && <p className="mt-1 text-xs text-red-700">{failure}</p>}
