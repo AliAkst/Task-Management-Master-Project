@@ -102,7 +102,13 @@ class DayPlanResponse(BaseModel):
 
 
 SuggestionKind = Literal[
-    "event", "carry_over", "due", "overdue", "in_progress", "worked"
+    "event",
+    "carry_over",
+    "due",
+    "overdue",
+    "in_progress",
+    "next_in_chain",
+    "worked",
 ]
 
 

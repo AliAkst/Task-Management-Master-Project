@@ -5,7 +5,7 @@ export interface Fact {
   id: number
   category: string
   content: string
-  source: 'ai_learned' | 'user_entered'
+  source: 'ai_learned' | 'user_entered' | 'insight_confirmed'
   is_private: boolean
   created_at: string
   updated_at: string

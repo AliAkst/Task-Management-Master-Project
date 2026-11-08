@@ -2380,7 +2380,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "event" | "carry_over" | "due" | "overdue" | "in_progress" | "worked";
+            kind: "event" | "carry_over" | "due" | "overdue" | "in_progress" | "next_in_chain" | "worked";
             /** Card Id */
             card_id?: number | null;
             /** Event Id */

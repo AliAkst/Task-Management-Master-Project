@@ -2,7 +2,7 @@
 
 > ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
 >
-> **Branch:** `feature/ai-life-manager` · Faz 0–6a tamam. **Sıradaki: Faz 6b** (haftalık analiz + ai_insights, zincirde sıradaki), sonra 6c (series + RRULE), Faz 7.
+> **Branch:** `feature/ai-life-manager` · Faz 0–6b tamam. **Sıradaki: Faz 6c** (series + RRULE), sonra Faz 7.
 
 ## 0. İlerleme Durumu
 
@@ -20,7 +20,7 @@
 | 5b — Hafıza + Tasarım | ✅ Tamam | `347b36a` | **Tasarım yenilemesi** (aşağıda), user_facts, goals, profil ekranı, tanışma sohbeti, ayrı hafıza çıkarımı |
 | 5c — Claude + model ayarları + tasarım gözden geçirme | ✅ Tamam | `a6b5e34` | AnthropicProvider (resmi SDK), Claude/GPT/Gemini bağlantı ekranı (Fernet şifreli key), local-zorunlu varsayılan model, board varsayılan modeli + ModelRouter, ücret uyarısı; tüm sayfaların tasarım gözden geçirmesi (aşağıda) |
 | 6a — Gün sonu döngüsü | ✅ Tamam | `f5ae4e8` | değerlendirme → arka plan işi: gün özeti (`ai_summary`) + yarın plan önerisi (gemma4:26b), tahmin katsayısı, arka plan modeli ayarı |
-| 6b — Öğrenen asistan | ⏳ Bekliyor | — | haftalık analiz → `ai_insights` (onay → fact), zincirde sıradaki kartı önerme (`card.unblocked`) |
+| 6b — Öğrenen asistan | ✅ Tamam | (bu commit) | haftalık analiz → `ai_insights` (onay → kalıcı bilgi), zincirde sıradaki kart plan önerilerinde |
 | 6c — Tekrarlayan işler | ⏳ Bekliyor | — | `series` + RRULE (kart ve etkinlik), "Koşu: 14. tamamlama" |
 | 7 — Dış Entegrasyonlar | ⏳ Bekliyor | — | Trello (tek seferlik import), Google, Microsoft To Do (Samsung Reminder üzerinden) |
 
@@ -54,6 +54,14 @@
 - **Görev bazlı model:** `model_prefs.background_model_id` (boş = önerilen `gemma4:26b`, kurulu değilse sohbet modeli). Bulut seçilebilir, ücret uyarısıyla. Ayarlar → Asistan modeli → "Arka plan işleri".
 - **Frontend:** Bugün sayfasında "Asistanın notu" (değerlendirilmiş günde özet, yarın için öneri, gerekçeler, onay kartı; iş sürerken 5 sn'de bir yoklama), planlama modunda önceki akşamın bekleyen önerisi.
 
+### Faz 6b'de yapılanlar (ayrıntı)
+- **Haftalık analiz (`app/agent/insights.py`):** kod son 4 haftanın istatistiğinden ölçülebilir sinyaller çıkarır: planların belirgin şekilde daha az bittiği hafta günü (en az 5 değerlendirilmiş gün), enerjinin tamamlama oranına etkisi, tahmin sapması (≥%25), en verimli 2 saat, haftalık süre hedefinin %60'ının altında kalan board'lar, 3+ kez ertelenen kartlar. Model sadece bunları cümleye çevirir ve haftayı özetler (JSON); yazamazsa verideki cümle kullanılır. Her gözlemde kanıt (`evidence`) saklanır. Bulut modelde `local_only` board'lar ve (board'u bilinmeyen) ertelenen kartlar elenir.
+- **Tekrar önleme:** onaylanmış gözlem bir daha önerilmez; reddedilen ya da bekleyen gözlem 4 hafta önerilmez. Çalışma başına en fazla 4 gözlem.
+- **Ne zaman çalışır:** gün sonu işinden sonra, son 7 günde başarılı analiz yoksa aynı sırada otomatik (`weekly_insights_auto`); Profil'de "Son 4 haftayı analiz et". Aynı `ai_jobs` altyapısı (`kind=weekly_insight`).
+- **Onay → bilgi:** "Doğru, hatırla" (istenirse cümle düzeltilerek) → `user_facts` (`source=insight_confirmed`), sohbette sistem mesajına girer. "Doğru değil" → neden kaydedilir.
+- **Zincirde sıradaki:** task-api yarın önerilerine yeni tür `next_in_chain`: ön koşullarının hepsi bitmiş ve sonuncusu son 14 günde bitmiş açık kartlar. Hem planlama ekranında ("Sıradaki") hem asistanın gün sonu önerisinde öncelikli aday.
+- **Gerçek model:** gemma4:26b örnek 4 haftalık veriyle 8 sn'de 4 doğru gözlem ve hafta özeti üretti; sayıları değiştirmedi. Yerel veritabanında henüz yeterli değerlendirilmiş gün yok, gerçek veride "kalıp bulunamadı" dedi (beklenen).
+
 ### Plandan bilinçli sapmalar
 | Plan | Yapılan | Neden |
 |---|---|---|
@@ -67,6 +75,8 @@
 | `review.submitted` olayını dinleyen tüketici | Arayüzün tetiklediği servis içi arka plan işi (`ai_jobs`) | RabbitMQ/Docker yok |
 | `model_routes` tablosu (chat/background_planning/insight/classification) | `model_prefs.background_model_id` (sohbet = varsayılan, arka plan = tek ayar) | Şimdilik iki görev sınıfı yeterli; sınıflandırma Faz 7'de |
 | pgvector semantik arama (ops.) | Yapılmadı | SQLite, Docker yok |
+| `card.unblocked` olayıyla sıradaki kartı takvime otomatik koyma (`schedule_next_in_chain` izni) | Açılan kart ertesi günün plan önerilerine `next_in_chain` olarak düşer; asistan gün sonu planında önceliklendirir | Olay kuyruğu yok; plan önerisi zaten onay/izin akışından geçiyor |
+| `propose_insight` sohbet aracı | Sadece haftalık analiz gözlem üretir | Model kalıp uydurmasın: gözlemler veriden hesaplanır |
 | Bulut modellerle gerçek test | Sadece birim/entegrasyon testleri (sahte istemci); gerçek API'ye istek atılmadı | Kullanıcı kararı: API maliyeti |
 
 ### Bilinen sorunlar / dikkat
@@ -78,7 +88,7 @@
 ### Yeni oturum için hızlı başlangıç
 - **Ortam:** Windows, Docker YOK (SQLite), uv: `C:\Users\alium\AppData\Roaming\Python\Python313\Scripts\uv.exe` (PATH'te değil). Ollama kurulu (qwen3.5:4b, gemma4:26b, qwen3.8:27b; deepseek-r1 ve coder listede gizli). GPU: RTX 4060 Laptop 8 GB.
 - **Çalıştırma:** `./scripts/dev.ps1` ya da önizleme (`task api project/.claude/launch.json`: task-api 8000, assistant 8100, web 5173).
-- **Testler:** `services/task-api`: `uv run pytest -q` (145) · `services/assistant-service`: `uv run pytest -q` (69) · `apps/web`: `npm run build`.
+- **Testler:** `services/task-api`: `uv run pytest -q` (146) · `services/assistant-service`: `uv run pytest -q` (77) · `apps/web`: `npm run build`.
 - **Bulut model anahtarı:** `ASSISTANT_SECRET_KEY` yoksa ilk kayıtta `services/assistant-service/.secret_key` üretilir (git'te yok). Silinirse kayıtlı API anahtarları çözülemez, yeniden girilmeli.
 - **Test hesabı:** `apps/web/README.md`.
 - **Benchmark:** `services/assistant-service`: `uv run python -m scripts.benchmark_models` (rapor `benchmark_results/`, git'te yok).
