@@ -2,7 +2,7 @@
 
 > ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
 >
-> **Faz 8 (2026-11-08) planlandı:** `planlar/faz8/00-genel.md` + faz başına detay dosyası (8a–8g, sırayla; her faz yeni Sonnet oturumu, ardından Haiku push). 8d kodu tamam (commit bekliyor). **Sıradaki: 8e** — yeni oturumda yalnız `00-genel.md` + `8e-surukle-birak.md` oku.
+> **Faz 8 (2026-11-08) planlandı:** `planlar/faz8/00-genel.md` + faz başına detay dosyası (8a–8g, sırayla; her faz yeni Sonnet oturumu, ardından Haiku push). 8d commit'lendi (`45c4175`, push bekliyor). **Sıradaki: 8e** — yeni oturumda yalnız `00-genel.md` + `8e-surukle-birak.md` oku.
 >
 > **Branch:** `feature/ai-life-manager` · Faz 0–6 tamam, **7a–7d commit'lendi** (7a–7c: `b8b46d1`, 7d: `b21b062`) ve push edildi. **Opus Faz 7 denetimi yapıldı** (aşağıda "Faz 7 denetimi"); denetimde eklenen OAuth kurulum sihirbazı **commit'lenmedi** (Haiku oturumu). **Sıradaki:** commit/push → kullanıcı gerçek hesaplarla kabul denemesi (Google, Microsoft, Trello, gemma4 triage).
 
@@ -32,7 +32,7 @@
 | 8a — Asistan: checklist + etiket + "bu kart" | 🟡 Commit'lendi, push bekliyor (gerçek-model kabulü kullanıcıyla) | `6b7e233` | `planlar/faz8/8a-asistan-kart-araclari.md` (genel: `planlar/faz8/00-genel.md`) |
 | 8b — Not editörü (çift tıkla düzenle, kod, GFM) | 🟡 Commit'lendi, push bekliyor (görsel kontrol kullanıcıda) | `dcfb1e1` | `planlar/faz8/8b-not-editoru.md` |
 | 8c — Kart ekleri | 🟡 Commit'lendi, push bekliyor (2026-11-09; PDF "Aç" CSP riski + gerçek yapıştırma kullanıcıda) | `ab4571c` | `planlar/faz8/8c-ekler.md` · migration `a5c9e1b3d7f2` `card_attachments` |
-| 8d — Teams/Outlook toplantıları | 🟡 Kod tamam, commit YOK (2026-11-09; gerçek Microsoft hesabı + tarayıcı doğrulaması kullanıcıda) | — | `planlar/faz8/8d-teams-toplantilari.md` · migration `events.meeting_url` |
+| 8d — Teams/Outlook toplantıları | 🟡 Commit'lendi, push bekliyor (2026-11-09; gerçek Microsoft hesabı + tarayıcı doğrulaması kullanıcıda) | `45c4175` | `planlar/faz8/8d-teams-toplantilari.md` · migration `events.meeting_url` |
 | 8e — Sürükle-bırak animasyonları | 📝 Planlandı | — | `planlar/faz8/8e-surukle-birak.md` |
 | 8f — Sesli dikte | 📝 Planlandı | — | `planlar/faz8/8f-sesli-dikte.md` |
 | 8g — Dark mode + arka plan | 📝 Planlandı | — | `planlar/faz8/8g-tema-dark-mode.md` · migration `theme_settings` |

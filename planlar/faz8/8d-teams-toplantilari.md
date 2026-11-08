@@ -42,7 +42,7 @@ Pencere hesabı (pazartesi/pazar hafta başı, saat dilimi, weeks_ahead); sayfal
 - **Risk:** kişisel hesapta Teams toplantısı `isOnlineMeeting=false` dönerse ama `joinUrl` gövdede/konumda geçiyorsa tespit genişletilir; hiç görünmüyorsa **ICS aboneliği yedeği** ayrı küçük alt faz (8d-ek, Sonnet) olarak planlanır.
 
 ## İlerleme
-**Durum: ✅ Kod tamam, commit YOK (2026-11-09; commit/push ayrı Haiku oturumu).** Migration `b6d2f8a4c1e9_event_meeting_url.py` (down = `a5c9e1b3d7f2`).
+**Durum: ✅ Kod tamam, commit `45c4175` (2026-11-09; push bekliyor).** Migration `b6d2f8a4c1e9_event_meeting_url.py` (down = `a5c9e1b3d7f2`).
 
 ### Yapılanlar
 - **Migration/model:** `events.meeting_url` (String(1000), nullable); `EventEntity.meeting_url`, `EventResponse.meeting_url`, `CalendarItem.meeting_url`. Salt okunur 409 mesajı sağlayıcıya göre ("…Outlook/Teams takviminden geliyor…"; Google metni aynen).
