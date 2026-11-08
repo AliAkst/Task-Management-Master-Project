@@ -14,6 +14,8 @@ import AttachmentsSection from './AttachmentsSection'
 import CardSchedule from './CardSchedule'
 import CardTime, { CardTimerButton } from './CardTime'
 import MarkdownEditor from './MarkdownEditor'
+import { DictationStatus, useMic } from './MicButton'
+import { insertDictated } from '../lib/dictation'
 import MarkdownView from './MarkdownView'
 import Modal from './Modal'
 import RecurrencePicker from './RecurrencePicker'
@@ -59,6 +61,15 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   const [editingNote, setEditingNote] = useState<number | null>(null)
   const [noteDraft, setNoteDraft] = useState('')
   const [item, setItem] = useState('')
+  const itemEl = useRef<HTMLInputElement>(null)
+  const itemRef = useRef(item)
+  itemRef.current = item
+  const itemMic = useMic((text) => {
+    const el = itemEl.current
+    const r = insertDictated(itemRef.current, el?.selectionStart ?? null, el?.selectionEnd ?? null, text)
+    itemRef.current = r.value
+    setItem(r.value.slice(0, 500))
+  })
   const [showHistory, setShowHistory] = useState(false)
   const [subtask, setSubtask] = useState('')
   const [splitOpen, setSplitOpen] = useState(false)
@@ -298,7 +309,19 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
               ))}
             </ul>
             <form onSubmit={addItem} className="mt-2">
-              <input className={input} placeholder="Madde ekle ve Enter'a bas" maxLength={500} value={item} onChange={(e) => setItem(e.target.value)} />
+              <div className="flex items-center gap-1">
+                <input
+                  ref={itemEl}
+                  className={input}
+                  placeholder="Madde ekle ve Enter'a bas"
+                  maxLength={500}
+                  value={item}
+                  onChange={(e) => setItem(e.target.value)}
+                  onKeyDown={itemMic.onKey}
+                />
+                {itemMic.button}
+              </div>
+              <DictationStatus mic={itemMic} className="mt-1" />
             </form>
           </div>
 

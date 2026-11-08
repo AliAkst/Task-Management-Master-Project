@@ -23,4 +23,27 @@
 - Elle (kullanıcıyla, Chrome/Edge, 5175 ya da gerçek uygulama): asistan panelinde Ctrl+M → Türkçe cümle yazıya döner, gönderilmez; notta ve checklist'te çalışır; izin reddi mesajı; Firefox'ta düğme yok. Tarayıcı paneli mikrofon vermeyebilir → otomatik doğrulama yalnız: düğmenin görünmesi, `supported` tespiti, sahte `window.webkitSpeechRecognition` (javascript_tool ile enjekte) üzerinden `onresult` → metin girişte.
 
 ## İlerleme
-_(oturum sonunda doldurulur)_
+**Durum:** kod tamam, commit edilmedi (2026-11-09; tarayıcı/mikrofon doğrulaması yapılmadı). Migration yok.
+
+### Yapılanlar
+- `stores/prefs.ts` (Zustand `persist`, anahtar `prefs`): `dictationEnabled` (true), `dictationAutoSend` (false), `dictationNoticeSeen`.
+- `lib/useDictation.ts`: `useDictation({ onFinal, lang='tr-TR' })` → `{ supported, listening, interim, error, start, stop, toggle }`; `SpeechRecognition || webkitSpeechRecognition`, `interimResults`, `continuous`; 8 sn sonuç gelmezse otomatik durur; unmount'ta `abort()`; Türkçe hata metinleri (`not-allowed`/`service-not-allowed`, `no-speech`, `audio-capture`, `network`).
+- `lib/dictation.ts`: `prepareDictated` (gerekirse önüne boşluk, cümle başı `toLocaleUpperCase('tr-TR')`), `insertDictated` (input/textarea imleç ekleme), `isDictationKey` (Ctrl+M).
+- `components/MicButton.tsx`: `useMic(onFinal)` (düğme + ilk kullanım bilgi kutusu "Anladım, başlat" + Ctrl+M) ve `DictationStatus` (geçici metin / hata satırı). Dinlerken `bg-rec` + `motion-safe:animate-pulse`, `aria-pressed`, `title="Sesle yaz (Ctrl+M)"`; destek yok ya da ayar kapalıysa render etmez.
+- Yerler: `AssistantPanel` (imlece ekler, otomatik göndermez; `dictationAutoSend` açıksa dikte durunca gönderir), `MarkdownEditor` (yerleşik `dictation` prop'u, varsayılan açık → CardModal'daki 3 editörde de), CardModal checklist ekleme girişi.
+- `SettingsPage`: yeni "Ses" bölümü (Sesli dikte aç/kapa, Dikte bitince mesajı gönder).
+
+### Sapmalar
+| Plan | Yapılan | Neden |
+|---|---|---|
+| `components/MicButton.tsx` bileşen | Bileşen yerine `useMic` kancası + `DictationStatus` | Düğme, Ctrl+M ve ilk kullanım bilgisi tek yerden yönetilsin (kısayol bilgiyi atlayamasın) |
+| Bilgi kutusu | Düğmenin üstünde küçük popover (role=dialog), "Vazgeç" düğmesi eklendi | Modal gerekmedi; geri çıkış gerekir |
+| Ayarlar: mevcut bölüm ya da yeni satır | Yeni "Ses" bölümü + kenar menüsüne giriş | Mevcut bölümler sunucu ayarlı; bu tercihler cihaza özel |
+| Tarayıcı doğrulaması (5175, sahte `webkitSpeechRecognition`) | **Yapılmadı** | Uykudaki oturumda kopya DB/sunucu kurulumu yapılmadı |
+
+### Doğrulanmayanlar
+- Gerçek mikrofon/Chrome/Edge dikte, izin reddi mesajı, Firefox'ta düğmenin görünmemesi, 8 sn zaman aşımı, otomatik gönder, ilk kullanım bilgisi, Ctrl+M — hiçbiri tarayıcıda görülmedi. Sahte `webkitSpeechRecognition` enjeksiyonu da yapılmadı. Yalnız `tsc -b && vite build` temiz.
+- Dikte sırasında imleç/odak davranışı (editörde `insertLatest` ile) elle denenmedi.
+
+### Test sayıları
+- task-api: 333 geçti · assistant-service: 152 geçti · `npm run build` temiz (yeni test yok; web'de test koşucusu yok).

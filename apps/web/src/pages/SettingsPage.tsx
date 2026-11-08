@@ -7,6 +7,7 @@ import { usePermissions, useSetPermission, type Permission } from '../api/assist
 import IntegrationsSettings from '../components/IntegrationsSettings'
 import ModelSettings from '../components/ModelSettings'
 import { PageHeader, Row, Segmented } from '../components/Page'
+import { usePrefs } from '../stores/prefs'
 
 const MODE_LABEL: Record<Permission['mode'], string> = {
   ask: 'Bana sor',
@@ -18,6 +19,7 @@ const SECTIONS = [
   { id: 'ritim', label: 'Günün ritmi' },
   { id: 'model', label: 'Asistan modeli' },
   { id: 'izinler', label: 'Asistan izinleri' },
+  { id: 'ses', label: 'Ses' },
   { id: 'baglantilar', label: 'Bağlantılar' },
 ]
 
@@ -49,7 +51,32 @@ function AssistantPermissions() {
   )
 }
 
-const toInput = (t: string | null | undefined) => (t ? t.slice(0, 5) : '')
+/** Sesli dikte tercihleri: cihaza ozel (localStorage), sunucuya yazilmaz. */
+function VoiceSettings() {
+  const enabled = usePrefs((s) => s.dictationEnabled)
+  const autoSend = usePrefs((s) => s.dictationAutoSend)
+  const setEnabled = usePrefs((s) => s.setDictationEnabled)
+  const setAutoSend = usePrefs((s) => s.setDictationAutoSend)
+  const onOff = [{ value: 'on', label: 'Açık' }, { value: 'off', label: 'Kapalı' }]
+  return (
+    <section id="ses" className="scroll-mt-6">
+      <h2 className="text-[22px]">Ses</h2>
+      <p className="mt-1 mb-2 max-w-prose text-[15px] text-slate-600">
+        Bu tercihler yalnız bu cihazda geçerlidir. Dikte tarayıcının konuşma tanımasını kullanır (Chrome, Edge).
+      </p>
+      <div className="divide-y divide-slate-200 border-y border-slate-200">
+        <Row title="Sesli dikte" hint="Asistan, not ve yapılacaklar girişlerinde mikrofon düğmesi (Ctrl+M).">
+          <Segmented label="Sesli dikte" value={enabled ? 'on' : 'off'} onChange={(v) => setEnabled(v === 'on')} options={onOff} />
+        </Row>
+        <Row title="Dikte bitince mesajı gönder" hint="Yalnız asistan panelinde; kapalıyken metin yalnız girişe yazılır.">
+          <Segmented label="Dikte bitince mesajı gönder" value={autoSend ? 'on' : 'off'} onChange={(v) => setAutoSend(v === 'on')} options={onOff} />
+        </Row>
+      </div>
+    </section>
+  )
+}
+
+const toInput =(t: string | null | undefined) => (t ? t.slice(0, 5) : '')
 
 /** Tarayici bildirim izni (hatirlaticilar uygulama aciktayken bildirim olarak da gelir). */
 function NotificationPermission() {
@@ -150,6 +177,7 @@ export default function SettingsPage() {
           <DayRhythm />
           <div id="model" className="scroll-mt-6"><ModelSettings /></div>
           <AssistantPermissions />
+          <VoiceSettings />
           <IntegrationsSettings />
         </div>
       </div>

@@ -17,6 +17,9 @@ import {
 } from '../api/assistant'
 import { AlertTriangle, ChevronDown, Loader2, Lock, Search, Sparkles, X } from 'lucide-react'
 import ActionCard from './ActionCard'
+import { DictationStatus, useMic } from './MicButton'
+import { insertDictated } from '../lib/dictation'
+import { usePrefs } from '../stores/prefs'
 import { useAssistantUi } from '../stores/assistant'
 
 interface LiveTurn {
@@ -122,6 +125,31 @@ export default function AssistantPanel() {
   const [showList, setShowList] = useState(false)
   const abort = useRef<AbortController | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
+
+  // Sesli dikte: metin imlec konumuna eklenir; "bitince gonder" aciksa durunca gonderilir
+  const inputEl = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef(input)
+  inputRef.current = input
+  const dictated = useRef(false)
+  const autoSend = usePrefs((s) => s.dictationAutoSend)
+  const mic = useMic((text) => {
+    const el = inputEl.current
+    const r = insertDictated(inputRef.current, el?.selectionStart ?? null, el?.selectionEnd ?? null, text)
+    inputRef.current = r.value
+    dictated.current = true
+    setInput(r.value)
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(r.caret, r.caret)
+    })
+  })
+  const listening = mic.dictation.listening
+  useEffect(() => {
+    if (listening || !dictated.current) return
+    dictated.current = false
+    if (autoSend && inputRef.current.trim()) void send(inputRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening])
 
   // Acik board (varsa): varsayilan modeli "Otomatik" secimini belirler
   const boardMatch = useMatch('/boards/:boardId')
@@ -335,19 +363,23 @@ export default function AssistantPanel() {
           </div>
         )}
         <textarea
+          ref={inputEl}
           rows={2}
           className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm"
           placeholder="Asistana yaz… (Enter: gönder, Shift+Enter: yeni satır)"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
+            mic.onKey(e)
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               void send(input)
             }
           }}
         />
+        <DictationStatus mic={mic} className="mt-1 px-1" />
         <div className="mt-1 flex items-center gap-2">
+          {mic.button}
           <select
             className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-1 py-1 text-xs"
             value={manual ?? ''}
