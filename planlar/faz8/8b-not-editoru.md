@@ -31,7 +31,7 @@
 5175'te kart penceresi: not ekle (kod bloklu), çift tıkla düzenle, kaydet; ekran görüntüsü. `read_console_messages` hatasız.
 
 ## İlerleme
-**Durum: ✅ Kod tamam, commit edilmedi (2026-11-09).**
+**Durum: ✅ Kod tamam, commit'lendi (`dcfb1e1`, 2026-11-09), push bekliyor.**
 
 ### Yapılanlar
 - `index.css`: `--color-surface`, `--color-on-ink` (`@theme`), `--code-*` değişkenleri ve `.hljs-*` kuralları (highlight.js hazır CSS'i kullanılmadı).

@@ -30,7 +30,7 @@
 | 7d — Gelen Kutusu dağıtımı | ✅ Tamam | `b21b062` | asistan kartlara board önerir, madde madde onay kartı (§4.1) |
 | 7 denetimi (Opus) | ✅ Tamam | `d0a2c3c` | plan ↔ kod uyumlu; eksik: OAuth kimliği yalnız `.env`'den → **arayüzde kurulum sihirbazı** eklendi (aşağıda) |
 | 8a — Asistan: checklist + etiket + "bu kart" | 🟡 Commit'lendi, push bekliyor (gerçek-model kabulü kullanıcıyla) | `6b7e233` | `planlar/faz8/8a-asistan-kart-araclari.md` (genel: `planlar/faz8/00-genel.md`) |
-| 8b — Not editörü (çift tıkla düzenle, kod, GFM) | 🟡 Kod tamam, commit bekliyor (görsel kontrol kullanıcıda) | — | `planlar/faz8/8b-not-editoru.md` |
+| 8b — Not editörü (çift tıkla düzenle, kod, GFM) | 🟡 Commit'lendi, push bekliyor (görsel kontrol kullanıcıda) | `dcfb1e1` | `planlar/faz8/8b-not-editoru.md` |
 | 8c — Kart ekleri | 📝 Planlandı | — | `planlar/faz8/8c-ekler.md` · migration `card_attachments` |
 | 8d — Teams/Outlook toplantıları | 📝 Planlandı | — | `planlar/faz8/8d-teams-toplantilari.md` · migration `events.meeting_url` |
 | 8e — Sürükle-bırak animasyonları | 📝 Planlandı | — | `planlar/faz8/8e-surukle-birak.md` |
