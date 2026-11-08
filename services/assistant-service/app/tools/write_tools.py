@@ -15,6 +15,13 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.llm.types import ToolSpec
+from app.tools.delete_tools import (
+    DELETE_ACTION_TYPES,
+    DELETE_SPECS,
+    execute_delete,
+    prepare_cancel_day,
+    prepare_delete_cards,
+)
 from app.tools.memory_tools import (
     MEMORY_ACTION_TYPES,
     MEMORY_SPECS,
@@ -43,6 +50,7 @@ ACTION_TYPES: dict[str, str] = {
     "link_cards": "Kartları ön koşulla bağlama",
     "plan_day": "Gün planına madde ekleme",
     "schedule_day": "Günü saat saat planlama (kartlar + takvim blokları)",
+    **DELETE_ACTION_TYPES,
     **MEMORY_ACTION_TYPES,
 }
 
@@ -170,7 +178,7 @@ WRITE_SPECS: list[ToolSpec] = [
     ),
 ]
 
-WRITE_SPECS += [SCHEDULE_SPEC, *MEMORY_SPECS]
+WRITE_SPECS += [SCHEDULE_SPEC, *DELETE_SPECS, *MEMORY_SPECS]
 WRITE_TOOL_NAMES = {s.name for s in WRITE_SPECS}
 
 
@@ -290,6 +298,14 @@ class WriteTools:
 
     # ---------------- hazirlik ----------------
     async def prepare(self, name: str, args: dict[str, Any]) -> PreparedAction:
+        if name == "delete_cards":
+            body, summary = await prepare_delete_cards(self.api, self.privacy, **args)
+            return PreparedAction(name, body, summary)
+        if name == "cancel_day":
+            body, summary = await prepare_cancel_day(
+                self.api, self.privacy, self.tz, **args
+            )
+            return PreparedAction(name, body, summary)
         if name == "tidy_facts":
             if self.memory is None:
                 raise ValueError("Hafıza şu an kullanılamıyor")
@@ -704,6 +720,8 @@ class WriteTools:
             return {"linked": True}
         if action_type == "schedule_day":
             return await self._execute_schedule(api, args)
+        if action_type in ("delete_cards", "cancel_day"):
+            return await execute_delete(api, action_type, args)
         if action_type == "plan_day":
             # Onay aninda mevcut planla yeniden birlestir (arada elle degismis olabilir)
             plan = await api.get(f"/day-plans/{args['date']}")

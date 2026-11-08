@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.api.chat as chat_module
 from app.agent.actions import (
+    ALWAYS_ASK,
     action_payload,
     load_modes,
     record_outcome_in_history,
@@ -95,7 +96,11 @@ async def approve(
     finally:
         await api.close()
     action.decided_at = datetime.now(UTC)
-    if data.remember_auto and action.status == "executed":
+    if (
+        data.remember_auto
+        and action.status == "executed"
+        and action.action_type not in ALWAYS_ASK
+    ):
         await set_mode(session, user["id"], action.action_type, "auto")
     await record_outcome_in_history(session, action)
     await session.commit()
