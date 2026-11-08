@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, ChevronLeft, ChevronRight, Timer } from 'lucide-react'
 import { useBoards } from '../api/boards'
 import { localDay, shiftDay, useDayPlan, useSuggestions } from '../api/dayPlans'
+import { useStartDayReview } from '../api/assistant'
+import { PlanProposal, ReviewDigest } from '../components/DayDigest'
 import DayReviewForm from '../components/DayReviewForm'
 import PlanEditor from '../components/PlanEditor'
 import { Segmented } from '../components/Page'
@@ -32,6 +34,7 @@ export default function TodayPage() {
   const suggestions = useSuggestions(day)
   const boards = useBoards()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<UserSettings>('/settings/') })
+  const startReview = useStartDayReview()
   const boardMap = useMemo(() => new Map((boards.data ?? []).map((b) => [b.id, b])), [boards.data])
 
   const mode =
@@ -104,9 +107,28 @@ export default function TodayPage() {
 
       {plan.data && suggestions.data && (
         mode === 'plan' && plan.data.status !== 'reviewed' ? (
-          <PlanEditor day={day} plan={plan.data} suggestions={suggestions.data} boards={boardMap} />
+          <>
+            <PlanProposal day={day} />
+            <PlanEditor day={day} plan={plan.data} suggestions={suggestions.data} boards={boardMap} />
+          </>
         ) : (
-          <DayReviewForm day={day} plan={plan.data} suggestions={suggestions.data} boards={boardMap} />
+          <>
+            <ReviewDigest
+              day={day}
+              aiSummary={plan.data.ai_summary}
+              reviewed={plan.data.status === 'reviewed'}
+              onStart={() => startReview.mutate(day)}
+              starting={startReview.isPending}
+              startError={startReview.error?.message ?? null}
+            />
+            <DayReviewForm
+              day={day}
+              plan={plan.data}
+              suggestions={suggestions.data}
+              boards={boardMap}
+              onReviewed={() => startReview.mutate(day)}
+            />
+          </>
         )
       )}
     </div>

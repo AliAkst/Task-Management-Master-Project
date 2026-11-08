@@ -517,11 +517,18 @@ class WriteTools:
                 card = await self._card(it["card_id"])
                 entry["card_id"] = card["id"]
                 titles.append(card["title"])
+            elif it.get("event_id") is not None:
+                eid = _int(it["event_id"], "event_id")
+                event = await self.api.get(f"/events/{eid}")
+                if self.privacy.board_hidden(event.get("board_id")):
+                    raise ValueError(HIDDEN_MESSAGE)
+                entry["event_id"] = eid
+                titles.append(event["title"])
             elif it.get("title"):
                 entry["title"] = str(it["title"])[:200]
                 titles.append(entry["title"])
             else:
-                raise ValueError("Her madde card_id ya da title içermeli")
+                raise ValueError("Her madde card_id, event_id ya da title içermeli")
             if it.get("planned_minutes") is not None:
                 entry["planned_minutes"] = _int(
                     it["planned_minutes"], "planned_minutes"
@@ -646,10 +653,12 @@ class WriteTools:
                 if i["was_planned"]
             ]
             have = {i.get("card_id") for i in existing if i.get("card_id")}
+            have_ev = {i.get("event_id") for i in existing if i.get("event_id")}
             merged = existing + [
                 i
                 for i in args["items"]
-                if i.get("card_id") not in have or i.get("card_id") is None
+                if not (i.get("card_id") and i["card_id"] in have)
+                and not (i.get("event_id") and i["event_id"] in have_ev)
             ]
             p = await api.write("PUT", f"/day-plans/{args['date']}", {"items": merged})
             return {"date": p["date"], "items": len(p["items"])}

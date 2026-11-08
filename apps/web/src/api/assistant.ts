@@ -266,19 +266,95 @@ export function useProviderMutations() {
   }
 }
 
-export function useModelPrefs() {
-  return useQuery({ queryKey: prefsKey, queryFn: () => api<{ default_model_id: string }>(`${BASE}/preferences`) })
+export interface ModelPrefs {
+  default_model_id: string
+  /** null: onerilen buyuk local model (suggested_background_model) */
+  background_model_id: string | null
+  suggested_background_model: string
 }
 
-export function useSetDefaultModel() {
+export function useModelPrefs() {
+  return useQuery({ queryKey: prefsKey, queryFn: () => api<ModelPrefs>(`${BASE}/preferences`) })
+}
+
+function useSavePrefs() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (default_model_id: string) =>
-      api<{ default_model_id: string }>(`${BASE}/preferences`, { method: 'PUT', body: JSON.stringify({ default_model_id }) }),
+    mutationFn: (data: Partial<Pick<ModelPrefs, 'default_model_id' | 'background_model_id'>>) =>
+      api<ModelPrefs>(`${BASE}/preferences`, { method: 'PUT', body: JSON.stringify(data) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: prefsKey })
       qc.invalidateQueries({ queryKey: assistantKeys.models })
     },
+  })
+}
+
+export function useSetDefaultModel() {
+  const m = useSavePrefs()
+  return { ...m, mutate: (default_model_id: string) => m.mutate({ default_model_id }) }
+}
+
+export function useSetBackgroundModel() {
+  const m = useSavePrefs()
+  return { ...m, mutate: (background_model_id: string | null) => m.mutate({ background_model_id }) }
+}
+
+// ---------------- gun sonu isi (ozet + yarin plan onerisi) ----------------
+export interface DayReviewPlanItem {
+  title: string
+  kind: string
+  card_id: number | null
+  event_id: number | null
+  minutes: number | null
+  adjusted_minutes: number | null
+  planned_start: string | null
+  reason: string | null
+}
+
+export interface DayReviewJob {
+  id: number
+  date: string
+  status: 'queued' | 'running' | 'done' | 'failed'
+  model_id: string
+  model_label: string
+  is_local: boolean
+  error: string | null
+  action: AiAction | null
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+  result: {
+    summary: string | null
+    tip: string | null
+    tomorrow: string
+    plan: DayReviewPlanItem[]
+    estimate_factor: number | null
+    estimate_text: string | null
+    cap_minutes: number
+    candidate_count: number
+    action_status: AiAction['status'] | null
+    notes: string[]
+  } | null
+}
+
+const jobKey = (day: string) => ['assistant', 'day-review', day] as const
+const isActive = (j: DayReviewJob | null | undefined) => j?.status === 'queued' || j?.status === 'running'
+
+/** Is surerken 5 sn'de bir yoklanir; bitince gunun plani/ozeti tazelenir. */
+export function useDayReviewJob(day: string, enabled = true) {
+  return useQuery({
+    queryKey: jobKey(day),
+    queryFn: () => api<DayReviewJob | null>(`${BASE}/day-review/${day}`),
+    enabled,
+    refetchInterval: (q) => (isActive(q.state.data) ? 5000 : false),
+  })
+}
+
+export function useStartDayReview() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (day: string) => api<DayReviewJob>(`${BASE}/day-review/${day}`, { method: 'POST' }),
+    onSuccess: (job) => qc.setQueryData(jobKey(job.date), job),
   })
 }
 
