@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Video } from 'lucide-react'
 import { useCalendarMutations } from '../api/calendar'
 import { formatRange, fromLocalInput, toLocalInput } from '../lib/format'
 import type { BoardWithCounts } from '../lib/types'
@@ -17,6 +18,8 @@ export interface EventDraft {
   location?: string | null
   notes?: string | null
   recurrenceRule?: string | null
+  // Cevrimici toplanti katilim baglantisi (Teams)
+  meetingUrl?: string | null
   // Dis takvimden gelen etkinlik: salt okunur gosterilir
   external?: { provider: string; url?: string | null } | null
 }
@@ -210,30 +213,52 @@ function EventForm({ draft, boards, onClose, onOpenCard }: Props) {
   )
 }
 
-const PROVIDER_NAME: Record<string, string> = { google: 'Google Takvim' }
+const PROVIDER_NAME: Record<string, { name: string; from: string; at: string }> = {
+  google: { name: 'Google Takvim', from: 'Google Takvim’den', at: 'Google Takvim’de' },
+  microsoft: { name: 'Outlook', from: 'Outlook’tan', at: 'Outlook’ta' },
+}
+
+/** Yalniz https baglantilari tiklanabilir (javascript: vb. engellenir). */
+export const safeHttpsUrl = (url: string | null | undefined) => (url && /^https:\/\//i.test(url) ? url : null)
 
 /** Dis takvimden gelen etkinlik: duzenlenemez, kaynakta acilir. */
 function ExternalEventView({ draft, onClose }: Pick<Props, 'draft' | 'onClose'>) {
-  const source = PROVIDER_NAME[draft.external!.provider] ?? draft.external!.provider
+  const names = PROVIDER_NAME[draft.external!.provider] ?? {
+    name: draft.external!.provider,
+    from: draft.external!.provider,
+    at: draft.external!.provider,
+  }
+  const joinUrl = safeHttpsUrl(draft.meetingUrl)
+  const openUrl = safeHttpsUrl(draft.external!.url)
   return (
-    <Modal title={`Etkinlik · ${source}`} onClose={onClose}>
+    <Modal title={`Etkinlik · ${names.name}`} onClose={onClose}>
       <div className="space-y-3 text-sm">
         <h3 className="text-lg font-semibold">{draft.title}</h3>
         <p>{formatRange(draft.start, draft.end, draft.allDay)}</p>
         {draft.location && <p className="text-slate-600">{draft.location}</p>}
         {draft.notes && <p className="max-h-48 overflow-auto whitespace-pre-wrap text-slate-600">{draft.notes}</p>}
         <p className="text-xs text-slate-500">
-          Bu etkinlik {source}’ten geliyor ve burada değiştirilemez; orada düzenle, sonraki senkronda güncellenir.
+          Bu etkinlik {names.from} geliyor ve burada değiştirilemez; orada düzenle, sonraki senkronda güncellenir.
         </p>
+        {joinUrl && (
+          <a
+            href={joinUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-4 py-2 font-medium text-on-ink hover:bg-slate-700"
+          >
+            <Video size={16} aria-hidden /> Teams’te katıl
+          </a>
+        )}
         <div className="flex items-center justify-between pt-2">
-          {draft.external!.url ? (
-            <a href={draft.external!.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-              {source}’te aç →
+          {openUrl ? (
+            <a href={openUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+              {names.at} aç →
             </a>
           ) : (
             <span />
           )}
-          <button type="button" onClick={onClose} className="rounded-md bg-slate-900 px-4 py-1.5 font-medium text-white">
+          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-1.5 font-medium hover:bg-slate-100">
             Kapat
           </button>
         </div>

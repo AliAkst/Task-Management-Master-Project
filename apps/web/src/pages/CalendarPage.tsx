@@ -17,7 +17,8 @@ import { useBoard, useBoards, keys as boardKeys } from '../api/boards'
 import { useCalendar, useCalendarMutations } from '../api/calendar'
 import CardModal from '../components/CardModal'
 import EventDialog, { type EventDraft } from '../components/EventDialog'
-import { Check, Hourglass } from 'lucide-react'
+import { Check, Hourglass, Loader2, RefreshCw, Video } from 'lucide-react'
+import { useIntegrationMutations, useMicrosoftCalendarEnabled } from '../api/integrations'
 import { api } from '../lib/api'
 import type { BoardDetail, CalendarEvent, CalendarItem, CardSummary, UserSettings } from '../lib/types'
 
@@ -40,6 +41,8 @@ export default function CalendarPage() {
   const boards = useBoards()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<UserSettings>('/settings/') })
   const m = useCalendarMutations()
+  const msCalendarOn = useMicrosoftCalendarEnabled()
+  const { syncMicrosoftCalendar } = useIntegrationMutations()
 
   const [range, setRange] = useState<{ start: string; end: string } | null>(null)
   const [hidden, setHidden] = useState<Set<number>>(new Set())
@@ -172,6 +175,7 @@ export default function CalendarPage() {
         location: ev.location,
         notes: ev.notes,
         recurrenceRule: ev.recurrence_rule,
+        meetingUrl: ev.meeting_url,
         external: ev.external,
       })
       return
@@ -256,6 +260,30 @@ export default function CalendarPage() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col p-4">
         {error && <p className="mb-2 text-sm text-red-700">{error}</p>}
+        {msCalendarOn && (
+          <div className="mb-2 flex flex-wrap items-center justify-end gap-3 text-[14px]">
+            {syncMicrosoftCalendar.error && <span className="text-red-700">{syncMicrosoftCalendar.error.message}</span>}
+            {syncMicrosoftCalendar.data && !syncMicrosoftCalendar.error && (
+              <span className={syncMicrosoftCalendar.data.errors.length ? 'text-red-700' : 'text-slate-600'} aria-live="polite">
+                {syncMicrosoftCalendar.data.errors.length
+                  ? syncMicrosoftCalendar.data.errors.join('; ')
+                  : `${syncMicrosoftCalendar.data.created} yeni, ${syncMicrosoftCalendar.data.updated} güncellendi, ${syncMicrosoftCalendar.data.removed} silindi`}
+              </span>
+            )}
+            <button
+              disabled={syncMicrosoftCalendar.isPending}
+              onClick={() => syncMicrosoftCalendar.mutate()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1 hover:bg-slate-100 disabled:opacity-40"
+            >
+              {syncMicrosoftCalendar.isPending ? (
+                <Loader2 size={14} className="animate-spin" aria-hidden />
+              ) : (
+                <RefreshCw size={14} aria-hidden />
+              )}
+              Toplantıları çek
+            </button>
+          </div>
+        )}
         <div className="min-h-0 flex-1 rounded-lg border border-slate-200 bg-white p-3">
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -271,6 +299,21 @@ export default function CalendarPage() {
             selectMirror
             droppable
             events={events}
+            eventContent={(arg) => {
+              const item = arg.event.extendedProps.item as CalendarItem
+              if (!item.meeting_url) return true // varsayilan gorunum
+              return (
+                <div className="fc-event-main-frame">
+                  {arg.timeText && <div className="fc-event-time">{arg.timeText}</div>}
+                  <div className="fc-event-title-container">
+                    <div className="fc-event-title fc-sticky">
+                      <Video size={12} className="mr-1 inline-block align-[-1px]" aria-label="Çevrimiçi toplantı" />
+                      {arg.event.title}
+                    </div>
+                  </div>
+                </div>
+              )
+            }}
             datesSet={onDatesSet}
             select={onSelect}
             drop={onDrop}

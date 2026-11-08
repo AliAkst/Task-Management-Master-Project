@@ -778,6 +778,11 @@ class TestScheduler:
             raise RuntimeError("boom")  # biri patlasa döngü sürer
 
         monkeypatch.setattr("app.integrations.google_calendar.sync_all_accounts", fake_google)
+
+        async def fake_calendar():
+            called.append("takvim")
+
         monkeypatch.setattr("app.integrations.microsoft_todo.sync_all_accounts", fake_microsoft)
+        monkeypatch.setattr("app.integrations.microsoft_calendar.sync_all_accounts", fake_calendar)
         await scheduler.run_once()
-        assert called == ["google", "microsoft"]
+        assert called == ["google", "microsoft", "takvim"]

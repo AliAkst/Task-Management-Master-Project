@@ -21,6 +21,25 @@ class IntegrationResponse(BaseModel):
     # Yalnizca son 4 karakter; gizli degerler arayuze hic donmez
     masked_credentials: dict[str, str]
     settings: dict[str, Any] | None = None
+    # Yalniz Microsoft: Calendars.Read izni verilmis mi (Faz 8d)
+    calendar_consent: bool | None = None
+
+
+CALENDAR_DEFAULTS: dict[str, Any] = {
+    "enabled": False,
+    "teams_only": True,
+    "board_id": None,
+    "weeks_ahead": 2,
+}
+
+
+def has_calendar_scope(scopes: str | None) -> bool:
+    """Kayitli kapsam dizgesinde Calendars.Read(Write) var mi ("https://.../X" da olur)."""
+    for scope in (scopes or "").split():
+        name = scope.rsplit("/", 1)[-1].lower()
+        if name in ("calendars.read", "calendars.readwrite"):
+            return True
+    return False
 
 
 def _masked(tokens: dict[str, Any]) -> dict[str, str]:
@@ -36,6 +55,14 @@ def to_response(account: IntegrationAccountEntity) -> IntegrationResponse:
         masked = _masked(crypto.decrypt_json(account.tokens_encrypted))
     except crypto.SecretError:
         masked = {}
+    settings = account.settings
+    consent: bool | None = None
+    if account.provider == "microsoft":
+        consent = has_calendar_scope(account.scopes)
+        settings = {
+            **(settings or {}),
+            "calendar": {**CALENDAR_DEFAULTS, **((settings or {}).get("calendar") or {})},
+        }
     return IntegrationResponse(
         provider=account.provider,
         account_label=account.account_label,
@@ -44,7 +71,8 @@ def to_response(account: IntegrationAccountEntity) -> IntegrationResponse:
         last_synced_at=account.last_synced_at,
         last_error=account.last_error,
         masked_credentials=masked,
-        settings=account.settings,
+        settings=settings,
+        calendar_consent=consent,
     )
 
 

@@ -144,6 +144,27 @@ class GraphClient:
             target = data.get("@odata.nextLink")
         return items
 
+    async def get_all(
+        self,
+        target: str,
+        *,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Sayfali GET: `@odata.nextLink` takip edilir (parametreler yalniz ilk istekte)."""
+        items: list[dict[str, Any]] = []
+        next_target: str | None = target
+        for _ in range(MAX_PAGES):
+            if next_target is None:
+                break
+            data = await self._request(
+                "GET", next_target, params=params, headers=headers
+            )
+            items.extend(data.get("value", []))
+            next_target = data.get("@odata.nextLink")
+            params = None
+        return items
+
     async def delta_page(self, target: str) -> dict[str, Any]:
         return await self._request(
             "GET", target, headers={"Prefer": f"odata.maxpagesize={PAGE_SIZE}"}

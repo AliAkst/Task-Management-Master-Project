@@ -34,7 +34,7 @@ from app.core.exceptions import ValidationException
 from app.core.logging import get_logger
 from app.db.entities import IntegrationAccountEntity, OAuthClientEntity
 from app.db.unit_of_work import TaskUnitOfWork
-from app.integrations.accounts import IntegrationAccountService
+from app.integrations.accounts import IntegrationAccountService, has_calendar_scope
 from app.integrations.base import IntegrationError
 
 logger = get_logger(__name__)
@@ -92,7 +92,14 @@ PROVIDERS: dict[str, OAuthProvider] = {
         label="Microsoft",
         authorize_url="https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
         token_url="https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
-        scopes=("openid", "email", "offline_access", "User.Read", "Tasks.ReadWrite"),
+        scopes=(
+            "openid",
+            "email",
+            "offline_access",
+            "User.Read",
+            "Tasks.ReadWrite",
+            "Calendars.Read",  # Faz 8d: Teams/Outlook toplantilari
+        ),
         client_id_setting="microsoft_client_id",
         client_secret_setting="microsoft_client_secret",
         extra_authorize_params={"response_mode": "query"},
@@ -290,6 +297,14 @@ async def connect_url(uow: TaskUnitOfWork, user_id: int, provider_name: str) -> 
         "state": make_state(user_id, provider.name),
         **provider.extra_authorize_params,
     }
+    # Zaten bagli ama takvim izni olmayan Microsoft hesabi: yeni kapsam icin
+    # onay ekrani zorlanir (aksi halde izin verilmis sayilip atlanabilir)
+    if provider.name == "microsoft":
+        existing = await uow.integration_accounts.get_for_provider(
+            user_id, provider.name
+        )
+        if existing is not None and not has_calendar_scope(existing.scopes):
+            params["prompt"] = "consent"
     return f"{provider.authorize_url}?{urlencode(params)}"
 
 

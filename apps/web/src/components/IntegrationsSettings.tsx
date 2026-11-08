@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Check, ExternalLink, Loader2, RefreshCw, Unplug } from 'lucide-react'
+import { Check, ExternalLink, Loader2, RefreshCw, Unplug, Video } from 'lucide-react'
 import {
+  calendarSettings,
   useIntegrationMutations,
   useGoogleCalendars,
   useIntegrations,
@@ -450,6 +451,104 @@ function MicrosoftLists({ account }: { account: IntegrationAccount }) {
   )
 }
 
+/** Teams/Outlook toplantıları: izin → aç/kapa → "Bu haftanın toplantılarını çek". */
+function MicrosoftTeams({ account }: { account: IntegrationAccount }) {
+  const boards = useBoards()
+  const { connectOAuth, saveMicrosoftCalendar, syncMicrosoftCalendar } = useIntegrationMutations()
+  const saved = calendarSettings(account)
+  type Draft = { enabled: boolean; teams_only: boolean; board_id: number | null; weeks_ahead: number }
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const cfg: Draft = draft ?? saved
+  const set = (patch: Partial<Draft>) => setDraft({ ...cfg, ...patch })
+
+  const save = () => saveMicrosoftCalendar.mutate(cfg, { onSuccess: () => setDraft(null) })
+
+  if (!account.calendar_consent) {
+    return (
+      <div className="space-y-2 pb-4">
+        <h3 className="flex items-center gap-1.5 text-[16px]"><Video size={16} aria-hidden /> Teams toplantıları</h3>
+        <p className="max-w-prose text-[14px] text-slate-600">
+          Outlook / Teams toplantılarını takvimde (salt okunur) görmek için Microsoft’tan ek bir izin gerekiyor (Calendars.Read). Önce Azure’da uygulamana bu izni eklediğinden emin ol (kurulum sihirbazında “Kimlik bilgilerini değiştir” adımlarına bak).
+        </p>
+        <button
+          disabled={connectOAuth.isPending}
+          onClick={() => connectOAuth.mutate('microsoft')}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink hover:bg-slate-700 disabled:opacity-40"
+        >
+          {connectOAuth.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />} Teams toplantıları için izin ver
+        </button>
+        {connectOAuth.error && <p className="text-[14px] text-red-700">{connectOAuth.error.message}</p>}
+      </div>
+    )
+  }
+
+  const result = syncMicrosoftCalendar.data
+  return (
+    <div className="space-y-3 pb-4">
+      <h3 className="flex items-center gap-1.5 text-[16px]"><Video size={16} aria-hidden /> Teams toplantıları</h3>
+      <label className="flex items-center gap-2 text-[15px]">
+        <input type="checkbox" checked={cfg.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
+        Toplantılarımı takvime getir (salt okunur; 15 dakikada bir güncellenir)
+      </label>
+      {cfg.enabled && (
+        <div className="space-y-2 pl-6 text-[14px] text-slate-600">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={cfg.teams_only} onChange={(e) => set({ teams_only: e.target.checked })} />
+            Sadece Teams toplantıları
+          </label>
+          <label className="flex flex-wrap items-center gap-2">
+            Kaç hafta ileri
+            <select className={input} value={Math.min(cfg.weeks_ahead, 4)} onChange={(e) => set({ weeks_ahead: Number(e.target.value) })}>
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-wrap items-center gap-2">
+            Toplantıların rengi ve board’u
+            <select className={input} value={cfg.board_id ?? ''} onChange={(e) => set({ board_id: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">— Board’suz —</option>
+              {(boards.data ?? []).map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          disabled={draft === null || saveMicrosoftCalendar.isPending}
+          onClick={save}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink hover:bg-slate-700 disabled:opacity-40"
+        >
+          {saveMicrosoftCalendar.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />} Kaydet
+        </button>
+        <button
+          disabled={!saved.enabled || syncMicrosoftCalendar.isPending}
+          onClick={() => syncMicrosoftCalendar.mutate()}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-4 py-1.5 text-[15px] hover:bg-slate-100 disabled:opacity-40"
+        >
+          <RefreshCw size={14} className={syncMicrosoftCalendar.isPending ? 'animate-spin' : ''} aria-hidden /> Bu haftanın toplantılarını çek
+        </button>
+        {saved.enabled && (
+          <span className="text-[13px] text-slate-500">
+            {saved.last_synced_at ? `son senkron ${formatDateTime(saved.last_synced_at)}` : 'henüz çekilmedi'}
+          </span>
+        )}
+      </div>
+      {saved.last_error && <p className="text-[14px] text-red-700">{saved.last_error}</p>}
+      {saveMicrosoftCalendar.error && <p className="text-[14px] text-red-700">{saveMicrosoftCalendar.error.message}</p>}
+      {syncMicrosoftCalendar.error && <p className="text-[14px] text-red-700">{syncMicrosoftCalendar.error.message}</p>}
+      {result && (
+        <p className={`text-[14px] ${result.errors.length ? 'text-red-700' : 'text-slate-700'}`} aria-live="polite">
+          {syncText(result)}
+          {result.errors.length > 0 && ` · hata: ${result.errors.join('; ')}`}
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** OAuth dönüşü: ?connected=google ya da ?connect_error=google&message=… */
 function useOAuthReturn() {
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
@@ -464,7 +563,7 @@ function useOAuthReturn() {
             ok: true,
             text:
               connected === 'microsoft'
-                ? 'Microsoft To Do bağlandı. Senkronlanacak listeleri seçip kaydet.'
+                ? 'Microsoft bağlandı. To Do listelerini seçip kaydet; Teams toplantıları için aşağıdaki bölümden aç.'
                 : 'Google Takvim bağlandı. Senkronlanacak takvimleri seç.',
           }
         : { ok: false, text: `Bağlantı kurulamadı: ${q.get('message') ?? 'bilinmeyen hata'}` },
@@ -510,13 +609,18 @@ export default function IntegrationsSettings() {
         {accounts.data && (
           <OAuthRow
             provider="microsoft"
-            title="Microsoft To Do"
-            idleHint="Samsung Reminder / To Do görevlerini Gelen Kutusu’na getir; kartı bitirince To Do’da da biter. 15 dakikada bir güncellenir."
-            disconnectConfirm="Microsoft To Do bağlantısı kesilsin mi? Gelen Kutusu’ndaki kartlar silinmez, To Do’ya dokunulmaz."
+            title="Microsoft To Do ve Teams"
+            idleHint="Samsung Reminder / To Do görevlerini Gelen Kutusu’na getir; kartı bitirince To Do’da da biter. Teams toplantıların takvimde görünür. 15 dakikada bir güncellenir."
+            disconnectConfirm="Microsoft bağlantısı kesilsin mi? Gelen Kutusu’ndaki kartlar silinmez, To Do’ya dokunulmaz; Teams toplantı etkinlikleri takvimden silinir."
             account={microsoft}
             info={clientInfo('microsoft')}
           >
-            {(a) => <MicrosoftLists account={a} />}
+            {(a) => (
+              <>
+                <MicrosoftLists account={a} />
+                <MicrosoftTeams account={a} />
+              </>
+            )}
           </OAuthRow>
         )}
         {accounts.data && <TrelloRow account={trello} />}

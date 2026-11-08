@@ -71,6 +71,7 @@ class EventResponse(BaseModel):
     all_day: bool
     location: str | None
     notes: str | None
+    meeting_url: str | None = None
     recurrence_rule: str | None = None
     external: ExternalRef | None = None
     created_by: str
@@ -97,6 +98,7 @@ class CalendarItem(BaseModel):
     card_id: int | None = None
     card_status: TaskStatus | None = None
     location: str | None = None
+    meeting_url: str | None = None
     # Tekrarlayan etkinligin bir tekrari: start/end bu tekrarin zamanidir;
     # duzenleme butun seriye uygulanir (event_id)
     recurrence_rule: str | None = None

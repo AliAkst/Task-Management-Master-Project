@@ -90,6 +90,9 @@ function MicrosoftSteps({ redirectUri }: { redirectUri: string }) {
         Açılan <b>Overview</b> sayfasından <b>Application (client) ID</b>’yi kopyala.
       </li>
       <li>
+        <b>API permissions → Add a permission → Microsoft Graph → Delegated permissions</b> yolunda <b>Calendars.Read</b>’i işaretleyip ekle (Teams toplantılarını takvime getirmek için; <b>Tasks.ReadWrite</b> ve <b>User.Read</b> zaten varsa dokunma).
+      </li>
+      <li>
         <b>Certificates &amp; secrets → Client secrets → New client secret</b> (süre: örn. 24 ay) → <b>Add</b>. Tablodaki <b>Value</b> sütununu hemen kopyala — <b>Secret ID</b> değil; sayfadan çıkınca bir daha görünmez.
       </li>
       <li>

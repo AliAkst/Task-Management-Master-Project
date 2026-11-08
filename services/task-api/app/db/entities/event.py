@@ -34,6 +34,8 @@ class EventEntity(Base, TimestampMixin):
     all_day: Mapped[bool] = mapped_column(Boolean, default=False)
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Cevrimici toplanti katilim baglantisi (Faz 8d; Teams joinUrl)
+    meeting_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     # RRULE (Faz 6c): tek satir; takvim tekrarlari sorgu aninda acar
     recurrence_rule: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[str] = mapped_column(String(20), default="user")

@@ -802,7 +802,7 @@ export interface paths {
         post?: never;
         /**
          * Disconnect
-         * @description Baglantiyi kaldirir; ice aktarilmis kartlar kalir (Google etkinlikleri silinir).
+         * @description Baglantiyi kaldirir; kartlar kalir (Google/Teams takvim etkinlikleri silinir).
          */
         delete: operations["disconnect_api_v1_integrations__provider__delete"];
         options?: never;
@@ -904,6 +904,46 @@ export interface paths {
         get: operations["microsoft_status_api_v1_integrations_microsoft_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/microsoft/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Microsoft Calendar Settings
+         * @description Takvimi ac/kapat + ayarlar; aciksa kayittan sonra hemen senkronlanir.
+         */
+        put: operations["microsoft_calendar_settings_api_v1_integrations_microsoft_calendar_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/microsoft/calendar/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Microsoft Calendar Sync
+         * @description Elle 'Bu haftanin toplantilarini cek'.
+         */
+        post: operations["microsoft_calendar_sync_api_v1_integrations_microsoft_calendar_sync_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2110,6 +2150,8 @@ export interface components {
             card_status?: components["schemas"]["TaskStatus"] | null;
             /** Location */
             location?: string | null;
+            /** Meeting Url */
+            meeting_url?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: string | null;
             external?: components["schemas"]["ExternalRef"] | null;
@@ -2765,6 +2807,8 @@ export interface components {
             location: string | null;
             /** Notes */
             notes: string | null;
+            /** Meeting Url */
+            meeting_url?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: string | null;
             external?: components["schemas"]["ExternalRef"] | null;
@@ -2932,6 +2976,8 @@ export interface components {
             settings?: {
                 [key: string]: unknown;
             } | null;
+            /** Calendar Consent */
+            calendar_consent?: boolean | null;
         };
         /**
          * ItemOutcome
@@ -3010,6 +3056,23 @@ export interface components {
             name?: string | null;
             /** Is Done List */
             is_done_list?: boolean | null;
+        };
+        /** MicrosoftCalendarUpdate */
+        MicrosoftCalendarUpdate: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Teams Only
+             * @default true
+             */
+            teams_only: boolean;
+            /** Board Id */
+            board_id?: number | null;
+            /**
+             * Weeks Ahead
+             * @default 2
+             */
+            weeks_ahead: number;
         };
         /** MicrosoftSettingsUpdate */
         MicrosoftSettingsUpdate: {
@@ -5610,6 +5673,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_MicrosoftStatus_"];
+                };
+            };
+        };
+    };
+    microsoft_calendar_settings_api_v1_integrations_microsoft_calendar_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MicrosoftCalendarUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_IntegrationResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    microsoft_calendar_sync_api_v1_integrations_microsoft_calendar_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_SyncSummary_"];
                 };
             };
         };

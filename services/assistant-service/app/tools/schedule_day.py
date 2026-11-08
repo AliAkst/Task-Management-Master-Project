@@ -225,3 +225,36 @@ def find_board(boards: list[dict[str, Any]], ref: Any) -> dict[str, Any] | None:
 
 def to_datetime(day: date, minutes: int, tz: ZoneInfo) -> datetime:
     return datetime.combine(day, time(0), tzinfo=tz) + timedelta(minutes=minutes)
+
+
+def find_conflict(
+    blocks: list[Block], day: date, tz: ZoneInfo, events: list[dict[str, Any]]
+) -> str | None:
+    """
+    Yeni bloklardan biri o gunun SAATLI bir etkinligiyle (orn. Teams toplantisi)
+    cakisiyorsa modele geri bildirim cumlesi dondurur; yoksa None.
+    Tum gun etkinlikleri ve ayni basligi tasiyan mevcut bloklar (ayni plan yeniden
+    verilirse) cakisma sayilmaz; ayrilamayan zamanlar atlanir.
+    """
+    for blk in blocks:
+        b_start, b_end = to_datetime(day, blk.start, tz), to_datetime(day, blk.end, tz)
+        for ev in events:
+            if ev.get("kind") != "event" or ev.get("all_day"):
+                continue
+            if str(ev.get("title", "")).strip().casefold() == blk.title.strip().casefold():
+                continue
+            try:
+                e_start = datetime.fromisoformat(str(ev["start"]))
+                e_end = datetime.fromisoformat(str(ev["end"]))
+            except (KeyError, ValueError):
+                continue
+            e_start = e_start if e_start.tzinfo else e_start.replace(tzinfo=tz)
+            e_end = e_end if e_end.tzinfo else e_end.replace(tzinfo=tz)
+            if b_start < e_end and e_start < b_end:
+                local_start, local_end = e_start.astimezone(tz), e_end.astimezone(tz)
+                return (
+                    f"«{ev.get('title') or 'Etkinlik'}» "
+                    f"{local_start:%H:%M}–{local_end:%H:%M} ile çakışıyor; "
+                    f"'{blk.title}' bloğunu toplantıdan sonraya kaydır."
+                )
+    return None
