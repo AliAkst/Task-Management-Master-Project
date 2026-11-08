@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth'
+import { useAssistantUi } from '../stores/assistant'
+import AssistantPanel from './AssistantPanel'
 import Reminders from './Reminders'
 import TimerWidget from './TimerWidget'
 
@@ -8,6 +10,8 @@ const link = ({ isActive }: { isActive: boolean }) =>
 
 export default function Layout() {
   const logout = useAuthStore((s) => s.logout)
+  const assistantOpen = useAssistantUi((s) => s.open)
+  const toggleAssistant = useAssistantUi((s) => s.toggle)
   return (
     // h-screen: icerik alani kesin yukseklik alir (React Flow %100 yukseklik ister,
     // kanban listeleri de sayfa yerine kendi iclerinde kayar)
@@ -32,14 +36,23 @@ export default function Layout() {
         <div className="ml-auto min-w-0">
           <TimerWidget />
         </div>
+        <button
+          onClick={toggleAssistant}
+          className={`rounded-md px-2.5 py-1 text-sm whitespace-nowrap ${assistantOpen ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+        >
+          ✨ Asistan
+        </button>
         <button onClick={logout} className="ml-2 text-sm text-slate-500 hover:underline">
           Çıkış
         </button>
       </header>
       <Reminders />
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <Outlet />
-      </main>
+      <div className="flex min-h-0 flex-1">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+          <Outlet />
+        </main>
+        <AssistantPanel />
+      </div>
     </div>
   )
 }
