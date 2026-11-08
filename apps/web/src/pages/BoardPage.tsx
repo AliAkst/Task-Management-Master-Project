@@ -24,6 +24,9 @@ import CardFace from '../components/CardFace'
 import CardModal from '../components/CardModal'
 import KanbanList, { listKey } from '../components/KanbanList'
 import Modal from '../components/Modal'
+import { Segmented } from '../components/Page'
+import { useModels } from '../api/assistant'
+import { Lock, Settings2, Sparkles } from 'lucide-react'
 import type { CardSummary, Label } from '../lib/types'
 
 // React Flow + dagre buyuk; sadece grafik gorunumu acilinca yuklenir
@@ -47,6 +50,7 @@ export default function BoardPage() {
   const openCard = (id: number) => setParams({ ...viewParam, card: String(id) })
   const closeCard = () => setParams(viewParam)
   const setView = (v: 'kanban' | 'graph') => setParams(v === 'graph' ? { view: 'graph' } : {})
+  const models = useModels()
 
   const board = useBoard(boardId)
   const m = useBoardMutations(boardId)
@@ -187,33 +191,49 @@ export default function BoardPage() {
     m.createLabel.mutate({ name: labelName.trim(), color: labelColor }, { onSuccess: () => setLabelName('') })
   }
 
+  const boardModel = b.default_model_id
+    ? (models.data?.models.find((x) => x.id === b.default_model_id)?.label ?? b.default_model_id.replace('ollama:', ''))
+    : null
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
-        <span className="h-4 w-4 rounded-full" style={{ backgroundColor: b.color }} />
-        <h1 className="text-lg font-semibold">{b.name}</h1>
-        {b.privacy === 'local_only' && <span title="Sadece local model görebilir">🔒</span>}
-        {b.scope_description && (
-          <p className="hidden truncate text-sm text-slate-500 md:block">{b.scope_description}</p>
-        )}
-        <div className="ml-auto flex rounded-md bg-slate-100 p-0.5 text-sm">
-          {(['kanban', 'graph'] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`rounded px-3 py-1 ${view === v ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            >
-              {v === 'kanban' ? 'Kanban' : 'Grafik'}
-            </button>
-          ))}
+      <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-200 bg-white py-3 pr-4 pl-6">
+        {/* Ajanda sekmesi: board'un rengi sayfanin kenarinda */}
+        <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: b.color }} />
+        <div className="min-w-0">
+          <h1 className="text-[26px] leading-tight">{b.name}</h1>
+          <p className="flex flex-wrap items-center gap-x-4 text-[13px] text-slate-600">
+            {b.scope_description && <span className="max-w-xl truncate">{b.scope_description}</span>}
+            {b.privacy === 'local_only' && (
+              <span className="inline-flex items-center gap-1" title="Bu board'un verisi bulut modellere gönderilmez">
+                <Lock size={12} aria-hidden /> Sadece local
+              </span>
+            )}
+            {boardModel && (
+              <span className="inline-flex items-center gap-1" title="Bu board açıkken asistan otomatik olarak bu modeli kullanır">
+                <Sparkles size={12} aria-hidden /> {boardModel}
+              </span>
+            )}
+          </p>
         </div>
-        <button onClick={() => setEditing(true)} className="rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">
-          Düzenle
-        </button>
+        <div className="ml-auto flex items-center gap-3">
+          <Segmented
+            label="Görünüm"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'kanban' as const, label: 'Kanban' },
+              { value: 'graph' as const, label: 'İlişkiler' },
+            ]}
+          />
+          <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:border-slate-900">
+            <Settings2 size={15} aria-hidden /> Board ayarları
+          </button>
+        </div>
       </div>
 
       {view === 'graph' ? (
-        <Suspense fallback={<p className="p-6 text-slate-500">Grafik yükleniyor…</p>}>
+        <Suspense fallback={<p className="p-6 text-slate-500">İlişki görünümü yükleniyor…</p>}>
           <GraphView boardId={boardId} labels={labels} onOpenCard={openCard} />
         </Suspense>
       ) : (

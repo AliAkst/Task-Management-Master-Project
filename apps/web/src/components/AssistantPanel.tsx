@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Markdown from 'react-markdown'
 import { useQueryClient } from '@tanstack/react-query'
+import { useMatch } from 'react-router-dom'
+import { useBoards } from '../api/boards'
 import {
   assistantKeys,
+  CLOUD_COST_WARNING,
   deleteConversation,
   streamChat,
   TOOL_LABEL,
@@ -120,8 +123,25 @@ export default function AssistantPanel() {
   const abort = useRef<AbortController | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
 
-  const effectiveModel = modelId ?? models.data?.default ?? null
-  const current = models.data?.models.find((m) => m.id === effectiveModel)
+  // Acik board (varsa): varsayilan modeli "Otomatik" secimini belirler
+  const boardMatch = useMatch('/boards/:boardId')
+  const boardId = boardMatch ? Number(boardMatch.params.boardId) : null
+  const boards = useBoards()
+  const board = boardId !== null ? boards.data?.find((b) => b.id === boardId) : undefined
+  const list = models.data?.models ?? []
+  const boardDefault =
+    board?.default_model_id && list.some((m) => m.id === board.default_model_id) &&
+    !(board.privacy === 'local_only' && !board.default_model_id.startsWith('ollama:'))
+      ? board.default_model_id
+      : null
+  const autoModel = boardDefault ?? models.data?.default ?? null
+  // Secili model artik listede yoksa (or. saglayici kaldirildi) otomatige don
+  const manual = modelId && (!models.data || list.some((m) => m.id === modelId)) ? modelId : null
+  const effectiveModel = manual ?? autoModel
+  const current = list.find((m) => m.id === effectiveModel)
+  const autoLabel = list.find((m) => m.id === autoModel)?.label ?? autoModel?.replace('ollama:', '') ?? 'model yok'
+  // Bulut modele gecis onay bekliyor (ucret uyarisi)
+  const [pendingCloud, setPendingCloud] = useState<string | null>(null)
   const busy = live !== null && !live.error
 
   useEffect(() => {
@@ -153,7 +173,7 @@ export default function AssistantPanel() {
     let convId = conversationId
     try {
       await streamChat(
-        { message, conversation_id: conversationId, model_id: effectiveModel },
+        { message, conversation_id: conversationId, model_id: manual, board_id: boardId },
         (e) => {
           setLive((t) => {
             if (!t) return t
@@ -307,14 +327,30 @@ export default function AssistantPanel() {
         <div className="mt-1 flex items-center gap-2">
           <select
             className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-1 py-1 text-xs"
-            value={effectiveModel ?? ''}
-            onChange={(e) => setModel(e.target.value || null)}
-            title="Bu mesaj için model"
+            value={manual ?? ''}
+            onChange={(e) => {
+              const id = e.target.value
+              const m = list.find((x) => x.id === id)
+              if (m && !m.is_local) setPendingCloud(id)
+              else {
+                setPendingCloud(null)
+                setModel(id || null)
+              }
+            }}
+            title="Bu sohbetteki model"
+            aria-label="Model"
           >
-            {models.data?.models.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}{m.is_local ? '' : ' — bulut'}</option>
-            ))}
-            {models.data && models.data.models.length === 0 && <option value="">Model yok (Ollama çalışıyor mu?)</option>}
+            <option value="">
+              {boardDefault ? `Otomatik, board'un modeli: ${autoLabel}` : `Otomatik: ${autoLabel}`}
+            </option>
+            <optgroup label="Local (bilgisayarında)">
+              {list.filter((m) => m.is_local).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </optgroup>
+            {list.some((m) => !m.is_local) && (
+              <optgroup label="Bulut (ücretli)">
+                {list.filter((m) => !m.is_local).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </optgroup>
+            )}
           </select>
           {busy ? (
             <button type="button" onClick={() => abort.current?.abort()} className="rounded-md bg-slate-200 px-3 py-1 text-sm">■ Durdur</button>
@@ -322,8 +358,34 @@ export default function AssistantPanel() {
             <button disabled={!input.trim() || !effectiveModel} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-40">Gönder</button>
           )}
         </div>
-        {current && !current.is_local && (
-          <p className="mt-1 text-[11px] text-slate-500">Bulut modeli: “sadece local” alanların verisi gönderilmez.</p>
+        {pendingCloud && (
+          <div role="alertdialog" aria-label="Bulut modeline geçiş" className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
+            <p className="flex gap-1.5">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
+              <span>
+                <b>{list.find((m) => m.id === pendingCloud)?.label}</b>. {CLOUD_COST_WARNING}
+              </span>
+            </p>
+            <div className="mt-2 flex justify-end gap-2">
+              <button type="button" onClick={() => setPendingCloud(null)} className="px-2 py-1 text-amber-900">Vazgeç</button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => { setModel(pendingCloud); setPendingCloud(null) }}
+                className="rounded bg-slate-900 px-2.5 py-1 font-medium text-white"
+              >
+                Bulut modele geç
+              </button>
+            </div>
+          </div>
+        )}
+        {current && !current.is_local && !pendingCloud && (
+          <p className="mt-1 text-[11px] text-amber-900">
+            Ücretli bulut modeli kullanılıyor. “Sadece local” alanların verisi gönderilmez.
+          </p>
+        )}
+        {models.data && list.length === 0 && (
+          <p className="mt-1 text-[11px] text-red-700">Kullanılabilir model yok: Ollama çalışıyor mu?</p>
         )}
       </form>
     </aside>

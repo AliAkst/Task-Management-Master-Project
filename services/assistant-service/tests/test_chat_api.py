@@ -26,7 +26,7 @@ def parse_sse(body: str) -> list[tuple[str, dict]]:
 async def client(monkeypatch, db_session_maker, task_api_transport):
     providers: dict[str, FakeProvider] = {}
 
-    def fake_build(model_id: str):
+    def fake_build(model_id: str, cloud=None):
         if model_id not in providers:
             raise chat_module.LLMError(f"yok: {model_id}")
         return providers[model_id]

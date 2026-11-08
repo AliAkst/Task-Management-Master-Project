@@ -45,6 +45,7 @@ async def run_agent(
         text = ""
         calls: list[ToolCall] = []
         usage = Usage()
+        state = None
         try:
             async for chunk in provider.stream(messages, None if last_round else specs):
                 if chunk.type == "text":
@@ -54,11 +55,15 @@ async def run_agent(
                     calls.append(chunk.tool_call)
                 elif chunk.type == "usage" and chunk.usage:
                     usage = chunk.usage
+                elif chunk.type == "state":
+                    state = chunk.state
         except LLMError as e:
             yield AgentEvent("error", {"message": str(e)})
             return
 
-        assistant = Msg("assistant", text, tool_calls=calls or None)
+        assistant = Msg(
+            "assistant", text, tool_calls=calls or None, provider_state=state
+        )
         messages.append(assistant)
         yield AgentEvent("message", message=assistant, usage=usage)
         if not calls:

@@ -1,3 +1,4 @@
+import { PencilLine, Timer } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useActiveSession, useCardSessions, useElapsed, useSessionMutations } from '../api/sessions'
 import { formatClock, formatDuration, formatRange, fromLocalInput, toLocalInput } from '../lib/format'
@@ -64,25 +65,25 @@ export default function CardTime({ card }: { card: CardDetail }) {
   const finished = (sessions.data ?? []).filter((s) => !s.is_running)
 
   return (
-    <div className="mt-6">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-700">
-          Harcanan süre{' '}
-          <span className="font-normal text-slate-500">
-            {formatDuration(total)}
-            {estimateSec > 0 && ` / ${formatDuration(estimateSec)} tahmin`}
-            {card.subtask_tracked_seconds > 0 && ` (alt kartlar: ${formatDuration(card.subtask_tracked_seconds)})`}
-          </span>
-        </h3>
-        <button onClick={() => setAdding((a) => !a)} className="text-xs text-blue-600 hover:underline">
-          + Elle ekle
+    <div className="mt-7">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-[15px] font-semibold text-slate-900">Harcanan süre</h3>
+        <button onClick={() => setAdding((a) => !a)} aria-expanded={adding} className="shrink-0 text-[13px] text-blue-700 hover:underline">
+          Elle ekle
         </button>
       </div>
+      <p className="mb-2 text-[14px] text-slate-700 tabular-nums">
+        {formatDuration(total)}
+        {estimateSec > 0 && <span className="text-slate-500"> / {formatDuration(estimateSec)} tahmin</span>}
+        {card.subtask_tracked_seconds > 0 && (
+          <span className="block text-[13px] text-slate-500">Alt kartlarda: {formatDuration(card.subtask_tracked_seconds)}</span>
+        )}
+      </p>
 
       {estimateSec > 0 && (
         <div className="mb-2 h-1.5 rounded-full bg-slate-200" title={`Tahminin %${Math.round(ratio * 100)}'i`}>
           <div
-            className={`h-1.5 rounded-full ${ratio > 1 ? 'bg-amber-500' : 'bg-blue-500'}`}
+            className={`h-1.5 rounded-full ${ratio > 1 ? 'bg-amber-600' : 'bg-blue-600'}`}
             style={{ width: `${Math.min(100, ratio * 100)}%` }}
           />
         </div>
@@ -103,7 +104,9 @@ export default function CardTime({ card }: { card: CardDetail }) {
       <ul className="space-y-1 text-sm">
         {finished.slice(0, 5).map((s) => (
           <li key={s.id} className="group flex items-center gap-2">
-            <span className="text-slate-400">{s.source === 'manual' ? '✎' : '⏱'}</span>
+            <span className="text-slate-400" title={s.source === 'manual' ? 'Elle girildi' : 'Kronometre'}>
+              {s.source === 'manual' ? <PencilLine size={13} aria-label="Elle girildi" /> : <Timer size={13} aria-label="Kronometre" />}
+            </span>
             <span className="flex-1">{formatRange(s.started_at, s.ended_at!, false)}</span>
             <span className="text-xs text-slate-500">{formatDuration(s.duration_sec ?? 0)}</span>
             <button
@@ -115,9 +118,9 @@ export default function CardTime({ card }: { card: CardDetail }) {
           </li>
         ))}
       </ul>
-      {finished.length > 5 && <p className="mt-1 text-xs text-slate-400">+ {finished.length - 5} kayıt daha</p>}
+      {finished.length > 5 && <p className="mt-1 text-[13px] text-slate-500">ve {finished.length - 5} kayıt daha</p>}
       {finished.length === 0 && !running && !adding && (
-        <p className="text-xs text-slate-400">Henüz süre kaydı yok. “▶ Başla” ile kronometreyi çalıştır.</p>
+        <p className="text-[13px] text-slate-500">Henüz süre kaydı yok. Üstteki “Başla” ile kronometreyi çalıştır.</p>
       )}
     </div>
   )

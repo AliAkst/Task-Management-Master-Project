@@ -17,6 +17,11 @@ from app.agent.context import build_system_prompt
 from app.agent.loop import run_agent
 from app.agent.memory_extractor import MEMORY_TOOLS, extract_memory
 from app.api.deps import current_user, ok
+from app.api.providers import (
+    enabled_cloud_models,
+    load_cloud_config,
+    user_default_model,
+)
 from app.config import settings
 from app.db.models import (
     AiActionEntity,
@@ -25,7 +30,14 @@ from app.db.models import (
     get_session,
     session_maker,
 )
-from app.llm.registry import build_provider, list_models
+from app.llm.registry import (
+    build_provider,
+    cloud_models,
+    is_local_model,
+    list_local_models,
+    parse_model_id,
+)
+from app.llm.router import resolve_model
 from app.llm.types import LLMError, Msg, ToolCall
 from app.tools.memory_tools import MemoryTools, load_facts
 from app.tools.read_tools import ToolBox
@@ -39,7 +51,9 @@ DEFAULT_TZ = "Europe/Istanbul"
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=8000)
     conversation_id: int | None = None
+    # None: otomatik (acik board'un varsayilani > kullanicinin local varsayilani)
     model_id: str | None = None
+    board_id: int | None = None  # kullanicinin o an baktigi board (varsa)
 
 
 class TitleUpdate(BaseModel):
@@ -102,11 +116,15 @@ def sse(event: str, data: dict[str, Any]) -> str:
 
 # ---------------- uc noktalar ----------------
 @router.get("/models")
-async def models(user: dict = Depends(current_user)):
-    items = await list_models()
+async def models(
+    user: dict = Depends(current_user), session: AsyncSession = Depends(get_session)
+):
+    items = await list_local_models() + cloud_models(
+        await enabled_cloud_models(session, user["id"])
+    )
     return ok(
         {
-            "default": settings.default_model,
+            "default": await user_default_model(session, user["id"]),
             "models": [
                 {
                     "id": m.id,
@@ -224,11 +242,30 @@ async def remove(
 @router.post("/chat")
 async def chat(data: ChatRequest, user: dict = Depends(current_user)):
     """SSE: start, token, tool_start, tool_end, done | error olaylari."""
-    model_id = data.model_id or settings.default_model
-    try:
-        provider = build_provider(model_id)
-    except LLMError as e:
-        raise HTTPException(422, str(e)) from e
+    async with session_maker() as session:
+        default = await user_default_model(session, user["id"])
+        api = TaskApiClient(user["token"])
+        try:
+            route = await resolve_model(
+                api,
+                requested=data.model_id,
+                board_id=data.board_id,
+                user_default=default,
+            )
+        finally:
+            await api.close()
+        model_id = route.model_id
+        try:
+            cloud = (
+                None
+                if is_local_model(model_id)
+                else await load_cloud_config(
+                    session, user["id"], parse_model_id(model_id)[0]
+                )
+            )
+            provider = build_provider(model_id, cloud)
+        except LLMError as e:
+            raise HTTPException(422, str(e)) from e
 
     # Sohbet kaydi akistan ONCE (hata varsa normal HTTP hatasi donsun)
     async with session_maker() as session:
@@ -243,14 +280,19 @@ async def chat(data: ChatRequest, user: dict = Depends(current_user)):
         conversation_id = conv.id
 
     return StreamingResponse(
-        _stream(user, conversation_id, data.message, provider, model_id),
+        _stream(user, conversation_id, data.message, provider, model_id, route.source),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
 async def _stream(
-    user: dict, conversation_id: int, text: str, provider, model_id: str
+    user: dict,
+    conversation_id: int,
+    text: str,
+    provider,
+    model_id: str,
+    model_source: str = "message",
 ) -> AsyncIterator[str]:
     is_local = provider.info.is_local
     api = TaskApiClient(user["token"])
@@ -301,6 +343,8 @@ async def _stream(
                 {
                     "conversation_id": conversation_id,
                     "model_id": model_id,
+                    "model_label": provider.info.label,
+                    "model_source": model_source,
                     "is_local": is_local,
                     "dropped_local_messages": dropped,
                 },

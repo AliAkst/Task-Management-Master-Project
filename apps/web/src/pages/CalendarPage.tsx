@@ -17,6 +17,7 @@ import { useBoard, useBoards, keys as boardKeys } from '../api/boards'
 import { useCalendar, useCalendarMutations } from '../api/calendar'
 import CardModal from '../components/CardModal'
 import EventDialog, { type EventDraft } from '../components/EventDialog'
+import { Check, Hourglass } from 'lucide-react'
 import { api } from '../lib/api'
 import type { BoardDetail, CalendarItem, CardSummary, UserSettings } from '../lib/types'
 
@@ -89,7 +90,7 @@ export default function CalendarPage() {
     const deadline = i.kind === 'deadline'
     return {
       id: i.id,
-      title: `${deadline ? '⏰ ' : ''}${i.title}`,
+      title: deadline ? `Son gün: ${i.title}` : i.title,
       start: i.start,
       end: i.end ?? undefined,
       allDay: i.all_day,
@@ -181,9 +182,9 @@ export default function CalendarPage() {
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="flex w-64 shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white p-3">
+      <aside className="flex w-72 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-white p-4">
         <section>
-          <p className="mb-2 text-[13px] text-slate-500">Gösterilen alanlar</p>
+          <h2 className="mb-2 text-[17px]">Gösterilen alanlar</h2>
           <div className="flex flex-wrap gap-1.5">
             {allBoards.map((b) => {
               const on = !hidden.has(b.id)
@@ -191,7 +192,8 @@ export default function CalendarPage() {
                 <button
                   key={b.id}
                   onClick={() => toggleBoard(b.id)}
-                  className={`rounded-full px-2.5 py-1 text-xs ${on ? 'text-white' : 'text-slate-500 ring-1 ring-slate-300'}`}
+                  aria-pressed={on}
+                  className={`rounded-full px-3 py-1 text-[13px] font-semibold ${on ? 'text-white' : 'text-slate-500 line-through ring-1 ring-slate-300'}`}
                   style={on ? { backgroundColor: b.color } : undefined}
                 >
                   {b.name}
@@ -203,7 +205,7 @@ export default function CalendarPage() {
 
         <section className="min-h-0 flex-1">
           <h2 className="mb-1 text-[17px]">Açık kartlar</h2>
-          <p className="mb-2 text-xs text-slate-400">Takvime sürükleyerek zaman ayır.</p>
+          <p className="mb-3 text-[14px] text-slate-600">Bir kartı takvime sürükleyerek ona zaman ayır.</p>
           <ul ref={listRef} className="space-y-1.5">
             {openCards.map((c) => {
               const board = boardById.get(c.board_id ?? -1)
@@ -213,30 +215,28 @@ export default function CalendarPage() {
                   data-card-id={c.id}
                   data-title={c.title}
                   data-minutes={c.estimated_minutes || 60}
-                  className="cursor-grab rounded-md border-l-4 bg-slate-50 px-2 py-1.5 text-xs hover:bg-slate-100"
+                  className="cursor-grab rounded-md border border-l-4 border-slate-200 bg-white px-2.5 py-2 text-[14px] hover:border-slate-400 active:cursor-grabbing"
                   style={{ borderLeftColor: board?.color }}
                   title={c.blocked ? 'Ön koşulları bitmedi' : undefined}
                 >
-                  <div className={c.blocked ? 'text-slate-400' : ''}>
-                    {c.blocked && '⛓ '}
-                    {c.title}
-                  </div>
-                  <div className="mt-0.5 flex gap-2 text-[10px] text-slate-400">
+                  <div className={`leading-snug ${c.blocked ? 'text-slate-500' : 'text-slate-900'}`}>{c.title}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2.5 text-[12px] text-slate-500">
                     <span>{board?.name}</span>
-                    <span>{c.estimated_minutes ? `${c.estimated_minutes} dk` : '~60 dk'}</span>
-                    {scheduledInView.has(c.id) && <span className="text-green-600">✓ bu aralıkta planlı</span>}
+                    <span className="tabular-nums">{c.estimated_minutes ? `${c.estimated_minutes} dk` : 'süre yok, 60 dk'}</span>
+                    {c.blocked && <span className="inline-flex items-center gap-0.5 text-amber-800"><Hourglass size={12} aria-hidden />Bekliyor</span>}
+                    {scheduledInView.has(c.id) && <span className="inline-flex items-center gap-0.5 text-green-700"><Check size={12} aria-hidden />Bu aralıkta planlı</span>}
                   </div>
                 </li>
               )
             })}
-            {openCards.length === 0 && <li className="text-xs text-slate-400">Açık kart yok.</li>}
+            {openCards.length === 0 && <li className="text-[14px] text-slate-500">Planlanacak açık kart yok.</li>}
           </ul>
         </section>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col p-3">
-        {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-        <div className="min-h-0 flex-1 rounded-xl bg-white p-2 shadow-sm ring-1 ring-slate-200">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col p-4">
+        {error && <p className="mb-2 text-sm text-red-700">{error}</p>}
+        <div className="min-h-0 flex-1 rounded-lg border border-slate-200 bg-white p-3">
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             locale={trLocale}

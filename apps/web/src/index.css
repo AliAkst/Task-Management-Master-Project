@@ -76,3 +76,98 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * FullCalendar v6 temasi: --fc-* degiskenleri (resmi yontem) + birkac duz secici.
+ * Takvim kagit ustunde cizgili bir sayfa gibi durur; dugmeler uygulamanin
+ * diger dugmeleriyle ayni (beyaz, ince cizgili, secili olan murekkep).
+ */
+.fc {
+  --fc-border-color: var(--color-slate-200);
+  --fc-page-bg-color: #fff;
+  --fc-neutral-bg-color: var(--color-slate-50);
+  --fc-today-bg-color: color-mix(in srgb, var(--color-blue-50) 70%, transparent);
+  --fc-now-indicator-color: var(--color-rec);
+  --fc-highlight-color: color-mix(in srgb, var(--color-blue-100) 60%, transparent);
+  --fc-event-border-color: transparent;
+  --fc-button-text-color: var(--color-slate-700);
+  --fc-button-bg-color: #fff;
+  --fc-button-border-color: var(--color-slate-300);
+  --fc-button-hover-bg-color: var(--color-slate-100);
+  --fc-button-hover-border-color: var(--color-slate-400);
+  --fc-button-active-bg-color: var(--color-slate-900);
+  --fc-button-active-border-color: var(--color-slate-900);
+  font-size: 14px;
+}
+.fc .fc-button {
+  border-radius: 6px;
+  padding: 0.3rem 0.75rem;
+  font-weight: 500;
+  box-shadow: none !important;
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  color: #fff;
+}
+.fc .fc-button-primary:disabled {
+  opacity: 0.45;
+}
+.fc .fc-toolbar-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+}
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number {
+  color: var(--color-slate-700);
+  font-weight: 600;
+  text-decoration: none;
+}
+.fc .fc-day-today .fc-col-header-cell-cushion,
+.fc .fc-day-today .fc-daygrid-day-number {
+  color: var(--color-blue-700);
+}
+.fc .fc-timegrid-slot-label-cushion,
+.fc .fc-timegrid-axis-cushion {
+  color: var(--color-slate-500);
+  font-size: 12px;
+  white-space: nowrap; /* "Tüm gün" iki satira kirilmasin */
+}
+.fc .fc-event {
+  border-radius: 5px;
+  font-weight: 600;
+}
+.fc .fc-timegrid-event .fc-event-main {
+  padding: 2px 4px;
+}
+.fc .fc-timegrid-now-indicator-line {
+  border-width: 2px 0 0;
+}
+
+/* React Flow v12 temasi (resmi yontem: .react-flow altindaki --xy-* degiskenleri) */
+.react-flow {
+  --xy-background-color-default: var(--color-slate-50);
+  --xy-background-pattern-dots-color-default: var(--color-slate-300);
+  --xy-edge-stroke-default: var(--color-slate-300);
+  --xy-edge-stroke-selected-default: var(--color-slate-900);
+  --xy-connectionline-stroke-default: var(--color-blue-600);
+  --xy-connectionline-stroke-width-default: 2;
+  --xy-selection-background-color-default: color-mix(in srgb, var(--color-blue-100) 40%, transparent);
+  --xy-selection-border-default: 1px dashed var(--color-blue-600);
+  --xy-controls-button-background-color-default: #fff;
+  --xy-controls-button-background-color-hover-default: var(--color-slate-100);
+  --xy-controls-button-color-default: var(--color-slate-700);
+  --xy-controls-button-border-color-default: var(--color-slate-200);
+  --xy-controls-box-shadow-default: 0 0 0 1px var(--color-slate-200);
+  --xy-attribution-background-color-default: transparent;
+}
+.react-flow__node.selected {
+  outline: 2px solid var(--color-blue-600);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.react-flow__controls {
+  border-radius: 6px;
+  overflow: hidden;
+}

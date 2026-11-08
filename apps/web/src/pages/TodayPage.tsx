@@ -6,6 +6,7 @@ import { useBoards } from '../api/boards'
 import { localDay, shiftDay, useDayPlan, useSuggestions } from '../api/dayPlans'
 import DayReviewForm from '../components/DayReviewForm'
 import PlanEditor from '../components/PlanEditor'
+import { Segmented } from '../components/Page'
 import { api } from '../lib/api'
 import { formatDuration } from '../lib/format'
 import type { UserSettings } from '../lib/types'
@@ -50,9 +51,9 @@ export default function TodayPage() {
   const relative = day === today ? 'Bugün' : day === shiftDay(today, 1) ? 'Yarın' : day === shiftDay(today, -1) ? 'Dün' : null
 
   return (
-    <div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-6xl p-4 sm:p-6">
       {/* Ajanda sayfasi basligi: gun, sayfanin en buyuk ogesi */}
-      <header className="mb-6 flex flex-wrap items-end gap-x-6 gap-y-3 border-b border-slate-200 pb-4">
+      <header className="mb-8 flex flex-wrap items-end gap-x-6 gap-y-3 border-b border-slate-200 pb-4">
         <div>
           <p className="flex items-center gap-1 text-[15px] text-slate-600">
             <button onClick={() => go({ date: shiftDay(day, -1) })} className="rounded p-1 hover:bg-slate-200" aria-label="Önceki gün">
@@ -80,18 +81,21 @@ export default function TodayPage() {
           )}
         </div>
 
-        <div className="ml-auto flex rounded-lg bg-slate-200/70 p-0.5 text-sm">
-          {(['plan', 'review'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => go({ mode: m })}
-              disabled={m === 'plan' && plan.data?.status === 'reviewed'}
-              title={m === 'plan' && plan.data?.status === 'reviewed' ? 'Değerlendirilmiş günün planı değiştirilemez' : undefined}
-              className={`rounded-md px-3.5 py-1.5 disabled:opacity-40 ${mode === m ? 'bg-white font-semibold text-slate-900 shadow-[0_0_0_1px_var(--color-slate-200)]' : 'text-slate-600'}`}
-            >
-              {m === 'plan' ? 'Planla' : 'Değerlendir'}
-            </button>
-          ))}
+        <div className="ml-auto pb-1">
+          <Segmented
+            label="Mod"
+            value={mode}
+            onChange={(m) => go({ mode: m })}
+            options={[
+              {
+                value: 'plan' as const,
+                label: 'Planla',
+                disabled: plan.data?.status === 'reviewed',
+                title: plan.data?.status === 'reviewed' ? 'Değerlendirilmiş günün planı değiştirilemez' : undefined,
+              },
+              { value: 'review' as const, label: 'Değerlendir' },
+            ]}
+          />
         </div>
       </header>
 

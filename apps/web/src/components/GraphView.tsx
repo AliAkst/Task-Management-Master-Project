@@ -19,6 +19,20 @@ import { useBoardGraph, useBoardMutations } from '../api/boards'
 import type { CardSummary, GraphEdge, Label } from '../lib/types'
 import CardFace from './CardFace'
 
+const EDGE = { child: '#949db7', waiting: '#c27803', done: '#15803d' } as const
+
+/** Cizgi aciklamasi: renk tek basina anlam tasimasin diye yaninda yazi. */
+function EdgeKey({ color, dashed, children }: { color: string; dashed?: boolean; children: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <svg width="26" height="8" aria-hidden>
+        <line x1="1" y1="4" x2="25" y2="4" stroke={color} strokeWidth="2" strokeDasharray={dashed ? '5 3' : undefined} />
+      </svg>
+      {children}
+    </span>
+  )
+}
+
 const NODE_W = 240
 const NODE_H = 90
 
@@ -29,10 +43,10 @@ function CardNodeView({ data }: NodeProps<CardNode>) {
   return (
     <div style={{ width: NODE_W }} className={data.external ? 'opacity-60' : ''}>
       {/* Sol: bu kartin on kosullari buraya baglanir. Sag: bu karti bekleyenler. */}
-      <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-slate-400" />
+      <Handle type="target" position={Position.Left} className="!h-3 !w-3 !border-2 !border-white !bg-slate-400" />
       <CardFace card={data.card} labels={data.labels} />
-      {data.external && <p className="mt-0.5 text-[10px] text-slate-500">başka board'dan</p>}
-      <Handle type="source" position={Position.Right} className="!h-3 !w-3 !bg-slate-700" />
+      {data.external && <p className="mt-0.5 text-[12px] text-slate-500">Başka board'dan</p>}
+      <Handle type="source" position={Position.Right} className="!h-3 !w-3 !border-2 !border-white !bg-slate-900" />
     </div>
   )
 }
@@ -100,7 +114,8 @@ export default function GraphView({ boardId, labels, onOpenCard }: Props) {
     .map((e) => {
       const dep = e.type === 'dependency'
       const open = dep && statusOf.get(String(e.source)) !== 'completed'
-      const color = !dep ? '#cbd5e1' : open ? '#f59e0b' : '#22c55e'
+      // Durum renkleri: bekleyen on kosul amber, biten yesil, alt kart iliskisi soluk murekkep
+      const color = !dep ? EDGE.child : open ? EDGE.waiting : EDGE.done
       return {
         id: `${e.type}-${e.source}-${e.target}`,
         source: String(e.source),
@@ -140,19 +155,26 @@ export default function GraphView({ boardId, labels, onOpenCard }: Props) {
   if (graph.error) return <p className="p-6 text-red-600">{graph.error.message}</p>
 
   return (
-    <div className="relative min-h-0 flex-1">
-      <div className="absolute top-3 left-3 z-10 flex items-center gap-3 rounded-lg bg-white/90 px-3 py-2 text-xs shadow ring-1 ring-slate-200">
-        <span className="text-slate-500">
-          Bir kartın <b>sağ</b> noktasından diğerinin <b>sol</b> noktasına çek: “bu bitmeden o başlamaz”.
-          İpi seçip <kbd>Delete</kbd> ile kaldır.
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-slate-200 bg-white px-4 py-2.5 text-[13px] text-slate-600">
+        <span>
+          <b className="text-slate-900">Sağ</b> noktadan diğer kartın <b className="text-slate-900">sol</b> noktasına çek:
+          “bu bitmeden o başlamaz”. İpi seçip Delete ile kaldır.
         </span>
-        <label className="flex items-center gap-1">
-          <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} />
-          Bitenleri gizle
-        </label>
-        <button onClick={relayout} className="rounded bg-slate-900 px-2 py-1 text-white">
-          Otomatik yerleştir
-        </button>
+        <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <EdgeKey color={EDGE.waiting}>Ön koşul, bekliyor</EdgeKey>
+          <EdgeKey color={EDGE.done}>Ön koşul, bitti</EdgeKey>
+          <EdgeKey color={EDGE.child} dashed>Alt kart</EdgeKey>
+        </span>
+        <span className="ml-auto flex items-center gap-4">
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} />
+            Bitenleri gizle
+          </label>
+          <button onClick={relayout} className="rounded-md border border-slate-300 px-3 py-1 text-slate-800 hover:border-slate-900">
+            Otomatik yerleştir
+          </button>
+        </span>
       </div>
       {(m.addDependency.error || m.removeDependency.error) && (
         <p className="absolute bottom-3 left-3 z-10 rounded bg-red-50 px-3 py-1.5 text-sm text-red-700">
@@ -162,6 +184,7 @@ export default function GraphView({ boardId, labels, onOpenCard }: Props) {
       {visible.length === 0 ? (
         <p className="p-6 text-slate-500">Bu board'da gösterilecek kart yok.</p>
       ) : (
+        <div className="relative min-h-0 flex-1">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -179,9 +202,10 @@ export default function GraphView({ boardId, labels, onOpenCard }: Props) {
           fitView
           minZoom={0.2}
         >
-          <Background gap={16} />
-          <Controls showInteractive={false} />
+          <Background gap={18} size={1.2} />
+          <Controls showInteractive={false} position="bottom-right" />
         </ReactFlow>
+        </div>
       )}
     </div>
   )

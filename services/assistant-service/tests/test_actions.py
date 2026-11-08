@@ -175,7 +175,9 @@ class TestGate:
 @pytest.fixture
 async def client(monkeypatch, db_session_maker, task_api_transport):
     providers: dict[str, FakeProvider] = {}
-    monkeypatch.setattr(chat_module, "build_provider", lambda mid: providers[mid])
+    monkeypatch.setattr(
+        chat_module, "build_provider", lambda mid, cloud=None: providers[mid]
+    )
     monkeypatch.setattr(chat_module, "session_maker", db_session_maker)
     monkeypatch.setattr(
         chat_module,

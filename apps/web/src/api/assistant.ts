@@ -77,7 +77,17 @@ export const deleteConversation = (id: number) =>
 
 // ---------------- SSE ----------------
 export type StreamEvent =
-  | { event: 'start'; data: { conversation_id: number; model_id: string; is_local: boolean; dropped_local_messages: number } }
+  | {
+      event: 'start'
+      data: {
+        conversation_id: number
+        model_id: string
+        model_label: string
+        model_source: 'message' | 'board' | 'user'
+        is_local: boolean
+        dropped_local_messages: number
+      }
+    }
   | { event: 'token'; data: { text: string } }
   | { event: 'tool_start'; data: { id: string; name: string; arguments: Record<string, unknown> } }
   | { event: 'tool_end'; data: { id: string; name: string; ok: boolean } }
@@ -90,7 +100,7 @@ export type StreamEvent =
  * (EventSource POST desteklemedigi icin fetch + stream okuyucu.)
  */
 export async function streamChat(
-  body: { message: string; conversation_id: number | null; model_id: string | null },
+  body: { message: string; conversation_id: number | null; model_id: string | null; board_id: number | null },
   onEvent: (e: StreamEvent) => void,
   signal: AbortSignal,
   retried = false,
@@ -198,3 +208,80 @@ export function useSetPermission() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['assistant', 'permissions'] }),
   })
 }
+
+// ---------------- model saglayicilari ----------------
+export type CloudProviderId = 'anthropic' | 'openai' | 'gemini'
+
+export interface ProviderConfig {
+  provider: CloudProviderId
+  label: string
+  key_url: string
+  suggested_models: string[]
+  connected: boolean
+  key_hint: string | null // "…ab12"; anahtarin kendisi asla gelmez
+  models: string[]
+  is_enabled: boolean
+  base_url: string | null
+  updated_at: string | null
+}
+
+export interface ProviderSave {
+  api_key?: string | null
+  models: string[]
+  is_enabled: boolean
+  base_url?: string | null
+}
+
+const providersKey = ['assistant', 'providers'] as const
+const prefsKey = ['assistant', 'preferences'] as const
+
+export function useProviders() {
+  return useQuery({ queryKey: providersKey, queryFn: () => api<ProviderConfig[]>(`${BASE}/providers`) })
+}
+
+export function useProviderMutations() {
+  const qc = useQueryClient()
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: providersKey })
+    qc.invalidateQueries({ queryKey: assistantKeys.models })
+  }
+  return {
+    save: useMutation({
+      mutationFn: ({ provider, data }: { provider: CloudProviderId; data: ProviderSave }) =>
+        api<ProviderConfig>(`${BASE}/providers/${provider}`, { method: 'PUT', body: JSON.stringify(data) }),
+      onSuccess: refresh,
+    }),
+    remove: useMutation({
+      mutationFn: (provider: CloudProviderId) => api<void>(`${BASE}/providers/${provider}`, { method: 'DELETE' }),
+      onSuccess: refresh,
+    }),
+    /** Anahtari dogrular: saglayicinin ucretsiz model listesi cagrisi (token harcamaz). */
+    test: useMutation({
+      mutationFn: ({ provider, api_key, base_url }: { provider: CloudProviderId; api_key?: string; base_url?: string | null }) =>
+        api<{ models: string[] }>(`${BASE}/providers/${provider}/test`, {
+          method: 'POST',
+          body: JSON.stringify({ api_key: api_key || null, base_url: base_url || null }),
+        }),
+    }),
+  }
+}
+
+export function useModelPrefs() {
+  return useQuery({ queryKey: prefsKey, queryFn: () => api<{ default_model_id: string }>(`${BASE}/preferences`) })
+}
+
+export function useSetDefaultModel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (default_model_id: string) =>
+      api<{ default_model_id: string }>(`${BASE}/preferences`, { method: 'PUT', body: JSON.stringify({ default_model_id }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: prefsKey })
+      qc.invalidateQueries({ queryKey: assistantKeys.models })
+    },
+  })
+}
+
+/** Bulut modele gecerken gosterilen ucret uyarisi (tek kaynak). */
+export const CLOUD_COST_WARNING =
+  'Bu bir bulut modeli: mesajların sağlayıcının sunucusuna gider ve her mesaj sağlayıcı hesabından ücretlendirilebilir.'

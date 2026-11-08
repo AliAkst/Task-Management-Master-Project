@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,10 +21,15 @@ class Settings(BaseSettings):
     # tamamen GPU'ya sigar (14.3 GB/%38 GPU -> 3.6 GB/%100 GPU, olculdu)
     ollama_num_ctx: int = 16384
 
-    # --- Cloud (opsiyonel; Faz 5'te kullanici basina sifreli key'e tasinacak) ---
-    openai_api_key: str | None = None
-    openai_models: list[str] = []  # orn. ["gpt-4.1-mini"]; key + liste varsa gorunur
+    # --- Cloud modeller: kullanici basina provider_configs (sifreli key) ---
+    # API anahtarlarini sifreleyen Fernet ana anahtari (bos: .secret_key dosyasi)
+    secret_key: str | None = Field(None, validation_alias="ASSISTANT_SECRET_KEY")
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    # Claude: sohbet icin dusunme derinligi (low|medium|high|xhigh|max)
+    anthropic_effort: str = "medium"
+    anthropic_max_tokens: int = 16000
 
+    # Varsayilan HER ZAMAN local model (kullanici Ayarlar'dan baska bir local secebilir)
     default_model: str = "ollama:qwen3.5:4b"
     max_tool_rounds: int = 6
     # Sohbetten sonra ayri, odakli hafiza cikarimi (bkz. app/agent/memory_extractor.py)
