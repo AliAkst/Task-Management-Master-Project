@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware'
 interface AssistantUi {
   open: boolean
   conversationId: number | null
-  modelId: string | null // null = sunucunun varsayilani
+  modelId: string | null // null = otomatik (board varsayilani > kullanicinin local varsayilani)
   // Baska bir sayfadan baslatilan sohbetin ilk mesaji (or. "Tanışalım"); panel gonderir
   pendingMessage: string | null
   setOpen: (open: boolean) => void
@@ -37,7 +37,12 @@ export const useAssistantUi = create<AssistantUi>()(
     {
       name: 'assistant-ui',
       // Bekleyen mesaj kalici olmasin (sayfa yenilenince tekrar gonderilmesin)
-      partialize: ({ open, conversationId, modelId }) => ({ open, conversationId, modelId }),
+      // Bulut model secimi kalici olmasin: ucretli; sayfa yenilenince local varsayilana doner
+      partialize: ({ open, conversationId, modelId }) => ({
+        open,
+        conversationId,
+        modelId: modelId?.startsWith('ollama:') ? modelId : null,
+      }),
     },
   ),
 )

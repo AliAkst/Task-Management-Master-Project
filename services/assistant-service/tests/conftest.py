@@ -342,3 +342,17 @@ def _no_memory_extraction(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, "memory_extraction", False)
+
+
+@pytest.fixture(autouse=True)
+def test_secret_key(monkeypatch):
+    """Testler gercek .secret_key dosyasina dokunmasin: gecici ana anahtar."""
+    from cryptography.fernet import Fernet
+
+    import app.security as security
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "secret_key", Fernet.generate_key().decode())
+    security._fernet.cache_clear()
+    yield
+    security._fernet.cache_clear()

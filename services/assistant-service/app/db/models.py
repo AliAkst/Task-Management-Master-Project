@@ -147,6 +147,39 @@ class UserFactEntity(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
 
+class ProviderConfigEntity(Base):
+    """
+    Kullanicinin bagladigi bulut saglayicisi (kullanici basina saglayici basina tek).
+    provider: anthropic | openai | gemini. API anahtari Fernet ile sifreli
+    (app/security.py); API yanitlarinda asla geri donmez.
+    models: kullanicinin bu saglayicida kullanmak istedigi model adlari.
+    """
+
+    __tablename__ = "provider_configs"
+    __table_args__ = (UniqueConstraint("user_id", "provider"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    provider: Mapped[str] = mapped_column(String(30))
+    api_key_encrypted: Mapped[str] = mapped_column(Text)
+    key_hint: Mapped[str] = mapped_column(String(10))  # "…ab12"
+    base_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    models: Mapped[list[str]] = mapped_column(JSON, default=list)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class ModelPrefEntity(Base):
+    """Kullanicinin varsayilan modeli (sadece local model olabilir)."""
+
+    __tablename__ = "model_prefs"
+
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    default_model_id: Mapped[str] = mapped_column(String(200))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
 engine = create_async_engine(settings.database_url)
 session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

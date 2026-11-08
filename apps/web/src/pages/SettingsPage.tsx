@@ -1,13 +1,35 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check } from 'lucide-react'
 import { api } from '../lib/api'
 import type { UserSettings, UserSettingsUpdate } from '../lib/types'
 import { usePermissions, useSetPermission, type Permission } from '../api/assistant'
+import ModelSettings from '../components/ModelSettings'
+import { PageHeader, Segmented } from '../components/Page'
 
 const MODE_LABEL: Record<Permission['mode'], string> = {
   ask: 'Bana sor',
-  auto: 'Otomatik yap',
-  never: 'Asla yapma',
+  auto: 'Otomatik',
+  never: 'Asla',
+}
+
+const SECTIONS = [
+  { id: 'ritim', label: 'Günün ritmi' },
+  { id: 'model', label: 'Asistan modeli' },
+  { id: 'izinler', label: 'Asistan izinleri' },
+]
+
+/** Ayar satiri: solda ne oldugu, sagda kontrol. Kutu yok, satirlar cizgiyle ayrilir. */
+function Row({ title, hint, children }: { title: ReactNode; hint?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3.5">
+      <div className="max-w-prose min-w-0">
+        <p className="font-semibold">{title}</p>
+        {hint && <p className="text-[14px] text-slate-600">{hint}</p>}
+      </div>
+      <div className="flex items-center gap-3">{children}</div>
+    </div>
+  )
 }
 
 /** AI'in hangi islemleri sormadan yapabilecegi: kullanici karar verir. */
@@ -15,27 +37,25 @@ function AssistantPermissions() {
   const perms = usePermissions()
   const set = useSetPermission()
   return (
-    <section className="mt-6 space-y-3 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <h2 className="font-medium">Asistan izinleri</h2>
-      <p className="text-sm text-slate-500">
-        Asistan bir işlem yapmak istediğinde ne olsun? “Bana sor” seçiliyse sohbette onay kartı çıkar.
+    <section id="izinler" className="scroll-mt-6">
+      <h2 className="text-[22px]">Asistan izinleri</h2>
+      <p className="mt-1 mb-2 max-w-prose text-[15px] text-slate-600">
+        Asistan bir şey yapmak istediğinde ne olsun? “Bana sor” seçiliyse sohbette onay kartı çıkar; “Asla” seçtiğin
+        işlemi asistan önermez bile.
       </p>
-      {perms.error && <p className="text-sm text-red-600">{perms.error.message} (asistan servisi çalışıyor mu?)</p>}
-      {perms.data?.map((p) => (
-        <label key={p.action_type} className="flex items-center justify-between gap-4 text-sm">
-          <span>{p.label}</span>
-          <select
-            className="rounded-md border border-slate-300 px-2 py-1"
-            value={p.mode}
-            disabled={set.isPending}
-            onChange={(e) => set.mutate({ actionType: p.action_type, mode: e.target.value as Permission['mode'] })}
-          >
-            {(Object.keys(MODE_LABEL) as Permission['mode'][]).map((m) => (
-              <option key={m} value={m}>{MODE_LABEL[m]}</option>
-            ))}
-          </select>
-        </label>
-      ))}
+      {perms.error && <p className="text-[14px] text-red-700">{perms.error.message} (asistan servisi çalışıyor mu?)</p>}
+      <div className="divide-y divide-slate-200 border-y border-slate-200">
+        {perms.data?.map((p) => (
+          <Row key={p.action_type} title={<span className="font-normal">{p.label}</span>}>
+            <Segmented
+              label={p.label}
+              value={p.mode}
+              onChange={(mode) => set.mutate({ actionType: p.action_type, mode })}
+              options={(Object.keys(MODE_LABEL) as Permission['mode'][]).map((m) => ({ value: m, label: MODE_LABEL[m] }))}
+            />
+          </Row>
+        ))}
+      </div>
     </section>
   )
 }
@@ -46,92 +66,103 @@ const toInput = (t: string | null | undefined) => (t ? t.slice(0, 5) : '')
 function NotificationPermission() {
   const supported = typeof window !== 'undefined' && 'Notification' in window
   const [perm, setPerm] = useState(supported ? Notification.permission : 'denied')
-  if (!supported) return <p className="text-xs text-slate-400">Bu tarayıcı bildirimleri desteklemiyor.</p>
   return (
-    <div className="flex items-center justify-between gap-4 text-sm">
-      <span>
-        Tarayıcı bildirimleri{' '}
-        <span className="text-xs text-slate-400">(uygulama açıkken çalışır)</span>
-      </span>
-      {perm === 'granted' ? (
-        <span className="text-green-600">Açık ✓</span>
+    <Row title="Tarayıcı bildirimleri" hint="Uygulama açıkken hatırlatmalar bildirim olarak da gelir.">
+      {!supported ? (
+        <span className="text-[14px] text-slate-500">Bu tarayıcı desteklemiyor</span>
+      ) : perm === 'granted' ? (
+        <span className="inline-flex items-center gap-1 text-[14px] text-green-700"><Check size={15} aria-hidden /> Açık</span>
       ) : perm === 'denied' ? (
-        <span className="text-xs text-slate-500">Engellendi — tarayıcı ayarlarından izin ver</span>
+        <span className="max-w-56 text-right text-[14px] text-slate-500">Engellendi; tarayıcının site ayarlarından izin ver</span>
       ) : (
-        <button
-          type="button"
-          onClick={() => Notification.requestPermission().then(setPerm)}
-          className="rounded-md bg-slate-200 px-3 py-1"
-        >
+        <button type="button" onClick={() => Notification.requestPermission().then(setPerm)} className="rounded-md border border-slate-300 px-3 py-1 text-sm hover:border-slate-900">
           İzin ver
         </button>
       )}
-    </div>
+    </Row>
   )
 }
 
-export default function SettingsPage() {
+function DayRhythm() {
   const qc = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<UserSettings>('/settings/') })
   const save = useMutation({
-    mutationFn: (data: UserSettingsUpdate) =>
-      api<UserSettings>('/settings/', { method: 'PUT', body: JSON.stringify(data) }),
+    mutationFn: (data: UserSettingsUpdate) => api<UserSettings>('/settings/', { method: 'PUT', body: JSON.stringify(data) }),
     onSuccess: (data) => qc.setQueryData(['settings'], data),
   })
-
   const [planning, setPlanning] = useState('')
   const [review, setReview] = useState('')
-  const [reminders, setReminders] = useState(true)
 
   useEffect(() => {
     if (!settings.data) return
     setPlanning(toInput(settings.data.planning_time))
     setReview(toInput(settings.data.review_time))
-    setReminders(settings.data.reminders_enabled)
   }, [settings.data])
 
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    save.mutate({
-      planning_time: planning ? `${planning}:00` : null,
-      review_time: review ? `${review}:00` : null,
-      reminders_enabled: reminders,
-    })
+  // Saat alani: yazarken degil, alandan cikinca kaydedilir
+  const saveTime = (key: 'planning_time' | 'review_time', v: string) => {
+    const current = toInput(settings.data?.[key])
+    if (v !== current) save.mutate({ [key]: v ? `${v}:00` : null })
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl p-6">
-      <h1 className="mb-6 text-2xl font-semibold">Ayarlar</h1>
+    <section id="ritim" className="scroll-mt-6">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-[22px]">Günün ritmi</h2>
+        <span className="text-[13px] text-slate-500" aria-live="polite">
+          {save.isPending ? 'Kaydediliyor…' : save.isSuccess ? 'Kaydedildi' : ''}
+        </span>
+      </div>
+      <p className="mt-1 mb-2 max-w-prose text-[15px] text-slate-600">
+        Günü ne zaman planlayıp ne zaman değerlendirmek istediğin. Bu saatlerde uygulama seni hatırlatır.
+      </p>
+      {settings.error && <p className="text-[14px] text-red-700">{settings.error.message}</p>}
+      {save.error && <p className="text-[14px] text-red-700">{save.error.message}</p>}
       {settings.data && (
-        <form onSubmit={submit} className="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm text-slate-500">
-            Günü ne zaman planlamak ve ne zaman değerlendirmek istediğini seç. Bu saatlerde
-            uygulama içinde ve (izin verirsen) tarayıcı bildirimiyle hatırlatma yapılır.
-          </p>
-          <label className="flex items-center justify-between gap-4">
-            <span>Planlama saati</span>
-            <input type="time" className="rounded-md border border-slate-300 px-2 py-1" value={planning} onChange={(e) => setPlanning(e.target.value)} />
-          </label>
-          <label className="flex items-center justify-between gap-4">
-            <span>Gün sonu değerlendirme saati</span>
-            <input type="time" className="rounded-md border border-slate-300 px-2 py-1" value={review} onChange={(e) => setReview(e.target.value)} />
-          </label>
-          <label className="flex items-center justify-between gap-4">
-            <span>Hatırlatmalar</span>
-            <input type="checkbox" checked={reminders} onChange={(e) => setReminders(e.target.checked)} />
-          </label>
+        <div className="divide-y divide-slate-200 border-y border-slate-200">
+          <Row title="Planlama saati" hint="“Bugün” sayfası bu saatte planlama ile açılır.">
+            <input type="time" className="rounded-md border border-slate-300 bg-white px-2 py-1" value={planning} onChange={(e) => setPlanning(e.target.value)} onBlur={(e) => saveTime('planning_time', e.target.value)} aria-label="Planlama saati" />
+          </Row>
+          <Row title="Gün sonu değerlendirme saati" hint="Bu saatten sonra “Bugün” sayfası değerlendirmeyle açılır.">
+            <input type="time" className="rounded-md border border-slate-300 bg-white px-2 py-1" value={review} onChange={(e) => setReview(e.target.value)} onBlur={(e) => saveTime('review_time', e.target.value)} aria-label="Gün sonu değerlendirme saati" />
+          </Row>
+          <Row title="Hatırlatmalar" hint={`Saat dilimi: ${settings.data.timezone}`}>
+            <Segmented
+              label="Hatırlatmalar"
+              value={settings.data.reminders_enabled ? 'on' : 'off'}
+              onChange={(v) => save.mutate({ reminders_enabled: v === 'on' })}
+              options={[{ value: 'on', label: 'Açık' }, { value: 'off', label: 'Kapalı' }]}
+            />
+          </Row>
           <NotificationPermission />
-          <p className="text-xs text-slate-400">Saat dilimi: {settings.data.timezone}</p>
-          <div className="flex items-center justify-end gap-3">
-            {save.isSuccess && <span className="text-sm text-green-600">Kaydedildi</span>}
-            {save.error && <span className="text-sm text-red-600">{save.error.message}</span>}
-            <button disabled={save.isPending} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-              Kaydet
-            </button>
-          </div>
-        </form>
+        </div>
       )}
-      <AssistantPermissions />
+    </section>
+  )
+}
+
+export default function SettingsPage() {
+  return (
+    <div className="mx-auto w-full max-w-6xl p-4 sm:p-6">
+      <PageHeader title="Ayarlar" subtitle="Günün ritmi, asistanın hangi modelle çalıştığı ve neleri sormadan yapabileceği." />
+      <div className="grid gap-10 lg:grid-cols-[200px_minmax(0,1fr)]">
+        <nav aria-label="Ayar bölümleri" className="hidden lg:block">
+          <ul className="sticky top-6 space-y-1 border-l border-slate-200 text-[15px]">
+            {SECTIONS.map((s) => (
+              <li key={s.id}>
+                <a href={`#${s.id}`} className="-ml-px block border-l-2 border-transparent py-1 pl-3 text-slate-600 hover:border-slate-900 hover:text-slate-900">
+                  {s.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <div className="max-w-3xl space-y-12">
+          <DayRhythm />
+          <div id="model" className="scroll-mt-6"><ModelSettings /></div>
+          <AssistantPermissions />
+        </div>
+      </div>
     </div>
   )
 }

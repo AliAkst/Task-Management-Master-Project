@@ -2,7 +2,7 @@
 
 > ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
 >
-> **Branch:** `feature/ai-life-manager` · Faz 0–5b tamam. **Sıradaki: Faz 5c**, sonra Faz 6, Faz 7.
+> **Branch:** `feature/ai-life-manager` · Faz 0–5c tamam. **Sıradaki: Faz 6**, sonra Faz 7.
 
 ## 0. İlerleme Durumu
 
@@ -18,7 +18,7 @@
 | 4 — AI Çekirdek | ✅ Tamam | `e52b4b7` | assistant-service, Ollama native adaptörü, benchmark, okuma araçları, gizlilik filtresi, sohbet paneli |
 | 5a — AI Aksiyonları | ✅ Tamam | `1d4f701` | yazma araçları, ai_permissions (ask/auto/never), ai_actions, onay kartları, `X-Actor: ai` |
 | 5b — Hafıza + Tasarım | ✅ Tamam | `347b36a` | **Tasarım yenilemesi** (aşağıda), user_facts, goals, profil ekranı, tanışma sohbeti, ayrı hafıza çıkarımı |
-| 5c — Claude + model ayarları | ⏳ Sıradaki | — | AnthropicProvider, provider_configs (şifreli key, Fernet), Ayarlar'da model ekranı, board varsayılan modeli. **Önce `claude-api` skill'ini oku.** |
+| 5c — Claude + model ayarları + tasarım gözden geçirme | ✅ Tamam | (bu commit) | AnthropicProvider (resmi SDK), Claude/GPT/Gemini bağlantı ekranı (Fernet şifreli key), local-zorunlu varsayılan model, board varsayılan modeli + ModelRouter, ücret uyarısı; tüm sayfaların tasarım gözden geçirmesi (aşağıda) |
 | 6 — Proaktif & Öğrenen | ⏳ Bekliyor | — | review.submitted → gün özeti + ertesi gün planı (gemma4:26b), ai_insights, tahmin katsayısı, görev bazlı ModelRouter, RRULE |
 | 7 — Dış Entegrasyonlar | ⏳ Bekliyor | — | Trello (tek seferlik import), Google, Microsoft To Do (Samsung Reminder üzerinden) |
 
@@ -36,6 +36,13 @@
 - **Profil sayfası** (`/profile`): bilgileri düzelt/gizle/sil, hedefler, "Tanışma sohbetini başlat".
 - **Hata düzeltmeleri:** Ollama araç çağrısı id'leri her akışta `call_0`'dan başlıyordu → turlar arası çakışma (onay sonucu yanlış mesaja yazılabilirdi); artık benzersiz. Sohbet mesajına bağlı olmayan öneriler sayfa yenilenince kayboluyordu → en yakın asistan cevabına bağlanıyor.
 
+### Faz 5c'de yapılanlar (ayrıntı)
+- **Claude adaptörü** (`app/llm/anthropic_provider.py`, `anthropic` SDK 2.6): Messages API streaming (`client.beta.messages.stream`), araç sonuçları tek `user` mesajında birleşir, `temperature` gönderilmez (güncel API sürümünde kaldırıldı), `output_config.effort` (varsayılan `medium`), `claude-opus-5-5`/`sonnet-5-5`'te sunucu taraflı `fallbacks: "default"`, `refusal` ve `max_tokens` durdurmalarında araç çalıştırılmaz. **Düşünme blokları** `Msg.provider_state` ile sadece aynı tur içindeki araç döngüsünde aynen geri verilir; veritabanına yazılmaz (sistem mesajı her turda yeniden kurulduğu için turlar arası replay 400 riski taşır). Son turda (FORCE_ANSWER) araç tanımları `tool_choice: none` ile korunur.
+- **Sağlayıcı ayarları** (`provider_configs`, `model_prefs`; `app/api/providers.py`): kullanıcı başına sağlayıcı başına tek kayıt, API anahtarı Fernet ile şifreli (`app/security.py`; ana anahtar `ASSISTANT_SECRET_KEY` ya da git'e girmeyen `.secret_key`), yanıtlarda sadece `…son4`. "Anahtarı doğrula" ücretsiz model listesi çağrısı yapar (token harcamaz) ve hesabın modellerini öneri olarak getirir.
+- **Model seçimi** (`app/llm/router.py`): mesajda seçilen > açık board'un `default_model_id`'si > kullanıcının local varsayılanı. Varsayılan model **sadece local** olabilir (422). `local_only` board'a bulut model atanamaz (task-api 422); board `local_only`'ye çekilince bulut varsayılanı silinir.
+- **Frontend:** Ayarlar → Asistan modeli (local varsayılan + Claude/GPT/Gemini satırları), board formunda "Bu board'da asistan modeli", sohbet panelinde "Otomatik" seçeneği + bulut modele geçerken ücret onay şeridi; bulut seçimi tarayıcıda kalıcı olmaz (yenilenince local'e döner).
+- **Tasarım gözden geçirmesi** (1440 px'te tüm sayfalar gezildi, ekran görüntüleriyle eleştirildi): ortak `PageHeader`/`Section`/`Segmented` (`components/Page.tsx`); Ayarlar, İstatistik, gün değerlendirme ve plan düzenleyicideki "beyaz kart kiti" çizgili bölümlere çevrildi; Ayarlar'da sol bölüm menüsü + anında kaydetme; İstatistik'te defter satırı sayılar, mürekkep tonlarında eksen/ızgara, özel ipucu kutusu, veri yokken açıklamalı boş durum (ruh hâli noktalarının görünmeme hatası düzeltildi); FullCalendar `--fc-*` ve React Flow `--xy-*` değişkenleriyle temalandı (sarı "bugün", lacivert düğmeler, iki satırlık "Tüm gün" gitti); ilişki görünümüne çizgi açıklaması; kart penceresi PC'de iki sütun (içerik + künye); değerlendirme formu iki sütun, emoji yerine sözcüklü 1–5 ölçek; ✓ ⛓ ○ 🔒 ⏰ 🗓 gibi metin sembolleri lucide ikonlarına çevrildi; board başlığı/listesinde gizlilik ve atanmış model görünür.
+
 ### Plandan bilinçli sapmalar
 | Plan | Yapılan | Neden |
 |---|---|---|
@@ -44,6 +51,9 @@
 | `daily_stats` / `card_stats` tabloları | Her istekte hesaplanan `/analytics/summary` | Kişisel ölçekte veri küçük; önbellek tablo eskiyebilirdi |
 | Hafıza aracını sohbet modeli çağırır | Ayrı, odaklı hafıza çıkarımı adımı | Modeller sohbet ederken araç çağırmıyordu (yukarıda) |
 | Faz 5 tek parça | 5a / 5b / 5c | Kapsam büyüklüğü |
+| `provider` = ollama/openai/anthropic/openai_compatible, `is_default` kayıtta | Claude/GPT/Gemini (Gemini, Google'ın OpenAI-uyumlu uç noktasıyla mevcut adaptörü kullanır); varsayılan ayrı `model_prefs` tablosunda ve **sadece local** | Kullanıcı kararı: varsayılan hep local, bulut ücretli olduğu için bilerek seçilir |
+| `boards.default_model_config_id` (FK) | `boards.default_model_id` (`"saglayici:model"` metni) | Ayrı servis/veritabanı; model kimliği zaten saglayici:model biçiminde |
+| Bulut modellerle gerçek test | Sadece birim/entegrasyon testleri (sahte istemci); gerçek API'ye istek atılmadı | Kullanıcı kararı: API maliyeti |
 
 ### Bilinen sorunlar / dikkat
 - **qwen3.5:4b** hızlı ve araç çağrılarında doğru ama çok adımlı işte zayıf: onay beklerken "ekledim" diyebiliyor, anlam hataları yapıyor (koşu etkinliğini "ayakkabı al" kartına bağladı). Onay kartları gerçeği gösteriyor; Faz 6'da görev bazlı yönlendirme (planlama → gemma4:26b) bunun için.
@@ -54,7 +64,8 @@
 ### Yeni oturum için hızlı başlangıç
 - **Ortam:** Windows, Docker YOK (SQLite), uv: `C:\Users\alium\AppData\Roaming\Python\Python313\Scripts\uv.exe` (PATH'te değil). Ollama kurulu (qwen3.5:4b, gemma4:26b, qwen3.8:27b; deepseek-r1 ve coder listede gizli). GPU: RTX 4060 Laptop 8 GB.
 - **Çalıştırma:** `./scripts/dev.ps1` ya da önizleme (`task api project/.claude/launch.json`: task-api 8000, assistant 8100, web 5173).
-- **Testler:** `services/task-api`: `uv run pytest -q` (139) · `services/assistant-service`: `uv run pytest -q` (37) · `apps/web`: `npm run build`.
+- **Testler:** `services/task-api`: `uv run pytest -q` (143) · `services/assistant-service`: `uv run pytest -q` (56) · `apps/web`: `npm run build`.
+- **Bulut model anahtarı:** `ASSISTANT_SECRET_KEY` yoksa ilk kayıtta `services/assistant-service/.secret_key` üretilir (git'te yok). Silinirse kayıtlı API anahtarları çözülemez, yeniden girilmeli.
 - **Test hesabı:** `apps/web/README.md`.
 - **Benchmark:** `services/assistant-service`: `uv run python -m scripts.benchmark_models` (rapor `benchmark_results/`, git'te yok).
 

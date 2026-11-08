@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from 'react'
+import { AlertTriangle } from 'lucide-react'
+import { CLOUD_COST_WARNING, useModels } from '../api/assistant'
 import type { BoardCreate } from '../lib/types'
 
 export const COLORS = [
@@ -23,6 +25,11 @@ export default function BoardForm({ initial, submitLabel, busy, onSubmit, onCanc
     initial?.weekly_time_budget_min ? String(initial.weekly_time_budget_min / 60) : '',
   )
   const [privacy, setPrivacy] = useState(initial?.privacy ?? 'cloud_allowed')
+  const [modelId, setModelId] = useState(initial?.default_model_id ?? '')
+  const models = useModels()
+  const all = models.data?.models ?? []
+  const chosen = all.find((m) => m.id === modelId)
+  const cloudChosen = modelId !== '' && !modelId.startsWith('ollama:')
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -33,6 +40,7 @@ export default function BoardForm({ initial, submitLabel, busy, onSubmit, onCanc
       color,
       weekly_time_budget_min: Number.isFinite(hours) ? Math.round(hours * 60) : null,
       privacy,
+      default_model_id: modelId || null,
     })
   }
 
@@ -82,13 +90,45 @@ export default function BoardForm({ initial, submitLabel, busy, onSubmit, onCanc
           <select
             className="w-full rounded-md border border-slate-300 px-3 py-2"
             value={privacy}
-            onChange={(e) => setPrivacy(e.target.value as typeof privacy)}
+            onChange={(e) => {
+              const v = e.target.value as typeof privacy
+              setPrivacy(v)
+              // "Sadece local" board bulut modelle calisamaz
+              if (v === 'local_only' && cloudChosen) setModelId('')
+            }}
           >
             <option value="cloud_allowed">Tüm modeller görebilir</option>
             <option value="local_only">Sadece local model</option>
           </select>
         </label>
       </div>
+      <label className="block space-y-1 text-sm">
+        <span className="text-slate-600">Bu board'da asistan modeli</span>
+        <select
+          className="w-full rounded-md border border-slate-300 px-3 py-2"
+          value={modelId}
+          onChange={(e) => setModelId(e.target.value)}
+        >
+          <option value="">Varsayılan local model</option>
+          <optgroup label="Local">
+            {all.filter((m) => m.is_local).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </optgroup>
+          {all.some((m) => !m.is_local) && (
+            <optgroup label={privacy === 'local_only' ? 'Bulut (bu board sadece local)' : 'Bulut (ücretli)'}>
+              {all.filter((m) => !m.is_local).map((m) => (
+                <option key={m.id} value={m.id} disabled={privacy === 'local_only'}>{m.label}</option>
+              ))}
+            </optgroup>
+          )}
+          {modelId && !chosen && <option value={modelId}>{modelId} (artık listede yok)</option>}
+        </select>
+        {cloudChosen && (
+          <span className="flex gap-1.5 text-[13px] text-amber-900">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
+            {CLOUD_COST_WARNING} Bu board açıkken asistan otomatik olarak bu modeli kullanır.
+          </span>
+        )}
+      </label>
       <div className="flex justify-end gap-2">
         {onCancel && (
           <button type="button" onClick={onCancel} className="px-3 py-2 text-sm text-slate-600">

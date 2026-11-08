@@ -30,6 +30,9 @@ class Msg:
     tool_calls: list[ToolCall] | None = None  # role=assistant
     tool_call_id: str | None = None  # role=tool
     name: str | None = None  # role=tool: arac adi
+    # Saglayiciya ozel, opak icerik (orn. Claude'un dusunme bloklari). Sadece ayni
+    # agent turu icinde ayni saglayiciya aynen geri verilir; veritabanina YAZILMAZ.
+    provider_state: Any = None
 
 
 @dataclass
@@ -51,16 +54,17 @@ class Usage:
 class ChatChunk:
     """Stream olayi: metin parcasi, tamamlanmis arac cagrisi ya da kullanim bilgisi."""
 
-    type: Literal["text", "tool_call", "usage"]
+    type: Literal["text", "tool_call", "usage", "state"]
     text: str = ""
     tool_call: ToolCall | None = None
     usage: Usage | None = None
+    state: Any = None  # type == "state": asistan mesajinin provider_state'i
 
 
 @dataclass(frozen=True)
 class ModelInfo:
     id: str  # "ollama:qwen3.5:4b", "openai:gpt-..."
-    provider: Literal["ollama", "openai", "anthropic", "openai_compatible"]
+    provider: Literal["ollama", "openai", "anthropic", "gemini"]
     model: str  # saglayicinin model adi
     label: str
     is_local: bool

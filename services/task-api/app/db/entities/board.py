@@ -37,6 +37,10 @@ class BoardEntity(Base, TimestampMixin):
     privacy: Mapped[BoardPrivacy] = mapped_column(
         SQLEnum(BoardPrivacy), default=BoardPrivacy.CLOUD_ALLOWED
     )
+    # Bu board'da asistanin varsayilan modeli ("ollama:qwen3.5:4b",
+    # "anthropic:claude-sonnet-5-5"...). Bos: kullanicinin (local) varsayilani.
+    # local_only board'da sadece local model olabilir.
+    default_model_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
