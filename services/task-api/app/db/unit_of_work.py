@@ -11,6 +11,7 @@ from app.db.repositories.board import (
 )
 from app.db.repositories.card_content import (
     ActivityRepository,
+    AttachmentRepository,
     CardNoteRepository,
     ChecklistRepository,
     DependencyRepository,
@@ -82,6 +83,7 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.labels = LabelRepository(session)
         self.card_labels = CardLabelRepository(session)
         self.notes = CardNoteRepository(session)
+        self.attachments = AttachmentRepository(session)
         self.checklist = ChecklistRepository(session)
         self.activity = ActivityRepository(session)
         self.events = EventRepository(session)

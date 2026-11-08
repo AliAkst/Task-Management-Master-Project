@@ -44,4 +44,36 @@ Yükleme + liste + indirme içeriği/sha; 25 MB aşımı 413 (sınırı testte k
 - Tarayıcıda (5175): PDF + PNG ekle, küçük resim görünür, Aç/İndir/Sil çalışır; nota ekran görüntüsü yapıştır → notta resim görünür; kanban kartında ataş sayısı.
 
 ## İlerleme
-_(oturum sonunda doldurulur)_
+**Durum: ✅ Kod tamam (2026-11-09), commit bekliyor.** Migration `a5c9e1b3d7f2_card_attachments.py` (down = `e4b8c2f6a9d3`).
+
+### Yapılanlar
+- **Backend:** `python-multipart`; `CardAttachmentEntity` + `AttachmentRepository` (UoW `attachments`); `app/services/attachment_storage.py` (`LocalAttachmentStorage` save/path/delete/sweep_orphans, `make/read_attachment_token`); `app/services/attachment.py` (`AttachmentService`: upload/list_for_card/get_for_download/delete, ad temizleme, yasak uzantılar, MIME uzantıdan); `app/api/v1/attachments.py` (4 uç; indirme token'lı ya da Authorization'lı); `AttachmentResponse`, `CardDetail.attachments`, `CardSummary.attachment_count`; config `ATTACHMENTS_MAX_MB` (25) + `ATTACHMENTS_DIR`; açılışta yetim temizliği (`main.sweep_orphan_attachments`, try/except).
+- **Silme yolları:** `CardService.delete`, `TaskService.delete` (eski `/tasks` ucu da kart siler), `BoardService.delete` (+ `delete_cascade`) ek satırlarını siler, dosyalar commit sonrası; `delete_note` → `note_id = NULL`; arşiv dokunmaz; seri kopyası eksiz (zaten kopyalanmıyordu, test eklendi).
+- **assistant-service:** `get_card` → `attachments: [dosya adı]` (URL/token yok) + 1 test.
+- **Frontend:** `api/attachments.ts` (`uploadAttachment` FormData + 401'de yenileme, `useUploadAttachment/useDeleteAttachment/useUploads`, Türkçe 413/422 mesajı); `AttachmentsSection.tsx` (Notlar'ın üstünde; 48 px küçük resim, ad, boyut, tarih, Aç/İndir/Sil(onaylı), "Dosya ekle", yükleme göstergesi); `CardModal` kart penceresine dosya sürükleme vurgusu + bırakma; `MarkdownEditor` `onFiles` (📎 düğmesi, yapıştırma, bırakma → `![ad](attachment:ID)` / `[📎 ad](attachment:ID)`; not düzenlerken `note_id`); `MarkdownView` `attachments` + `urlTransform` (bulunamazsa "📎 ek silinmiş"); `CardFace` ataş + sayı; `formatBytes`.
+- `api-schema.d.ts`: `npx openapi-typescript` ile uygulamanın `app.openapi()` çıktısından üretildi (elle değil).
+
+### Sapmalar
+| Planda | Yapılan | Neden |
+|---|---|---|
+| `.gitignore`'a `services/task-api/data/` | Eklenmedi | `services/task-api/.gitignore:27` zaten `data/` içeriyor |
+| 📎 düğmesi `toolbarExtra`'ya | `MarkdownEditor` kendisi (`onFiles` verilince) 📎 + gizli `<input>` çiziyor; `toolbarExtra` aynen duruyor | Düğme editörün `insert`/imleç mantığına ve yükleme durumuna bağlı; dışarıdan yönetmek kırılgan |
+| Yükleme `app/api/v1/cards.py` ya da yeni dosya | Yeni `attachments.py` | Plan iki seçeneği de sundu |
+| Token ≠ sahip → 404; süresi dolmuş/yanlış purpose → "404/401" | Bozuk/süresi dolmuş/yanlış purpose/token'sız → **401**; token geçerli ama başka kullanıcı/başka ek → **404** | Plan "404/401" diyordu; ayrım kimlik hatası vs. sahiplik |
+| Dosya adı yalnız `filename*=` | `filename="ascii-yedek"; filename*=UTF-8''…` ikisi birden | RFC 6266 uyumu, eski istemciler |
+| 25 MB sınırı yalnız parça parça yazarken | Ek olarak `Content-Length` > sınır+1 MB ise baştan 413 | Starlette multipart'ı önce geçici dosyaya alıyor; gereksiz okumayı önler. Sınır yine yazarken kesin uygulanır |
+| `AttachmentResponse` her üretildiğinde taze token | `to_response()` her çağrıda yeni token (60 dk) | Plana uygun; kart sorgusu tazelenince URL'ler yenilenir |
+| `api-schema.d.ts` elle | Üreteçle (dosyadan) | Çıktı gerçek şemayla birebir; yeni router'ın sırası yüzünden bazı blokların yeri değişti (diff gürültülü, içerik aynı) |
+| Gerçek DB yedeği | DB'ye hiç dokunulmadı; migration yalnız kopyada (`%TEMP%\8c_copy.db`) denendi | Kural: gerçek DB'ye dokunma. Gerçek DB'yi kullanıcı "Ajanda - Durdur → Ajanda" ile taşıyacak (öncesinde yedek almak kullanıcıda) |
+
+### Doğrulanmayanlar
+- **PDF'yi yeni sekmede (Aç) görüntüleme:** plandaki CSP `sandbox` bazı tarayıcılarda dahili PDF görüntüleyicisini engelleyebilir; yalnız başlıklar doğrulandı (`inline` + CSP). Sorun çıkarsa "İndir" çalışır; çözüm gerekirse PDF için `sandbox` çıkarılabilir (kullanıcı kararı).
+- Gerçek ekran görüntüsü yapıştırma (pano izni), gerçek sürükle-bırak (OS'tan) ve 25 MB'lık gerçek dosya yüklemesi tarayıcıda denenmedi; yapıştırma/yükleme `ClipboardEvent`/`DataTransfer` ile simüle edildi, 413 testle doğrulandı.
+- Silme düğmesi (`confirm`) tarayıcıda tıklanmadı (API testleri kapsıyor).
+- Dark mode yok (8g); yeni bileşende `bg-surface`/`text-on-ink` kuralına uyuldu.
+
+### Test sayıları
+- task-api: 298 geçti (+29: `tests/integration/test_attachments.py`). assistant-service: 148 geçti (+1). `npm run build` temiz.
+- Migration (DB kopyasında): `upgrade` → `downgrade -1` → `upgrade`, `alembic check` "No new upgrade operations".
+- Tarayıcı (8001 kopya DB + kopya ek klasörü / 5175): PNG + PDF + `.exe` yükleme (`.exe` → "Bu dosya türü yüklenemez"), küçük resim görünür, nota resim yapıştırma → `![image.png](attachment:3)` → kayıtta resim render, kanban kartında ataş + 3, indirme başlıkları (inline, nosniff, CSP). Kopya DB'den entegrasyon hesabı satırı silindi (arka plan senkronu gerçek hesaba gitmesin).
+- Ruff: yeni/değişen dosyalarda yalnız E501 (yeni dosyalarda kabul).

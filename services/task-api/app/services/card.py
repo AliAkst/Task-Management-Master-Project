@@ -43,6 +43,8 @@ from app.models.card import (
 )
 from app.models.task import TaskStatus
 from app.services.activity import ActivityLogger, diff
+from app.services.attachment import to_response
+from app.services.attachment_storage import get_storage
 from app.services.board import BoardService
 from app.services.ordering import STEP, place_at
 from app.services.recurrence import next_occurrence, normalize_rule
@@ -138,6 +140,7 @@ class CardService:
         labels = await self.uow.card_labels.label_ids_for_cards(ids)
         progress = await self.uow.checklist.progress_for_cards(ids)
         notes = await self.uow.notes.counts_for_cards(ids)
+        attachments = await self.uow.attachments.counts_for_cards(ids)
 
         # Bagimliliklar: bitmemis on kosulu olan kart 'blocked'
         edges = await self.uow.dependencies.edges_touching(ids)
@@ -185,6 +188,7 @@ class CardService:
                         "checklist_total": total,
                         "checklist_done": done,
                         "note_count": notes.get(c.id, 0),
+                        "attachment_count": attachments.get(c.id, 0),
                         "blocked": open_prereqs.get(c.id, 0) > 0
                         and c.status != TaskStatus.COMPLETED,
                         "blocked_by_count": open_prereqs.get(c.id, 0),
@@ -268,6 +272,7 @@ class CardService:
         summary = (await self.summaries([card]))[0]
         notes = await self.uow.notes.list_for_card(card.id)
         checklist = await self.uow.checklist.list_for_card(card.id)
+        attachments = await self.uow.attachments.list_for_card(card.id)
         parent = (
             await self.uow.tasks.get_by_id(card.parent_id) if card.parent_id else None
         )
@@ -300,6 +305,7 @@ class CardService:
             created_at=card.created_at,
             updated_at=card.updated_at,
             notes=[NoteResponse.model_validate(n) for n in notes],
+            attachments=[to_response(a) for a in attachments],
             checklist=[ChecklistItemResponse.model_validate(i) for i in checklist],
             parent=CardRef.model_validate(parent) if parent else None,
             subtasks=await self.summaries(subtasks),
@@ -580,6 +586,8 @@ class CardService:
             changes={"title": card.title},
         )
         await self.uow.card_labels.set_for_card(card.id, [])
+        file_keys = await self.uow.attachments.keys_for_card(card.id)
+        await self.uow.attachments.delete_for_card(card.id)
         await self.uow.notes.delete_for_card(card.id)
         await self.uow.checklist.delete_for_card(card.id)
         await self.uow.dependencies.delete_for_card(card.id)
@@ -592,6 +600,7 @@ class CardService:
         await self.uow.tasks.detach_children(card.id)
         await self.uow.tasks.delete(card)
         await self.uow.commit()
+        get_storage().delete_many(file_keys)  # commit sonrasi; hata loglanir
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))
         await domain_event_publisher.publish(
             "card.deleted",
@@ -640,6 +649,7 @@ class CardService:
     async def delete_note(self, note_id: int, user_id: int) -> None:
         note = await self._owned_note(note_id, user_id)
         card = await self.get_owned_card(note.card_id, user_id)
+        await self.uow.attachments.detach_note(note.id)
         await self.uow.notes.delete(note)
         await self.activity.log(
             user_id, "note", note.id, "deleted", board_id=card.board_id, card_id=card.id

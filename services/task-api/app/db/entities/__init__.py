@@ -8,6 +8,7 @@ from .board import (
     LabelEntity,
 )
 from .card_content import (
+    CardAttachmentEntity,
     CardDependencyEntity,
     CardNoteEntity,
     ChecklistItemEntity,
@@ -28,6 +29,7 @@ __all__ = [
     "BoardEntity",
     "BoardListEntity",
     "BoardPrivacy",
+    "CardAttachmentEntity",
     "CardDependencyEntity",
     "CardSeriesEntity",
     "CardLabelEntity",

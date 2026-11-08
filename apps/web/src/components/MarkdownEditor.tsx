@@ -5,10 +5,13 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type ClipboardEvent,
+  type DragEvent,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { Bold, Braces, Code, Link2, List, ListChecks } from 'lucide-react'
+import { Bold, Braces, Code, Link2, List, ListChecks, Loader2, Paperclip } from 'lucide-react'
+import type { Attachment } from '../lib/types'
 
 const LANGS: [string, string][] = [
   ['', 'Düz metin'],
@@ -42,18 +45,70 @@ interface Props {
   submitLabel?: string
   cancelLabel?: string
   toolbarExtra?: ReactNode
+  /** Dosya yapistirma/birakma/📎: yukler, ekleri dondurur; editor imlece baglanti ekler. */
+  onFiles?: (files: File[]) => Promise<Attachment[]>
 }
 
 const tool = 'rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
 const FENCE = '```'
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function MarkdownEditor(
-  { value, onChange, onSubmit, onCancel, placeholder, autoFocus, minRows = 3, submitLabel = 'Kaydet', cancelLabel = 'Vazgeç', toolbarExtra },
+  { value, onChange, onSubmit, onCancel, placeholder, autoFocus, minRows = 3, submitLabel = 'Kaydet', cancelLabel = 'Vazgeç', toolbarExtra, onFiles },
   ref,
 ) {
   const ta = useRef<HTMLTextAreaElement>(null)
   const [langMenu, setLangMenu] = useState(false)
   const pendingSel = useRef<[number, number] | null>(null)
+  const valueRef = useRef(value)
+  valueRef.current = value
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(0)
+
+  /** Asenkron islerden sonra da guncel metne/imlece gore ekler (kapanis degerleri eskiyebilir). */
+  const insertLatest = useCallback(
+    (text: string) => {
+      const el = ta.current
+      const v = valueRef.current
+      const s = el?.selectionStart ?? v.length
+      const e = el?.selectionEnd ?? v.length
+      pendingSel.current = [s + text.length, s + text.length]
+      onChange(v.slice(0, s) + text + v.slice(e))
+      requestAnimationFrame(() => ta.current?.focus())
+    },
+    [onChange],
+  )
+
+  const handleFiles = async (files: File[]) => {
+    if (!onFiles || files.length === 0) return
+    setUploading((n) => n + files.length)
+    try {
+      const done = await onFiles(files)
+      if (done.length) {
+        const md = done
+          .map((a) => (a.is_image ? `![${a.filename}](attachment:${a.id})` : `[📎 ${a.filename}](attachment:${a.id})`))
+          .join('\n')
+        insertLatest(md + '\n')
+      }
+    } finally {
+      setUploading((n) => n - files.length)
+    }
+  }
+  const onPaste = (ev: ClipboardEvent<HTMLTextAreaElement>) => {
+    // Excel/Word kopyasi hem metin hem resim tasir: metin varsa normal yapistir
+    if (!onFiles || ev.clipboardData.files.length === 0 || ev.clipboardData.getData('text/plain')) return
+    ev.preventDefault()
+    void handleFiles(Array.from(ev.clipboardData.files))
+  }
+  const hasFiles = (ev: DragEvent) => Array.from(ev.dataTransfer.types).includes('Files')
+  const onDragOver = (ev: DragEvent<HTMLTextAreaElement>) => {
+    if (onFiles && hasFiles(ev)) ev.preventDefault()
+  }
+  const onDrop = (ev: DragEvent<HTMLTextAreaElement>) => {
+    if (!onFiles || !hasFiles(ev)) return
+    ev.preventDefault()
+    ev.stopPropagation() // kart penceresinin genel birakma alani da yuklemesin
+    void handleFiles(Array.from(ev.dataTransfer.files))
+  }
 
   // Otomatik yukselme + bekleyen imlec konumu
   useEffect(() => {
@@ -194,6 +249,25 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
           <button type="button" className={tool} title="Bağlantı" aria-label="Bağlantı" onClick={link}>
             <Link2 size={16} aria-hidden />
           </button>
+          {onFiles && (
+            <>
+              <button type="button" className={tool} title="Dosya ekle" aria-label="Dosya ekle" onClick={() => fileInput.current?.click()}>
+                {uploading > 0 ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Paperclip size={16} aria-hidden />}
+              </button>
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                className="hidden"
+                aria-hidden
+                tabIndex={-1}
+                onChange={(e) => {
+                  void handleFiles(Array.from(e.target.files ?? []))
+                  e.target.value = ''
+                }}
+              />
+            </>
+          )}
           {toolbarExtra}
           {langMenu && (
             <ul
@@ -218,6 +292,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
           aria-label={placeholder ?? 'Markdown metni'}
         />
       </div>

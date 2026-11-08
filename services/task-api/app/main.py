@@ -1,9 +1,11 @@
 import asyncio
+from datetime import timedelta
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.attachments import attachments_router
 from app.api.v1.auth import auth_router as auth_router
 from app.api.v1.tasks import tasks_router as tasks_router
 from app.api.v1.boards import boards_router
@@ -23,12 +25,29 @@ from app.core.middleware import RateLimitMiddleware
 from app.api.v1.health import router as health_router
 from app.core.correlation import CorrelationIdMiddleware
 from app.core.messaging import rabbitmq_client
+from app.db.database import async_session_maker
+from app.db.repositories.card_content import AttachmentRepository
+from app.services.attachment_storage import get_storage
 from app.integrations.scheduler import sync_loop
 
 setup_logging()
 
 logger = get_logger(__name__)
 logger.info("Starting my little tiny app...(finally i made it)")
+
+
+async def sweep_orphan_attachments() -> None:
+    """Acilista: DB satiri olmayan ve 24 saatten eski ek dosyalarini siler."""
+    try:
+        async with async_session_maker() as session:
+            known = await AttachmentRepository(session).all_storage_keys()
+        removed = await asyncio.to_thread(
+            get_storage().sweep_orphans, known, timedelta(hours=24)
+        )
+        if removed:
+            logger.info(f"Yetim ek dosyasi temizlendi: {removed}")
+    except Exception as e:  # uygulamayi durdurmaz
+        logger.warning(f"Yetim ek temizligi atlandi: {e}")
 
 
 @asynccontextmanager
@@ -40,6 +59,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"RabbitMQ unavailable, domain events disabled: {e}")
 
+    await sweep_orphan_attachments()
     sync_task = asyncio.create_task(sync_loop())
 
     yield
@@ -80,6 +100,7 @@ app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(settings_router, prefix=settings.api_v1_prefix)
 app.include_router(boards_router, prefix=settings.api_v1_prefix)
 app.include_router(cards_router, prefix=settings.api_v1_prefix)
+app.include_router(attachments_router, prefix=settings.api_v1_prefix)
 app.include_router(events_router, prefix=settings.api_v1_prefix)
 app.include_router(goals_router, prefix=settings.api_v1_prefix)
 app.include_router(integrations_router, prefix=settings.api_v1_prefix)

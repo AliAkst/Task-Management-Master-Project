@@ -291,6 +291,8 @@ class ToolBox:
             out["labels"] = [
                 {"id": i, "name": names[i]} for i in c["label_ids"] if i in names
             ]
+        if c.get("attachments"):  # yalniz dosya adlari; icerik modele gitmez (Faz 8c)
+            out["attachments"] = [a["filename"] for a in c["attachments"]]
         if c["notes"]:
             out["recent_notes"] = [_clip(n["content"], 300) for n in c["notes"][:5]]
         if c["subtasks"]:

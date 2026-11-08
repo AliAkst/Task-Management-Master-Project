@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type MouseEvent } from 'react'
 import { Check, Circle, CornerLeftUp, ExternalLink, Hourglass, X } from 'lucide-react'
+import { useUploads } from '../api/attachments'
 import { useCard, useCardActivity, useCardMutations } from '../api/boards'
 import {
   ACTION_LABEL,
@@ -9,6 +10,7 @@ import {
   toDateInput,
 } from '../lib/format'
 import type { BoardDetail, TaskPriority } from '../lib/types'
+import AttachmentsSection from './AttachmentsSection'
 import CardSchedule from './CardSchedule'
 import CardTime, { CardTimerButton } from './CardTime'
 import MarkdownEditor from './MarkdownEditor'
@@ -46,6 +48,9 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   const card = useCard(cardId)
   const activity = useCardActivity(cardId)
   const m = useCardMutations(cardId, board.board.id)
+  const uploads = useUploads(cardId, board.board.id)
+  const [dropping, setDropping] = useState(false)
+  const dragDepth = useRef(0)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -86,6 +91,30 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   const c = card.data
   const done = c.status === 'completed'
   const list = board.lists.find((l) => l.id === c.list_id)
+
+  const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer.types).includes('Files')
+  const dragProps = {
+    onDragEnter: (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      dragDepth.current += 1
+      setDropping(true)
+    },
+    onDragOver: (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault()
+    },
+    onDragLeave: (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      dragDepth.current = Math.max(0, dragDepth.current - 1)
+      if (dragDepth.current === 0) setDropping(false)
+    },
+    onDrop: (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      e.preventDefault()
+      dragDepth.current = 0
+      setDropping(false)
+      void uploads.upload(Array.from(e.dataTransfer.files))
+    },
+  }
 
   const saveTitle = () => {
     if (title.trim() && title.trim() !== c.title) m.update.mutate({ title: title.trim() })
@@ -157,6 +186,12 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
 
   return (
     <Modal size="xl" onClose={onClose} label={c.title}>
+      <div {...dragProps} className={`relative rounded-md ${dropping ? "outline-2 outline-dashed outline-blue-600 outline-offset-4" : ""}`}>
+        {dropping && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md bg-blue-50/80 text-[16px] font-semibold text-blue-800">
+            Bırak, karta eklensin
+          </div>
+        )}
       {/* Baslik */}
       <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
         <button
@@ -225,6 +260,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                 onChange={setDescription}
                 onSubmit={saveDescription}
                 onCancel={cancelDescription}
+                onFiles={(files) => uploads.upload(files)}
               />
             ) : (
               <div
@@ -235,7 +271,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                 onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && setEditingDesc(true)}
                 className="min-h-14 cursor-text rounded-md border border-transparent bg-slate-50 px-3 py-2 text-[15px] hover:border-slate-200"
               >
-                {c.description ? <MarkdownView content={c.description} /> : <span className="text-slate-500">Açıklama eklemek için tıkla</span>}
+                {c.description ? <MarkdownView content={c.description} attachments={c.attachments} /> : <span className="text-slate-500">Açıklama eklemek için tıkla</span>}
               </div>
             )}
           </div>
@@ -316,6 +352,16 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
             </form>
           </div>
 
+          {/* Ekler */}
+          <AttachmentsSection
+            cardId={c.id}
+            boardId={board.board.id}
+            attachments={c.attachments}
+            pending={uploads.pending}
+            error={uploads.error}
+            onFiles={(files) => void uploads.upload(files)}
+          />
+
           {/* Notlar */}
           <div className={section}>
             <h3 className={sectionTitle}>Notlar</h3>
@@ -326,6 +372,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
               onChange={setNote}
               onSubmit={addNote}
               submitLabel="Notu kaydet"
+              onFiles={(files) => uploads.upload(files)}
             />
             <ul className="mt-3 space-y-3">
               {c.notes.map((n) => {
@@ -351,10 +398,11 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                         onChange={setNoteDraft}
                         onSubmit={() => saveNote(n.id, n.content)}
                         onCancel={() => cancelNote(n.content)}
+                        onFiles={(files) => uploads.upload(files, n.id)}
                       />
                     ) : (
                       <div onDoubleClick={(e) => onNoteDoubleClick(e, n.id, n.content)} title="Düzenlemek için çift tıkla">
-                        <MarkdownView content={n.content} />
+                        <MarkdownView content={n.content} attachments={c.attachments} />
                       </div>
                     )}
                   </li>
@@ -521,6 +569,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
           </div>
           {m.update.error && <p className="mt-2 text-sm text-red-700">{m.update.error.message}</p>}
         </aside>
+      </div>
       </div>
     </Modal>
   )
