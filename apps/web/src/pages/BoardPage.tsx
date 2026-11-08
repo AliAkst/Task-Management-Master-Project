@@ -22,6 +22,7 @@ import { useBoard, useBoardMutations, useDeleteBoard, useUpdateBoard } from '../
 import BoardForm, { COLORS } from '../components/BoardForm'
 import CardFace from '../components/CardFace'
 import CardModal from '../components/CardModal'
+import InboxTriage from '../components/InboxTriage'
 import KanbanList, { listKey } from '../components/KanbanList'
 import Modal from '../components/Modal'
 import { Segmented } from '../components/Page'
@@ -232,6 +233,10 @@ export default function BoardPage() {
         </div>
       </div>
 
+      {b.system_kind === 'inbox' && (
+        <InboxTriage openCount={board.data.cards.filter((c) => c.status !== 'completed' && !c.is_archived).length} />
+      )}
+
       {view === 'graph' ? (
         <Suspense fallback={<p className="p-6 text-slate-500">İlişki görünümü yükleniyor…</p>}>
           <GraphView boardId={boardId} labels={labels} onOpenCard={openCard} />
@@ -341,15 +346,19 @@ export default function BoardPage() {
             >
               Arşivle
             </button>
-            <button
-              className="text-red-600 hover:underline"
-              onClick={() => {
-                if (confirm(`"${b.name}" board'u tüm kartlarıyla silinsin mi?`))
-                  deleteBoard.mutate(b.id, { onSuccess: () => navigate('/') })
-              }}
-            >
-              Board'u sil
-            </button>
+            {b.system_kind === 'inbox' ? (
+              <span className="text-slate-500">Gelen Kutusu silinemez</span>
+            ) : (
+              <button
+                className="text-red-600 hover:underline"
+                onClick={() => {
+                  if (confirm(`"${b.name}" board'u tüm kartlarıyla silinsin mi?`))
+                    deleteBoard.mutate(b.id, { onSuccess: () => navigate('/') })
+                }}
+              >
+                Board'u sil
+              </button>
+            )}
           </div>
         </Modal>
       )}

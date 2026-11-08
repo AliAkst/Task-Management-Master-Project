@@ -22,7 +22,12 @@ from app.db.models import AiActionEntity, get_session
 from app.tools.memory_tools import MemoryTools
 from app.tools.privacy import PrivacyFilter
 from app.tools.task_api import TaskApiError
-from app.tools.write_tools import ACTION_TYPES, WriteTools
+from app.tools.write_tools import (
+    ACTION_TYPES,
+    WriteTools,
+    triage_summary,
+    without_cards,
+)
 
 router = APIRouter()
 Mode = Literal["ask", "auto", "never"]
@@ -31,6 +36,8 @@ Mode = Literal["ask", "auto", "never"]
 class ApproveRequest(BaseModel):
     # "Bu tur islemleri bundan sonra otomatik yap"
     remember_auto: bool = False
+    # Gelen Kutusu dagitiminda kullanicinin onaydan once cikardigi kartlar
+    exclude_card_ids: list[int] = Field(default_factory=list, max_length=100)
 
 
 class RejectRequest(BaseModel):
@@ -80,6 +87,12 @@ async def approve(
 ):
     action = await _owned_action(session, action_id, user["id"])
     _must_be_pending(action)
+    if data.exclude_card_ids and action.action_type == "triage_inbox":
+        kept = without_cards(action.args, set(data.exclude_card_ids))
+        if not kept["moves"]:
+            raise HTTPException(422, "En az bir kart kalmalı; hepsini istemiyorsan reddet")
+        action.args = kept
+        action.summary = triage_summary(kept["moves"])
     api = chat_module.TaskApiClient(user["token"])
     try:
         settings = await api.get("/settings/")
