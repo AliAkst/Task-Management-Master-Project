@@ -352,9 +352,9 @@ export default function BoardPage() {
       </DndContext>
       )}
 
-      {(m.moveCard.error || m.deleteList.error || m.createCard.error) && (
+      {(m.moveCard.error || m.moveList.error || m.deleteList.error || m.createCard.error) && (
         <p className="px-4 pb-2 text-sm text-red-600">
-          {(m.moveCard.error ?? m.deleteList.error ?? m.createCard.error)?.message}
+          {(m.moveCard.error ?? m.moveList.error ?? m.deleteList.error ?? m.createCard.error)?.message}
         </p>
       )}
 

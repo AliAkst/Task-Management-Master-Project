@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.api.dependencies import AttachmentServiceDep, CurrentUserDep
 from app.config import settings
 from app.core.exceptions import (
+    AppException,
     AuthenticationException,
     InvalidTokenException,
     NotFoundException,
@@ -34,6 +35,7 @@ SECURITY_HEADERS = {
         "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
     ),
     "Cache-Control": "private, max-age=3600",
+    "Referrer-Policy": "no-referrer",
 }
 
 
@@ -62,7 +64,14 @@ async def upload_attachment(
     limit = settings.attachments_max_mb * 1024 * 1024
     declared = request.headers.get("content-length")
     # Govde cok buyukse (form alanlari icin 1 MB pay) parcalamadan reddet
-    if declared and declared.isdigit() and int(declared) > limit + 1024 * 1024:
+    if not (declared and declared.isdigit()):
+        # Chunked govde Starlette tarafindan once tamamen tamponlanir: boyut bilinmeden alinmaz
+        raise AppException(
+            status_code=411,
+            error_code="CONTENT_LENGTH_REQUIRED",
+            message="Content-Length başlığı gerekli",
+        )
+    if int(declared) > limit + 1024 * 1024:
         raise AttachmentTooLargeException(settings.attachments_max_mb)
     data = await service.upload(card_id, user.id, file.filename, file, note_id)
     return ApiResponse(success=True, data=data)

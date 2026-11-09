@@ -432,3 +432,27 @@ class TestFocusContext:
         await ask(client, "fake:local", board_id=2, card_id=21)
         system = client.providers["fake:local"].received[0][0].content
         assert "#21 «Gizli date planı»" in system
+
+
+# ---------------- arsivli gizli board (denetim bulgusu 4) ----------------
+class TestArchivedLocalOnly:
+    async def test_archived_local_only_board_hidden_from_cloud(self):
+        import httpx
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            path = request.url.path.removeprefix("/api/v1")
+            archived = request.url.params.get("include_archived") == "true"
+            if path == "/boards":
+                boards = [{"id": 9, "name": "Eski", "privacy": "local_only"}] if archived else []
+                return httpx.Response(200, json={"success": True, "data": boards})
+            if path == "/boards/9":
+                return httpx.Response(
+                    200, json={"success": True, "data": {"cards": [{"id": 90}]}}
+                )
+            return httpx.Response(404, json={"success": False})
+
+        box = await ToolBox.create(
+            TaskApiClient("t", transport=httpx.MockTransport(handler)), cloud=True, tz=TZ
+        )
+        assert box.privacy.board_hidden(9)
+        assert box.privacy.card_hidden(90)
