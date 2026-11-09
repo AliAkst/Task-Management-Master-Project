@@ -77,7 +77,7 @@ export default function TimerWidget() {
   return (
     <div className="relative">
       <div
-        className={`rounded-lg border bg-white px-2.5 py-2 ${longRun || focusDone ? 'border-amber-400' : 'border-[var(--color-rec)]/40'}`}
+        className={`rounded-lg border bg-surface px-2.5 py-2 ${longRun || focusDone ? 'border-amber-400' : 'border-[var(--color-rec)]/40'}`}
         title={longRun ? '8 saatten uzun süredir çalışıyor — durdurmayı unutmuş olabilir misin?' : undefined}
       >
         <div className="flex items-center gap-2">
@@ -98,7 +98,7 @@ export default function TimerWidget() {
             disabled={m.stop.isPending}
             aria-label="Kronometreyi durdur"
             title="Durdur"
-            className="rounded-md bg-slate-900 p-1.5 text-white hover:bg-slate-700 disabled:opacity-50"
+            className="rounded-md bg-slate-900 p-1.5 text-on-ink hover:bg-slate-700 disabled:opacity-50"
           >
             <Square size={12} fill="currentColor" aria-hidden />
           </button>

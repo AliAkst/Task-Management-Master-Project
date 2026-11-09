@@ -90,7 +90,7 @@ export default function FocusPicker({ onClose, currentCardId }: { onClose: () =>
       ref={ref}
       role="dialog"
       aria-label="Neye çalışıyorsun?"
-      className="absolute bottom-0 left-full z-40 ml-3 flex max-h-[70vh] w-80 flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+      className="absolute bottom-0 left-full z-40 ml-3 flex max-h-[70vh] w-80 flex-col rounded-xl border border-slate-200 bg-surface p-3 shadow-xl"
     >
       <div className="mb-2 flex items-center justify-between">
         <p className="font-display text-[17px] font-[650]">Neye çalışıyorsun?</p>
@@ -132,7 +132,7 @@ export default function FocusPicker({ onClose, currentCardId }: { onClose: () =>
               role="radio"
               aria-checked={focusMinutes === v}
               onClick={() => setFocusMinutes(v)}
-              className={`rounded-md px-2 py-0.5 ${focusMinutes === v ? 'bg-slate-900 text-white' : 'text-slate-700 ring-1 ring-slate-300 hover:ring-slate-900'}`}
+              className={`rounded-md px-2 py-0.5 ${focusMinutes === v ? 'bg-slate-900 text-on-ink' : 'text-slate-700 ring-1 ring-slate-300 hover:ring-slate-900'}`}
             >
               {v === null ? 'Kapalı' : `${v} dk`}
             </button>

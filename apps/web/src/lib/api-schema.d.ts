@@ -1958,6 +1958,8 @@ export interface components {
             privacy: components["schemas"]["BoardPrivacy"];
             /** Default Model Id */
             default_model_id?: string | null;
+            /** Background */
+            background?: ("none" | "tint" | "deniz" | "orman" | "gunbatimi" | "alacakaranlik" | "kum" | "grafit") | null;
             /** Lists */
             lists?: string[] | null;
         };
@@ -2009,6 +2011,8 @@ export interface components {
             privacy: components["schemas"]["BoardPrivacy"];
             /** Default Model Id */
             default_model_id?: string | null;
+            /** Background */
+            background?: ("none" | "tint" | "deniz" | "orman" | "gunbatimi" | "alacakaranlik" | "kum" | "grafit") | null;
             /** System Kind */
             system_kind?: string | null;
             /** Is Archived */
@@ -2060,6 +2064,8 @@ export interface components {
             privacy?: components["schemas"]["BoardPrivacy"] | null;
             /** Default Model Id */
             default_model_id?: string | null;
+            /** Background */
+            background?: ("none" | "tint" | "deniz" | "orman" | "gunbatimi" | "alacakaranlik" | "kum" | "grafit") | null;
             /** Is Archived */
             is_archived?: boolean | null;
             /** Position */
@@ -2084,6 +2090,8 @@ export interface components {
             privacy: components["schemas"]["BoardPrivacy"];
             /** Default Model Id */
             default_model_id?: string | null;
+            /** Background */
+            background?: ("none" | "tint" | "deniz" | "orman" | "gunbatimi" | "alacakaranlik" | "kum" | "grafit") | null;
             /** System Kind */
             system_kind?: string | null;
             /** Is Archived */
@@ -3571,6 +3579,10 @@ export interface components {
             reminders_enabled: boolean;
             /** Week Start */
             week_start: number;
+            /** Theme */
+            theme: string;
+            /** Background */
+            background: string;
             /**
              * Updated At
              * Format: date-time
@@ -3592,6 +3604,10 @@ export interface components {
             reminders_enabled?: boolean | null;
             /** Week Start */
             week_start?: number | null;
+            /** Theme */
+            theme?: ("system" | "light" | "dark") | null;
+            /** Background */
+            background?: ("kagit" | "krem" | "adacayi" | "lavanta" | "gri") | null;
         };
         /** ValidationError */
         ValidationError: {

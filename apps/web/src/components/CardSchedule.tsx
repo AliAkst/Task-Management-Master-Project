@@ -50,7 +50,7 @@ export default function CardSchedule({
             <input type="number" min={5} step={5} className="w-20 rounded border border-slate-300 px-2 py-1" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
             dk
           </label>
-          <button disabled={m.create.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-white disabled:opacity-50">Ekle</button>
+          <button disabled={m.create.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-on-ink disabled:opacity-50">Ekle</button>
           {m.create.error && <span className="text-red-600">{m.create.error.message}</span>}
         </form>
       )}

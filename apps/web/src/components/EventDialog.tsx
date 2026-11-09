@@ -202,7 +202,7 @@ function EventForm({ draft, boards, onClose, onOpenCard }: Props) {
             <button type="button" onClick={onClose} className="px-3 py-1.5 text-slate-600">Vazgeç</button>
             <button
               disabled={m.create.isPending || m.update.isPending}
-              className="rounded-md bg-slate-900 px-4 py-1.5 font-medium text-white disabled:opacity-50"
+              className="rounded-md bg-slate-900 px-4 py-1.5 font-medium text-on-ink disabled:opacity-50"
             >
               Kaydet
             </button>

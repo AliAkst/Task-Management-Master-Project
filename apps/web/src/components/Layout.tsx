@@ -5,12 +5,15 @@ import {
   LayoutGrid,
   LogOut,
   Settings,
+  Moon,
   Sparkles,
   Sun,
   UserRound,
   type LucideIcon,
 } from 'lucide-react'
 import { useBoards } from '../api/boards'
+import { useSaveTheme, useThemeSync } from '../hooks/useThemeSync'
+import { oppositeTheme, useTheme } from '../lib/theme'
 import { useAuthStore } from '../stores/auth'
 import { useAssistantUi } from '../stores/assistant'
 import AssistantPanel from './AssistantPanel'
@@ -29,7 +32,7 @@ const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
 const navClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[15px] ${
     isActive
-      ? 'bg-white font-semibold text-slate-900 shadow-[0_0_0_1px_var(--color-slate-200)]'
+      ? 'bg-surface font-semibold text-slate-900 shadow-[0_0_0_1px_var(--color-slate-200)]'
       : 'text-slate-600 hover:bg-slate-100'
   }`
 
@@ -53,7 +56,7 @@ function AreaTabs() {
               <NavLink
                 to={`/boards/${b.id}`}
                 className={`group flex items-center gap-2 rounded-r-lg py-1.5 pr-2.5 pl-4 text-[15px] ${
-                  active ? 'bg-white font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-100'
+                  active ? 'bg-surface font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <span
@@ -82,6 +85,9 @@ export default function Layout() {
   const assistantOpen = useAssistantUi((s) => s.open)
   const toggleAssistant = useAssistantUi((s) => s.toggle)
   useAutoInboxTriage()
+  useThemeSync()
+  const { resolved, paper } = useTheme()
+  const themeSaver = useSaveTheme()
   return (
     // h-screen: icerik alani kesin yukseklik alir (React Flow %100 yukseklik ister,
     // kanban listeleri de sayfa yerine kendi iclerinde kayar)
@@ -113,7 +119,7 @@ export default function Layout() {
             onClick={toggleAssistant}
             aria-pressed={assistantOpen}
             className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[15px] ${
-              assistantOpen ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+              assistantOpen ? 'bg-slate-900 text-on-ink' : 'text-slate-700 hover:bg-slate-100'
             }`}
           >
             <Sparkles size={17} strokeWidth={1.75} aria-hidden />
@@ -124,6 +130,14 @@ export default function Layout() {
               <Settings size={17} strokeWidth={1.75} aria-hidden />
               Ayarlar
             </NavLink>
+            <button
+              onClick={() => themeSaver.set(oppositeTheme(resolved), paper)}
+              title={resolved === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç'}
+              aria-label={resolved === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç'}
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            >
+              {resolved === 'dark' ? <Sun size={17} strokeWidth={1.75} aria-hidden /> : <Moon size={17} strokeWidth={1.75} aria-hidden />}
+            </button>
             <button
               onClick={logout}
               title="Çıkış yap"

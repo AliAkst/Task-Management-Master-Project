@@ -49,7 +49,7 @@ export default function ActionCard({ action, items }: { action: AiAction; items?
   }
 
   return (
-    <div className={`rounded-xl border bg-white p-2.5 text-sm ${proposed ? 'border-amber-300' : 'border-slate-200'}`}>
+    <div className={`rounded-xl border bg-surface p-2.5 text-sm ${proposed ? 'border-amber-300' : 'border-slate-200'}`}>
       <div className="flex items-start gap-2">
         <span className="flex-1 whitespace-pre-line">{summary}</span>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${status.cls}`}>{status.label}</span>
@@ -109,7 +109,7 @@ export default function ActionCard({ action, items }: { action: AiAction; items?
               <button
                 disabled={busy}
                 onClick={() => reject.mutate({ id: current.id, reason: reason.trim() || null }, { onSuccess: setCurrent })}
-                className="rounded-md bg-slate-700 px-2.5 py-1 text-xs text-white disabled:opacity-50"
+                className="rounded-md bg-slate-700 px-2.5 py-1 text-xs text-on-ink disabled:opacity-50"
               >
                 Reddet
               </button>
@@ -125,7 +125,7 @@ export default function ActionCard({ action, items }: { action: AiAction; items?
                     { onSuccess: setCurrent },
                   )
                 }
-                className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-on-ink hover:bg-green-700 disabled:opacity-50"
               >
                 {approve.isPending
                   ? 'Yapılıyor…'

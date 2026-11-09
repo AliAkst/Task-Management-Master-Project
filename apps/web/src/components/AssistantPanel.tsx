@@ -70,7 +70,7 @@ function Bubble({
 }) {
   if (m.role === 'user') {
     return (
-      <div className="ml-10 rounded-2xl rounded-br-sm bg-slate-900 px-3 py-2 text-sm whitespace-pre-wrap text-white">
+      <div className="ml-10 rounded-2xl rounded-br-sm bg-slate-900 px-3 py-2 text-sm whitespace-pre-wrap text-on-ink">
         {m.content}
       </div>
     )
@@ -79,7 +79,7 @@ function Bubble({
     <div className="mr-6">
       <ToolChips names={m.tools ?? []} />
       {m.content && (
-        <div className="rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_p+p]:mt-2 [&_ul]:list-disc">
+        <div className="rounded-2xl rounded-bl-sm bg-surface px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_p+p]:mt-2 [&_ul]:list-disc">
           <MarkdownView content={m.content} />
         </div>
       )}
@@ -265,7 +265,7 @@ export default function AssistantPanel() {
 
   return (
     <aside className="flex w-full max-w-md shrink-0 flex-col border-l border-slate-200 bg-slate-50">
-      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
+      <header className="flex items-center gap-2 border-b border-slate-200 bg-surface px-3 py-2">
         <button onClick={() => setShowList((s) => !s)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline" title="Sohbetler">
           <Sparkles size={15} className="mr-1.5 inline align-[-2px]" aria-hidden />
           {conversations.data?.find((c) => c.id === conversationId)?.title ?? 'Yeni sohbet'}
@@ -278,7 +278,7 @@ export default function AssistantPanel() {
       </header>
 
       {showList && (
-        <ul className="max-h-60 overflow-y-auto border-b border-slate-200 bg-white text-sm">
+        <ul className="max-h-60 overflow-y-auto border-b border-slate-200 bg-surface text-sm">
           {(conversations.data ?? []).length === 0 && <li className="px-3 py-2 text-slate-400">Henüz sohbet yok.</li>}
           {conversations.data?.map((c) => (
             <li key={c.id} className={`group flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 ${c.id === conversationId ? 'bg-slate-100' : ''}`}>
@@ -304,7 +304,7 @@ export default function AssistantPanel() {
             <p className="mb-3">Board'larına, takvimine, planlarına ve istatistiklerine bakarak yardım edebilirim.</p>
             <div className="flex flex-wrap justify-center gap-1.5">
               {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => void send(s)} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-slate-200 hover:ring-slate-400">{s}</button>
+                <button key={s} onClick={() => void send(s)} className="rounded-full bg-surface px-3 py-1 text-xs ring-1 ring-slate-200 hover:ring-slate-400">{s}</button>
               ))}
             </div>
             <p className="mt-4 text-xs text-slate-400">Kart, etkinlik ve plan önerebilirim; ne otomatik yapılacağına Ayarlar'dan sen karar verirsin.</p>
@@ -331,7 +331,7 @@ export default function AssistantPanel() {
                 </div>
               )}
               {live.text ? (
-                <div className="rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc">
+                <div className="rounded-2xl rounded-bl-sm bg-surface px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc">
                   <MarkdownView content={live.text} />
                 </div>
               ) : (
@@ -345,7 +345,7 @@ export default function AssistantPanel() {
         <div ref={bottom} />
       </div>
 
-      <form onSubmit={onSubmit} className="border-t border-slate-200 bg-white p-2">
+      <form onSubmit={onSubmit} className="border-t border-slate-200 bg-surface p-2">
         {contextCardId !== null && (
           <div className="mb-1.5 flex items-center gap-1 rounded-full bg-indigo-50 py-0.5 pl-2.5 pr-1 text-[11px] text-indigo-700">
             <span className="min-w-0 flex-1 truncate">
@@ -381,7 +381,7 @@ export default function AssistantPanel() {
         <div className="mt-1 flex items-center gap-2">
           {mic.button}
           <select
-            className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-1 py-1 text-xs"
+            className="min-w-0 flex-1 rounded border border-slate-200 bg-surface px-1 py-1 text-xs"
             value={manual ?? ''}
             onChange={(e) => {
               const id = e.target.value
@@ -410,7 +410,7 @@ export default function AssistantPanel() {
           {busy ? (
             <button type="button" onClick={() => abort.current?.abort()} className="rounded-md bg-slate-200 px-3 py-1 text-sm">■ Durdur</button>
           ) : (
-            <button disabled={!input.trim() || !effectiveModel} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-40">Gönder</button>
+            <button disabled={!input.trim() || !effectiveModel} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-on-ink disabled:opacity-40">Gönder</button>
           )}
         </div>
         {pendingCloud && (
@@ -427,7 +427,7 @@ export default function AssistantPanel() {
                 type="button"
                 autoFocus
                 onClick={() => { setModel(pendingCloud); setPendingCloud(null) }}
-                className="rounded bg-slate-900 px-2.5 py-1 font-medium text-white"
+                className="rounded bg-slate-900 px-2.5 py-1 font-medium text-on-ink"
               >
                 Bulut modele geç
               </button>

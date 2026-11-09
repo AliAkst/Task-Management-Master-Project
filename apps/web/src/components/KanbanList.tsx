@@ -46,7 +46,7 @@ export function ListOverlay({
   labels: Map<number, Label>
 }) {
   return (
-    <section className="w-72 rotate-2 scale-[1.02] cursor-grabbing rounded-xl bg-slate-100 pb-2 shadow-[0_12px_32px_-8px_rgb(23_32_56/0.4)]">
+    <section className="w-72 rotate-2 scale-[1.02] cursor-grabbing rounded-xl bg-slate-100/90 pb-2 backdrop-blur-sm shadow-[0_12px_32px_-8px_rgb(23_32_56/0.4)]">
       <h3 className="px-3 pt-3 pb-2 text-sm font-medium">
         {list.is_done_list && <span className="mr-1 text-green-600">✓</span>}
         {list.name}
@@ -114,7 +114,7 @@ export default function KanbanList({
     <section
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100 ${isDragging ? 'opacity-40' : ''}`}
+      className={`flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100/90 backdrop-blur-sm ${isDragging ? 'opacity-40' : ''}`}
     >
       <header className="relative flex items-center gap-2 px-3 pt-3 pb-2" {...attributes} {...listeners}>
         {editing ? (
@@ -150,7 +150,7 @@ export default function KanbanList({
         </button>
         {menu && (
           <div
-            className="absolute top-9 right-2 z-10 w-56 rounded-lg bg-white py-1 text-sm shadow-lg ring-1 ring-slate-200"
+            className="absolute top-9 right-2 z-10 w-56 rounded-lg bg-surface py-1 text-sm shadow-lg ring-1 ring-slate-200"
             onPointerDown={(e) => e.stopPropagation()}
           >
             <button className="block w-full px-3 py-1.5 text-left hover:bg-slate-100" onClick={() => { setMenu(false); setEditing(true) }}>
@@ -195,7 +195,7 @@ export default function KanbanList({
               }}
             />
             <div className="flex gap-2">
-              <button className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Ekle</button>
+              <button className="rounded-md bg-slate-900 px-3 py-1 text-sm text-on-ink">Ekle</button>
               <button type="button" className="text-sm text-slate-500" onClick={() => setAdding(false)}>
                 Vazgeç
               </button>

@@ -19,7 +19,7 @@ import { formatDateTime } from '../lib/format'
 import { Row } from './Page'
 import OAuthSetup from './OAuthSetup'
 
-const input = 'rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm'
+const input = 'rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-sm'
 
 /** Sonuc ozeti: "3 liste, 12 kart, 5 madde, 2 not (4 kart zaten vardı)". */
 function summary(r: TrelloImportResult) {
@@ -76,7 +76,7 @@ function TrelloConnectForm() {
         )}
         <button
           disabled={connectTrello.isPending || key.length < 8 || token.trim().length < 8}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink hover:bg-slate-700 disabled:opacity-40"
         >
           {connectTrello.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />} Bağlan
         </button>
@@ -129,7 +129,7 @@ function TrelloBoards() {
       <button
         disabled={selected.size === 0 || importTrello.isPending}
         onClick={() => importTrello.mutate([...selected], { onSuccess: () => setSelected(new Set()) })}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700 disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink hover:bg-slate-700 disabled:opacity-40"
       >
         {importTrello.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
         İçe aktar{selected.size > 0 ? ` (${selected.size})` : ''}
@@ -249,7 +249,7 @@ function GoogleCalendars({ account }: { account: IntegrationAccount }) {
         <button
           disabled={!dirty || saveGoogleSettings.isPending}
           onClick={save}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink hover:bg-slate-700 disabled:opacity-40"
         >
           {saveGoogleSettings.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />} Kaydet
         </button>
@@ -315,7 +315,7 @@ function OAuthRow({
           {canConnect && info && !configured && !setupOpen && (
             <button
               onClick={() => setSetupOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink hover:bg-slate-700"
             >
               Kurulumu başlat
             </button>
@@ -324,7 +324,7 @@ function OAuthRow({
             <button
               disabled={connectOAuth.isPending}
               onClick={() => connectOAuth.mutate(provider)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700 disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink hover:bg-slate-700 disabled:opacity-40"
             >
               {connectOAuth.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
               {reconnect ? 'Yeniden bağlan' : `${label} ile bağlan`}
@@ -421,7 +421,7 @@ function MicrosoftLists({ account }: { account: IntegrationAccount }) {
         <button
           disabled={picked === null || selected.size === 0 || saveMicrosoftSettings.isPending}
           onClick={save}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink hover:bg-slate-700 disabled:opacity-40"
         >
           {saveMicrosoftSettings.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />} Kaydet
         </button>
