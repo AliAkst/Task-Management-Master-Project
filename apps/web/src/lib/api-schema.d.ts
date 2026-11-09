@@ -553,6 +553,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cards/{card_id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Attachments */
+        get: operations["list_attachments_api_v1_cards__card_id__attachments_get"];
+        put?: never;
+        /**
+         * Upload Attachment
+         * @description Karta dosya ekler (multipart `file`, istege bagli `note_id`).
+         */
+        post: operations["upload_attachment_api_v1_cards__card_id__attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attachments/{attachment_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Attachment
+         * @description Dosya icerigi. Yetki: imzali `token` (<img src> / yeni sekme icin) ya da
+         *     Authorization basligi. Baskasinin eki 404.
+         */
+        get: operations["download_attachment_api_v1_attachments__attachment_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Attachment */
+        delete: operations["delete_attachment_api_v1_attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/calendar": {
         parameters: {
             query?: never;
@@ -668,6 +727,327 @@ export interface paths {
         head?: never;
         /** Update Goal */
         patch: operations["update_goal_api_v1_goals__goal_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Integrations
+         * @description Bagli hesaplar (gizli degerler maskeli).
+         */
+        get: operations["list_integrations_api_v1_integrations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/oauth-clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Clients
+         * @description Google/Microsoft icin uygulama kimligi girilmis mi + eklenecek yonlendirme adresi.
+         */
+        get: operations["oauth_clients_api_v1_integrations_oauth_clients_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{provider}/oauth-client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Oauth Client
+         * @description Kurulum sihirbazindan gelen client id/secret (sir sifreli saklanir, geri donmez).
+         */
+        put: operations["save_oauth_client_api_v1_integrations__provider__oauth_client_put"];
+        post?: never;
+        /** Delete Oauth Client */
+        delete: operations["delete_oauth_client_api_v1_integrations__provider__oauth_client_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect
+         * @description Baglantiyi kaldirir; kartlar kalir (Google/Teams takvim etkinlikleri silinir).
+         */
+        delete: operations["disconnect_api_v1_integrations__provider__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{provider}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Oauth Connect
+         * @description Saglayicinin izin ekraninin adresini dondurur (arayuz oraya yonlendirir).
+         */
+        post: operations["oauth_connect_api_v1_integrations__provider__connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{provider}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Now
+         * @description Elle 'Simdi senkronla' (Microsoft'ta once bekleyen geri yazmalar gider).
+         */
+        post: operations["sync_now_api_v1_integrations__provider__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/microsoft/lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Microsoft Lists
+         * @description To Do listeleri (senkronlananlar isaretli).
+         */
+        get: operations["microsoft_lists_api_v1_integrations_microsoft_lists_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/microsoft/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Microsoft Settings
+         * @description Senkronlanacak listeler (null = hepsi).
+         */
+        put: operations["microsoft_settings_api_v1_integrations_microsoft_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/microsoft/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Microsoft Status
+         * @description Geri yazilmayi bekleyen / hata almis tamamlama sayisi.
+         */
+        get: operations["microsoft_status_api_v1_integrations_microsoft_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/microsoft/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Microsoft Calendar Settings
+         * @description Takvimi ac/kapat + ayarlar; aciksa kayittan sonra hemen senkronlanir.
+         */
+        put: operations["microsoft_calendar_settings_api_v1_integrations_microsoft_calendar_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/microsoft/calendar/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Microsoft Calendar Sync
+         * @description Elle 'Bu haftanin toplantilarini cek'.
+         */
+        post: operations["microsoft_calendar_sync_api_v1_integrations_microsoft_calendar_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/google/calendars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Google Calendars
+         * @description Hesaptaki takvimler (secili olanlar isaretli).
+         */
+        get: operations["google_calendars_api_v1_integrations_google_calendars_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/google/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Google Settings
+         * @description Senkronlanacak takvimler ve (istege bagli) etkinliklerin dustugu board.
+         */
+        put: operations["google_settings_api_v1_integrations_google_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/trello": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Connect Trello
+         * @description API key + token'i Trello'ya karsi dogrular, sifreli kaydeder.
+         */
+        put: operations["connect_trello_api_v1_integrations_trello_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/trello/boards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trello Boards
+         * @description Trello'daki acik board'lar (zaten ice aktarilanlar isaretli).
+         */
+        get: operations["trello_boards_api_v1_integrations_trello_boards_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/trello/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trello Import
+         * @description Secilen board'lari tek seferlik alir; tekrar calistirmak sadece yenileri ekler.
+         */
+        post: operations["trello_import_api_v1_integrations_trello_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/sessions/active": {
@@ -1064,6 +1444,18 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[AttachmentResponse] */
+        ApiResponse_AttachmentResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["AttachmentResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[BoardDetail] */
         ApiResponse_BoardDetail_: {
             /** Success */
@@ -1136,6 +1528,18 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[ConnectResponse] */
+        ApiResponse_ConnectResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["ConnectResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[DayPlanResponse] */
         ApiResponse_DayPlanResponse_: {
             /** Success */
@@ -1184,6 +1588,18 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[IntegrationResponse] */
+        ApiResponse_IntegrationResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["IntegrationResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[LabelResponse] */
         ApiResponse_LabelResponse_: {
             /** Success */
@@ -1208,11 +1624,35 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[MicrosoftStatus] */
+        ApiResponse_MicrosoftStatus_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["MicrosoftStatus"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[NoteResponse] */
         ApiResponse_NoteResponse_: {
             /** Success */
             success: boolean;
             data?: components["schemas"]["NoteResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[OAuthClientInfo] */
+        ApiResponse_OAuthClientInfo_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["OAuthClientInfo"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -1237,6 +1677,18 @@ export interface components {
             /** Success */
             success: boolean;
             data?: components["schemas"]["SessionResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[SyncSummary] */
+        ApiResponse_SyncSummary_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["SyncSummary"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -1320,6 +1772,19 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[list[AttachmentResponse]] */
+        ApiResponse_list_AttachmentResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["AttachmentResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[list[BoardWithCounts]] */
         ApiResponse_list_BoardWithCounts__: {
             /** Success */
@@ -1359,6 +1824,45 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[list[GoogleCalendarInfo]] */
+        ApiResponse_list_GoogleCalendarInfo__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["GoogleCalendarInfo"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[list[IntegrationResponse]] */
+        ApiResponse_list_IntegrationResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["IntegrationResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[list[OAuthClientInfo]] */
+        ApiResponse_list_OAuthClientInfo__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["OAuthClientInfo"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[list[SessionResponse]] */
         ApiResponse_list_SessionResponse__: {
             /** Success */
@@ -1371,6 +1875,69 @@ export interface components {
              * Format: date-time
              */
             timestamp?: string;
+        };
+        /** ApiResponse[list[TodoListInfo]] */
+        ApiResponse_list_TodoListInfo__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["TodoListInfo"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[list[TrelloBoardInfo]] */
+        ApiResponse_list_TrelloBoardInfo__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["TrelloBoardInfo"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[list[TrelloImportResult]] */
+        ApiResponse_list_TrelloImportResult__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["TrelloImportResult"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** AttachmentResponse */
+        AttachmentResponse: {
+            /** Id */
+            id: number;
+            /** Card Id */
+            card_id: number;
+            /** Note Id */
+            note_id: number | null;
+            /** Filename */
+            filename: string;
+            /** Mime Type */
+            mime_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Is Image */
+            is_image: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Url */
+            url: string;
         };
         /** BoardCreate */
         BoardCreate: {
@@ -1391,6 +1958,8 @@ export interface components {
             privacy: components["schemas"]["BoardPrivacy"];
             /** Default Model Id */
             default_model_id?: string | null;
+            /** Background */
+            background?: ("none" | "tint" | "deniz" | "orman" | "gunbatimi" | "alacakaranlik" | "kum" | "grafit") | null;
             /** Lists */
             lists?: string[] | null;
         };
@@ -1442,6 +2011,10 @@ export interface components {
             privacy: components["schemas"]["BoardPrivacy"];
             /** Default Model Id */
             default_model_id?: string | null;
+            /** Background */
+            background?: ("none" | "tint" | "deniz" | "orman" | "gunbatimi" | "alacakaranlik" | "kum" | "grafit") | null;
+            /** System Kind */
+            system_kind?: string | null;
             /** Is Archived */
             is_archived: boolean;
             /**
@@ -1491,6 +2064,8 @@ export interface components {
             privacy?: components["schemas"]["BoardPrivacy"] | null;
             /** Default Model Id */
             default_model_id?: string | null;
+            /** Background */
+            background?: ("none" | "tint" | "deniz" | "orman" | "gunbatimi" | "alacakaranlik" | "kum" | "grafit") | null;
             /** Is Archived */
             is_archived?: boolean | null;
             /** Position */
@@ -1515,6 +2090,10 @@ export interface components {
             privacy: components["schemas"]["BoardPrivacy"];
             /** Default Model Id */
             default_model_id?: string | null;
+            /** Background */
+            background?: ("none" | "tint" | "deniz" | "orman" | "gunbatimi" | "alacakaranlik" | "kum" | "grafit") | null;
+            /** System Kind */
+            system_kind?: string | null;
             /** Is Archived */
             is_archived: boolean;
             /**
@@ -1532,6 +2111,16 @@ export interface components {
              * @default 0
              */
             open_card_count: number;
+        };
+        /** Body_upload_attachment_api_v1_cards__card_id__attachments_post */
+        Body_upload_attachment_api_v1_cards__card_id__attachments_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+            /** Note Id */
+            note_id?: number | null;
         };
         /**
          * CalendarItem
@@ -1569,8 +2158,11 @@ export interface components {
             card_status?: components["schemas"]["TaskStatus"] | null;
             /** Location */
             location?: string | null;
+            /** Meeting Url */
+            meeting_url?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: string | null;
+            external?: components["schemas"]["ExternalRef"] | null;
         };
         /** CalendarResponse */
         CalendarResponse: {
@@ -1647,6 +2239,11 @@ export interface components {
              * @default 0
              */
             note_count: number;
+            /**
+             * Attachment Count
+             * @default 0
+             */
+            attachment_count: number;
             /** Parent Id */
             parent_id?: number | null;
             /** Assigned To */
@@ -1719,6 +2316,8 @@ export interface components {
             updated_at: string;
             /** Notes */
             notes?: components["schemas"]["NoteResponse"][];
+            /** Attachments */
+            attachments?: components["schemas"]["AttachmentResponse"][];
             /** Checklist */
             checklist?: components["schemas"]["ChecklistItemResponse"][];
             parent?: components["schemas"]["CardRef"] | null;
@@ -1728,6 +2327,24 @@ export interface components {
             depends_on?: components["schemas"]["CardRef"][];
             /** Dependents */
             dependents?: components["schemas"]["CardRef"][];
+            external?: components["schemas"]["CardExternalRef"] | null;
+        };
+        /**
+         * CardExternalRef
+         * @description Kartin geldigi dis sistem + geri yazma (outbox) durumu (Faz 7c).
+         */
+        CardExternalRef: {
+            /** Provider */
+            provider: string;
+            /** Url */
+            url?: string | null;
+            /**
+             * Pending Push
+             * @default false
+             */
+            pending_push: boolean;
+            /** Push Error */
+            push_error?: string | null;
         };
         /**
          * CardMove
@@ -1826,6 +2443,11 @@ export interface components {
              * @default 0
              */
             note_count: number;
+            /**
+             * Attachment Count
+             * @default 0
+             */
+            attachment_count: number;
             /** Parent Id */
             parent_id?: number | null;
             /** Assigned To */
@@ -1932,6 +2554,11 @@ export interface components {
             text?: string | null;
             /** Is Done */
             is_done?: boolean | null;
+        };
+        /** ConnectResponse */
+        ConnectResponse: {
+            /** Authorize Url */
+            authorize_url: string;
         };
         /** DayPlanItemResponse */
         DayPlanItemResponse: {
@@ -2188,8 +2815,11 @@ export interface components {
             location: string | null;
             /** Notes */
             notes: string | null;
+            /** Meeting Url */
+            meeting_url?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: string | null;
+            external?: components["schemas"]["ExternalRef"] | null;
             /** Created By */
             created_by: string;
             /**
@@ -2221,6 +2851,16 @@ export interface components {
             notes?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: string | null;
+        };
+        /**
+         * ExternalRef
+         * @description Etkinligin geldigi dis sistem; varsa etkinlik salt okunurdur.
+         */
+        ExternalRef: {
+            /** Provider */
+            provider: string;
+            /** Url */
+            url?: string | null;
         };
         /** GoalCreate */
         GoalCreate: {
@@ -2282,6 +2922,32 @@ export interface components {
             root_card_id?: number | null;
             status?: components["schemas"]["GoalStatus"] | null;
         };
+        /** GoogleCalendarInfo */
+        GoogleCalendarInfo: {
+            /** Id */
+            id: string;
+            /** Summary */
+            summary: string;
+            /**
+             * Primary
+             * @default false
+             */
+            primary: boolean;
+            /** Color */
+            color?: string | null;
+            /**
+             * Selected
+             * @default false
+             */
+            selected: boolean;
+        };
+        /** GoogleSettingsUpdate */
+        GoogleSettingsUpdate: {
+            /** Calendar Ids */
+            calendar_ids?: string[];
+            /** Board Id */
+            board_id?: number | null;
+        };
         /** GraphEdge */
         GraphEdge: {
             /** Source */
@@ -2295,6 +2961,31 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** IntegrationResponse */
+        IntegrationResponse: {
+            /** Provider */
+            provider: string;
+            /** Account Label */
+            account_label: string | null;
+            /** Status */
+            status: string;
+            /** Scopes */
+            scopes: string | null;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Masked Credentials */
+            masked_credentials: {
+                [key: string]: string;
+            };
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
+            /** Calendar Consent */
+            calendar_consent?: boolean | null;
         };
         /**
          * ItemOutcome
@@ -2315,11 +3006,8 @@ export interface components {
         LabelCreate: {
             /** Name */
             name: string;
-            /**
-             * Color
-             * @default #64748b
-             */
-            color: string;
+            /** Color */
+            color?: string | null;
         };
         /** LabelResponse */
         LabelResponse: {
@@ -2377,6 +3065,35 @@ export interface components {
             /** Is Done List */
             is_done_list?: boolean | null;
         };
+        /** MicrosoftCalendarUpdate */
+        MicrosoftCalendarUpdate: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Teams Only
+             * @default true
+             */
+            teams_only: boolean;
+            /** Board Id */
+            board_id?: number | null;
+            /**
+             * Weeks Ahead
+             * @default 2
+             */
+            weeks_ahead: number;
+        };
+        /** MicrosoftSettingsUpdate */
+        MicrosoftSettingsUpdate: {
+            /** List Ids */
+            list_ids?: string[] | null;
+        };
+        /** MicrosoftStatus */
+        MicrosoftStatus: {
+            /** Pending Push */
+            pending_push: number;
+            /** Failed Push */
+            failed_push: number;
+        };
         /** NoteCreate */
         NoteCreate: {
             /** Content */
@@ -2405,6 +3122,29 @@ export interface components {
         NoteUpdate: {
             /** Content */
             content: string;
+        };
+        /**
+         * OAuthClientInfo
+         * @description Arayuzdeki kurulum sihirbazi icin; sir hicbir zaman donmez.
+         */
+        OAuthClientInfo: {
+            /** Provider */
+            provider: string;
+            /** Configured */
+            configured: boolean;
+            /** Source */
+            source: string | null;
+            /** Client Id */
+            client_id: string | null;
+            /** Redirect Uri */
+            redirect_uri: string;
+        };
+        /** OAuthClientSave */
+        OAuthClientSave: {
+            /** Client Id */
+            client_id: string;
+            /** Client Secret */
+            client_secret: string;
         };
         /** PaginatedResponse[TaskResponse] */
         PaginatedResponse_TaskResponse_: {
@@ -2565,6 +3305,17 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** SyncSummary */
+        SyncSummary: {
+            /** Created */
+            created: number;
+            /** Updated */
+            updated: number;
+            /** Removed */
+            removed: number;
+            /** Errors */
+            errors: string[];
+        };
         /** TaskCreate */
         TaskCreate: {
             /** Title */
@@ -2624,6 +3375,18 @@ export interface components {
             /** Due Date */
             due_date?: string | null;
         };
+        /** TodoListInfo */
+        TodoListInfo: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Selected
+             * @default true
+             */
+            selected: boolean;
+        };
         /**
          * TokenResponse
          * @description Giris Basarili oldugunda donecek token paketi
@@ -2675,6 +3438,73 @@ export interface components {
              * @default 0
              */
             completed_cards: number;
+        };
+        /** TrelloBoardInfo */
+        TrelloBoardInfo: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Url */
+            url?: string | null;
+            /**
+             * Already Imported
+             * @default false
+             */
+            already_imported: boolean;
+        };
+        /** TrelloConnect */
+        TrelloConnect: {
+            /** Api Key */
+            api_key: string;
+            /** Token */
+            token: string;
+        };
+        /** TrelloImportRequest */
+        TrelloImportRequest: {
+            /** Board Ids */
+            board_ids: string[];
+        };
+        /** TrelloImportResult */
+        TrelloImportResult: {
+            /** Trello Board Id */
+            trello_board_id: string;
+            /** Name */
+            name: string;
+            /** Board Id */
+            board_id?: number | null;
+            /**
+             * Created Board
+             * @default false
+             */
+            created_board: boolean;
+            /**
+             * Lists
+             * @default 0
+             */
+            lists: number;
+            /**
+             * Cards
+             * @default 0
+             */
+            cards: number;
+            /**
+             * Checklist Items
+             * @default 0
+             */
+            checklist_items: number;
+            /**
+             * Notes
+             * @default 0
+             */
+            notes: number;
+            /**
+             * Skipped Cards
+             * @default 0
+             */
+            skipped_cards: number;
+            /** Error */
+            error?: string | null;
         };
         /**
          * UnplannedInput
@@ -2749,6 +3579,10 @@ export interface components {
             reminders_enabled: boolean;
             /** Week Start */
             week_start: number;
+            /** Theme */
+            theme: string;
+            /** Background */
+            background: string;
             /**
              * Updated At
              * Format: date-time
@@ -2770,6 +3604,10 @@ export interface components {
             reminders_enabled?: boolean | null;
             /** Week Start */
             week_start?: number | null;
+            /** Theme */
+            theme?: ("system" | "light" | "dark") | null;
+            /** Background */
+            background?: ("kagit" | "krem" | "adacayi" | "lavanta" | "gri") | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -4110,6 +4948,143 @@ export interface operations {
             };
         };
     };
+    list_attachments_api_v1_cards__card_id__attachments_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                card_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_AttachmentResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_attachment_api_v1_cards__card_id__attachments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                card_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_attachment_api_v1_cards__card_id__attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_AttachmentResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_attachment_api_v1_attachments__attachment_id__download_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+                download?: number;
+            };
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                attachment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_attachment_api_v1_attachments__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                attachment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     calendar_api_v1_calendar_get: {
         parameters: {
             query: {
@@ -4437,6 +5412,466 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_GoalResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_integrations_api_v1_integrations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_IntegrationResponse__"];
+                };
+            };
+        };
+    };
+    oauth_clients_api_v1_integrations_oauth_clients_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_OAuthClientInfo__"];
+                };
+            };
+        };
+    };
+    save_oauth_client_api_v1_integrations__provider__oauth_client_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthClientSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_OAuthClientInfo_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_oauth_client_api_v1_integrations__provider__oauth_client_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_api_v1_integrations__provider__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_connect_api_v1_integrations__provider__connect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ConnectResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_now_api_v1_integrations__provider__sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_SyncSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    microsoft_lists_api_v1_integrations_microsoft_lists_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_TodoListInfo__"];
+                };
+            };
+        };
+    };
+    microsoft_settings_api_v1_integrations_microsoft_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MicrosoftSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_IntegrationResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    microsoft_status_api_v1_integrations_microsoft_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_MicrosoftStatus_"];
+                };
+            };
+        };
+    };
+    microsoft_calendar_settings_api_v1_integrations_microsoft_calendar_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MicrosoftCalendarUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_IntegrationResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    microsoft_calendar_sync_api_v1_integrations_microsoft_calendar_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_SyncSummary_"];
+                };
+            };
+        };
+    };
+    google_calendars_api_v1_integrations_google_calendars_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_GoogleCalendarInfo__"];
+                };
+            };
+        };
+    };
+    google_settings_api_v1_integrations_google_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_IntegrationResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connect_trello_api_v1_integrations_trello_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrelloConnect"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_IntegrationResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trello_boards_api_v1_integrations_trello_boards_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_TrelloBoardInfo__"];
+                };
+            };
+        };
+    };
+    trello_import_api_v1_integrations_trello_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrelloImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_TrelloImportResult__"];
                 };
             };
             /** @description Validation Error */

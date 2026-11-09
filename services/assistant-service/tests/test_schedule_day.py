@@ -3,6 +3,7 @@
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import httpx
 import pytest
 
 from app.tools.privacy import PrivacyFilter
@@ -148,3 +149,79 @@ async def test_cloud_cannot_schedule_into_private_board(task_api_transport):
                 ],
             },
         )
+
+
+# ---- Faz 8d: takvimdeki (Teams) toplantilariyla cakisma kontrolu ----
+def _conflict_writer(fake_api, items, privacy=None):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/calendar"):
+            return httpx.Response(200, json={"success": True, "data": {"items": items}})
+        return fake_api(request)
+
+    return WriteTools(
+        TaskApiClient("t", transport=httpx.MockTransport(handler)),
+        privacy or PrivacyFilter(),
+        TZ,
+    )
+
+
+def _event(title, day, start, end, **extra):
+    return {
+        "kind": "event",
+        "title": title,
+        "start": f"{day.isoformat()}T{start}:00+03:00",
+        "end": f"{day.isoformat()}T{end}:00+03:00",
+        "all_day": False,
+        "board_id": None,
+        "card_id": None,
+        **extra,
+    }
+
+
+def _plan(day):
+    return {
+        "day": day.isoformat(),
+        "blocks": [{"title": "Rapor yaz", "start": "13:30", "minutes": 60}],
+    }
+
+
+async def test_schedule_rejects_overlap_with_timed_meeting(fake_api):
+    day = (datetime.now(TZ) + timedelta(days=1)).date()
+    writer = _conflict_writer(
+        fake_api, [_event("Haftalık toplantı", day, "14:00", "15:00")]
+    )
+    with pytest.raises(ValueError) as err:
+        await writer.prepare("schedule_day", _plan(day))
+    msg = str(err.value)
+    assert "«Haftalık toplantı» 14:00–15:00 ile çakışıyor" in msg
+    assert "toplantıdan sonraya kaydır" in msg
+    assert fake_api.writes == []
+
+
+async def test_schedule_ignores_all_day_events(fake_api):
+    day = (datetime.now(TZ) + timedelta(days=1)).date()
+    items = [_event("Konferans", day, "00:00", "23:59", all_day=True)]
+    prepared = await _conflict_writer(fake_api, items).prepare("schedule_day", _plan(day))
+    assert prepared.action_type == "schedule_day"
+
+
+async def test_schedule_passes_without_overlap_and_same_title_block(fake_api):
+    day = (datetime.now(TZ) + timedelta(days=1)).date()
+    items = [
+        _event("Toplantı", day, "15:00", "16:00"),  # bitişik: çakışma değil
+        _event("Rapor yaz", day, "13:30", "14:30", card_id=5),  # aynı kartın bloğu
+    ]
+    prepared = await _conflict_writer(fake_api, items).prepare("schedule_day", _plan(day))
+    assert "13:30–14:30 Rapor yaz" in prepared.summary
+
+
+async def test_conflict_hides_private_event_title_from_cloud(fake_api):
+    day = (datetime.now(TZ) + timedelta(days=1)).date()
+    items = [_event("Gizli randevu", day, "14:00", "15:00", board_id=2)]
+    privacy = PrivacyFilter(active=True, hidden_boards={2})
+    with pytest.raises(ValueError) as err:
+        await _conflict_writer(fake_api, items, privacy).prepare(
+            "schedule_day", _plan(day)
+        )
+    assert "Gizli randevu" not in str(err.value)
+    assert "çakışıyor" in str(err.value)

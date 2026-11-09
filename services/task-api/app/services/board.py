@@ -23,7 +23,9 @@ from app.models.board import (
     is_local_model,
 )
 from app.services.activity import ActivityLogger, diff
+from app.services.attachment_storage import get_storage
 from app.services.ordering import STEP, place_at
+from app.services.palette import next_free_color
 
 logger = get_logger(__name__)
 
@@ -33,6 +35,9 @@ DEFAULT_LISTS: list[tuple[str, bool]] = [
     ("Tamamlandı", True),
 ]
 DEFAULT_BOARD_NAME = "Genel"
+INBOX_KIND = "inbox"
+INBOX_BOARD_NAME = "Gelen Kutusu"
+INBOX_LIST_NAME = "Gelen"
 
 
 class BoardService:
@@ -113,6 +118,42 @@ class BoardService:
         )
         return board, lists[0]
 
+    async def get_or_create_inbox(
+        self, user_id: int
+    ) -> tuple[BoardEntity, BoardListEntity]:
+        """
+        Entegrasyonlardan gelen islerin dustugu "Gelen Kutusu" board'u ve tek
+        listesi. Gizlilik varsayilani local_only. Commit etmez.
+        """
+        board = await self.uow.boards.find_inbox(user_id)
+        if board is not None:
+            lists = await self.uow.lists.list_for_board(board.id)
+            if lists:
+                return board, lists[0]
+            lst = BoardListEntity(
+                user_id=user_id, board_id=board.id, name=INBOX_LIST_NAME, position=STEP
+            )
+            await self.uow.lists.create(lst)
+            await self.uow.flush()
+            return board, lst
+        board, lists = await self._create_board_entity(
+            user_id,
+            BoardCreate(
+                name=INBOX_BOARD_NAME,
+                privacy=BoardPrivacy.LOCAL_ONLY,
+                color="#6366f1",
+                icon="inbox",
+                scope_description=(
+                    "Dış kaynaklardan (Trello, Microsoft To Do…) gelen, henüz "
+                    "bir alana yerleştirilmemiş işler."
+                ),
+                lists=[INBOX_LIST_NAME],
+            ),
+        )
+        board.system_kind = INBOX_KIND
+        await self.uow.flush()
+        return board, lists[0]
+
     # ---------------- board ----------------
     async def list_boards(
         self, user_id: int, include_archived: bool = False
@@ -181,6 +222,10 @@ class BoardService:
 
     async def delete_board(self, board_id: int, user_id: int) -> None:
         board = await self.get_owned_board(board_id, user_id)
+        if board.system_kind == INBOX_KIND:
+            raise ConflictException(
+                "INBOX_PROTECTED", "Gelen Kutusu silinemez; yeniden adlandırabilirsiniz."
+            )
         await self.activity.log(
             user_id,
             "board",
@@ -195,8 +240,10 @@ class BoardService:
         await detach_goals(self.uow.session, board_id=board.id)
         await self.uow.events.delete_for_board(board.id)
         await self.uow.time_sessions.detach_board_cards(board.id)
+        file_keys = await self.uow.attachments.keys_for_board(board.id)
         await self.uow.boards.delete_cascade(board)
         await self.uow.commit()
+        get_storage().delete_many(file_keys)  # commit sonrasi; hata loglanir
 
     # ---------------- liste ----------------
     async def create_list(
@@ -275,7 +322,11 @@ class BoardService:
         self, board_id: int, user_id: int, data: LabelCreate
     ) -> LabelResponse:
         board = await self.get_owned_board(board_id, user_id)
-        label = LabelEntity(user_id=user_id, board_id=board.id, **data.model_dump())
+        values = data.model_dump()
+        if not values.get("color"):
+            existing = await self.uow.labels.list_for_board(board.id)
+            values["color"] = next_free_color([lb.color for lb in existing])
+        label = LabelEntity(user_id=user_id, board_id=board.id, **values)
         await self.uow.labels.create(label)
         await self.uow.commit()
         return LabelResponse.model_validate(label)

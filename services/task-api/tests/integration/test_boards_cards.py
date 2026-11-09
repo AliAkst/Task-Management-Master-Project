@@ -251,6 +251,42 @@ class TestCards:
         )
         assert card["label_ids"] == [own_label]
 
+    async def test_label_without_color_gets_next_free_palette_color(
+        self, client, auth_headers
+    ):
+        from app.services.palette import BOARD_PALETTE
+
+        b = await create_board(client, auth_headers, name="Renk")
+        url = f"{API}/boards/{b['board']['id']}/labels"
+        colors = []
+        for name in ("A", "B", "C"):
+            res = await client.post(url, json={"name": name}, headers=auth_headers)
+            assert res.status_code == 201, res.text
+            colors.append(res.json()["data"]["color"])
+        assert colors == BOARD_PALETTE[:3]
+
+        # Acik renk verilirse ona dokunulmaz; sirada kullanilmayan ilk renk kalir
+        res = await client.post(
+            url, json={"name": "D", "color": BOARD_PALETTE[3]}, headers=auth_headers
+        )
+        assert res.json()["data"]["color"] == BOARD_PALETTE[3]
+        res = await client.post(url, json={"name": "E"}, headers=auth_headers)
+        assert res.json()["data"]["color"] == BOARD_PALETTE[4]
+
+    async def test_label_color_falls_back_to_first_when_palette_exhausted(
+        self, client, auth_headers
+    ):
+        from app.services.palette import BOARD_PALETTE
+
+        b = await create_board(client, auth_headers, name="Dolu")
+        url = f"{API}/boards/{b['board']['id']}/labels"
+        for i, color in enumerate(BOARD_PALETTE):
+            await client.post(
+                url, json={"name": f"L{i}", "color": color}, headers=auth_headers
+            )
+        res = await client.post(url, json={"name": "Fazla"}, headers=auth_headers)
+        assert res.json()["data"]["color"] == BOARD_PALETTE[0]
+
     async def test_notes_checklist_and_summary_counts(self, client, auth_headers):
         detail = await create_board(client, auth_headers)
         card = await create_card(
@@ -308,6 +344,47 @@ class TestCards:
         assert res.status_code == 200
         actions = [a["action"] for a in res.json()["data"]]
         assert actions == ["deleted", "completed", "estimate_changed", "created"]
+
+    async def test_note_update_writes_activity(self, client, auth_headers):
+        detail = await create_board(client, auth_headers)
+        card = await create_card(client, auth_headers, detail["lists"][0]["id"], "Not")
+        note = (
+            await client.post(
+                f"{API}/cards/{card['id']}/notes",
+                json={"content": "ilk"},
+                headers=auth_headers,
+            )
+        ).json()["data"]
+        res = await client.patch(
+            f"{API}/notes/{note['id']}",
+            json={"content": "ikinci"},
+            headers=auth_headers,
+        )
+        assert res.status_code == 200
+        acts = (
+            await client.get(f"{API}/cards/{card['id']}/activity", headers=auth_headers)
+        ).json()["data"]
+        assert [(a["entity_type"], a["action"]) for a in acts][:2] == [
+            ("note", "updated"),
+            ("note", "created"),
+        ]
+
+    async def test_note_delete_writes_activity(self, client, auth_headers):
+        detail = await create_board(client, auth_headers)
+        card = await create_card(client, auth_headers, detail["lists"][0]["id"], "Not")
+        note = (
+            await client.post(
+                f"{API}/cards/{card['id']}/notes",
+                json={"content": "silinecek"},
+                headers=auth_headers,
+            )
+        ).json()["data"]
+        res = await client.delete(f"{API}/notes/{note['id']}", headers=auth_headers)
+        assert res.status_code in (200, 204)
+        acts = (
+            await client.get(f"{API}/cards/{card['id']}/activity", headers=auth_headers)
+        ).json()["data"]
+        assert (acts[0]["entity_type"], acts[0]["action"]) == ("note", "deleted")
 
     async def test_legacy_tasks_api_lands_in_default_board(self, client, auth_headers):
         res = await client.post(

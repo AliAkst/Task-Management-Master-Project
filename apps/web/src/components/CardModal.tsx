@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import Markdown from 'react-markdown'
-import { Check, Circle, CornerLeftUp, Hourglass, X } from 'lucide-react'
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type MouseEvent } from 'react'
+import { Check, Circle, CornerLeftUp, ExternalLink, Hourglass, X } from 'lucide-react'
+import { useUploads } from '../api/attachments'
 import { useCard, useCardActivity, useCardMutations } from '../api/boards'
 import {
   ACTION_LABEL,
@@ -10,8 +10,14 @@ import {
   toDateInput,
 } from '../lib/format'
 import type { BoardDetail, TaskPriority } from '../lib/types'
+import AttachmentsSection from './AttachmentsSection'
 import CardSchedule from './CardSchedule'
 import CardTime, { CardTimerButton } from './CardTime'
+import MarkdownEditor from './MarkdownEditor'
+import { DictationStatus, useMic } from './MicButton'
+import { insertDictated } from '../lib/dictation'
+import { readableTextOn } from '../lib/color'
+import MarkdownView from './MarkdownView'
 import Modal from './Modal'
 import RecurrencePicker from './RecurrencePicker'
 import { dayCodeOf } from '../lib/rrule'
@@ -23,10 +29,16 @@ interface Props {
   onOpenCard: (id: number) => void
 }
 
+const EXTERNAL_LABEL: Record<string, string> = {
+  microsoft: 'Microsoft To Do',
+  trello: 'Trello',
+  google: 'Google',
+}
+const NOTE_ACTION: Record<string, string> = { created: 'eklendi', updated: 'düzenlendi', deleted: 'silindi' }
 const section = 'mt-7'
 const sectionTitle = 'mb-2 text-[15px] font-semibold text-slate-900'
 const fieldLabel = 'block text-[13px] text-slate-600'
-const input = 'w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[14px]'
+const input = 'w-full rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-[14px]'
 
 /** Alt kart / on kosul durumu: ikon + erisilebilir ad (renk tek basina anlam tasimaz). */
 function StatusMark({ status, blocked }: { status: string; blocked?: boolean }) {
@@ -39,12 +51,26 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   const card = useCard(cardId)
   const activity = useCardActivity(cardId)
   const m = useCardMutations(cardId, board.board.id)
+  const uploads = useUploads(cardId, board.board.id)
+  const [dropping, setDropping] = useState(false)
+  const dragDepth = useRef(0)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [editingDesc, setEditingDesc] = useState(false)
   const [note, setNote] = useState('')
+  const [editingNote, setEditingNote] = useState<number | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
   const [item, setItem] = useState('')
+  const itemEl = useRef<HTMLInputElement>(null)
+  const itemRef = useRef(item)
+  itemRef.current = item
+  const itemMic = useMic((text) => {
+    const el = itemEl.current
+    const r = insertDictated(itemRef.current, el?.selectionStart ?? null, el?.selectionEnd ?? null, text)
+    itemRef.current = r.value
+    setItem(r.value.slice(0, 500))
+  })
   const [showHistory, setShowHistory] = useState(false)
   const [subtask, setSubtask] = useState('')
   const [splitOpen, setSplitOpen] = useState(false)
@@ -78,6 +104,30 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   const done = c.status === 'completed'
   const list = board.lists.find((l) => l.id === c.list_id)
 
+  const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer.types).includes('Files')
+  const dragProps = {
+    onDragEnter: (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      dragDepth.current += 1
+      setDropping(true)
+    },
+    onDragOver: (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault()
+    },
+    onDragLeave: (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      dragDepth.current = Math.max(0, dragDepth.current - 1)
+      if (dragDepth.current === 0) setDropping(false)
+    },
+    onDrop: (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      e.preventDefault()
+      dragDepth.current = 0
+      setDropping(false)
+      void uploads.upload(Array.from(e.dataTransfer.files))
+    },
+  }
+
   const saveTitle = () => {
     if (title.trim() && title.trim() !== c.title) m.update.mutate({ title: title.trim() })
     else setTitle(c.title)
@@ -90,9 +140,30 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
     const next = c.label_ids.includes(id) ? c.label_ids.filter((x) => x !== id) : [...c.label_ids, id]
     m.update.mutate({ label_ids: next })
   }
-  const addNote = (e: FormEvent) => {
-    e.preventDefault()
+  const addNote = () => {
     if (note.trim()) m.addNote.mutate(note.trim(), { onSuccess: () => setNote('') })
+  }
+  const startEditNote = (id: number, content: string) => {
+    setEditingNote(id)
+    setNoteDraft(content)
+  }
+  const saveNote = (id: number, original: string) => {
+    const text = noteDraft.trim()
+    if (!text || text === original.trim()) return setEditingNote(null)
+    m.updateNote.mutate({ id, content: text }, { onSuccess: () => setEditingNote(null) })
+  }
+  const cancelNote = (original: string) => {
+    if (noteDraft !== original && !confirm('Değişiklikler kaybolsun mu?')) return
+    setEditingNote(null)
+  }
+  const cancelDescription = () => {
+    if (description !== (c.description ?? '') && !confirm('Değişiklikler kaybolsun mu?')) return
+    setDescription(c.description ?? '')
+    setEditingDesc(false)
+  }
+  const onNoteDoubleClick = (e: MouseEvent, id: number, content: string) => {
+    if ((e.target as HTMLElement).closest('a,button')) return
+    startEditNote(id, content)
   }
   const addSubtask = (e: FormEvent) => {
     e.preventDefault()
@@ -127,6 +198,12 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
 
   return (
     <Modal size="xl" onClose={onClose} label={c.title}>
+      <div {...dragProps} className={`relative rounded-md ${dropping ? "outline-2 outline-dashed outline-blue-600 outline-offset-4" : ""}`}>
+        {dropping && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md bg-blue-50/80 text-[16px] font-semibold text-blue-800">
+            Bırak, karta eklensin
+          </div>
+        )}
       {/* Baslik */}
       <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
         <button
@@ -134,7 +211,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
           aria-label={done ? 'Yeniden aç' : 'Tamamla'}
           onClick={() => m.update.mutate({ status: done ? 'pending' : 'completed' })}
           className={`mt-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-            done ? 'border-green-700 bg-green-700 text-white' : 'border-slate-300 hover:border-green-700'
+            done ? 'border-green-700 bg-green-700 text-on-ink' : 'border-slate-300 hover:border-green-700'
           }`}
         >
           {done && <Check size={14} strokeWidth={3} aria-hidden />}
@@ -156,6 +233,22 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
               </button>
             )}
             <span>{meta.join(', ')}</span>
+            {c.external && (
+              <span className="inline-flex items-center gap-1">
+                {c.external.url ? (
+                  <a href={c.external.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">
+                    {EXTERNAL_LABEL[c.external.provider] ?? c.external.provider}’dan <ExternalLink size={11} aria-hidden />
+                  </a>
+                ) : (
+                  <>{EXTERNAL_LABEL[c.external.provider] ?? c.external.provider}’dan</>
+                )}
+                {c.external.push_error ? (
+                  <span className="text-red-700" title={c.external.push_error}>· geri yazılamadı</span>
+                ) : c.external.pending_push ? (
+                  <span>· geri yazılıyor…</span>
+                ) : null}
+              </span>
+            )}
           </p>
         </div>
         <CardTimerButton cardId={c.id} />
@@ -171,29 +264,26 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
           <div className="mt-5">
             <h3 className={sectionTitle}>Açıklama</h3>
             {editingDesc ? (
-              <div className="space-y-2">
-                <textarea
-                  autoFocus
-                  rows={8}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm"
-                  placeholder="Markdown destekli…"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <button onClick={saveDescription} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Kaydet</button>
-                  <button onClick={() => { setDescription(c.description ?? ''); setEditingDesc(false) }} className="text-sm text-slate-600">Vazgeç</button>
-                </div>
-              </div>
+              <MarkdownEditor
+                autoFocus
+                minRows={6}
+                placeholder="Markdown destekli…"
+                value={description}
+                onChange={setDescription}
+                onSubmit={saveDescription}
+                onCancel={cancelDescription}
+                onFiles={(files) => uploads.upload(files)}
+              />
             ) : (
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() => setEditingDesc(true)}
-                onKeyDown={(e) => e.key === 'Enter' && setEditingDesc(true)}
-                className="min-h-14 cursor-text rounded-md border border-transparent bg-slate-50 px-3 py-2 text-[15px] hover:border-slate-200 [&_a]:text-blue-700 [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc"
+                onClick={(e) => !(e.target as HTMLElement).closest('a,button') && setEditingDesc(true)}
+                onDoubleClick={(e) => !(e.target as HTMLElement).closest('a,button') && setEditingDesc(true)}
+                onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && setEditingDesc(true)}
+                className="min-h-14 cursor-text rounded-md border border-transparent bg-slate-50 px-3 py-2 text-[15px] hover:border-slate-200"
               >
-                {c.description ? <Markdown>{c.description}</Markdown> : <span className="text-slate-500">Açıklama eklemek için tıkla</span>}
+                {c.description ? <MarkdownView content={c.description} attachments={c.attachments} /> : <span className="text-slate-500">Açıklama eklemek için tıkla</span>}
               </div>
             )}
           </div>
@@ -220,7 +310,19 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
               ))}
             </ul>
             <form onSubmit={addItem} className="mt-2">
-              <input className={input} placeholder="Madde ekle ve Enter'a bas" maxLength={500} value={item} onChange={(e) => setItem(e.target.value)} />
+              <div className="flex items-center gap-1">
+                <input
+                  ref={itemEl}
+                  className={input}
+                  placeholder="Madde ekle ve Enter'a bas"
+                  maxLength={500}
+                  value={item}
+                  onChange={(e) => setItem(e.target.value)}
+                  onKeyDown={itemMic.onKey}
+                />
+                {itemMic.button}
+              </div>
+              <DictationStatus mic={itemMic} className="mt-1" />
             </form>
           </div>
 
@@ -254,7 +356,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                   <input type="checkbox" checked={splitChain} onChange={(e) => setSplitChain(e.target.checked)} />
                   Sırayla bağla
                 </label>
-                <button disabled={m.split.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-white disabled:opacity-50">Böl</button>
+                <button disabled={m.split.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-on-ink disabled:opacity-50">Böl</button>
                 {m.split.error && <span className="text-red-700">{m.split.error.message}</span>}
               </form>
             )}
@@ -274,31 +376,64 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
             </form>
           </div>
 
+          {/* Ekler */}
+          <AttachmentsSection
+            cardId={c.id}
+            boardId={board.board.id}
+            attachments={c.attachments}
+            pending={uploads.pending}
+            error={uploads.error}
+            onFiles={(files) => void uploads.upload(files)}
+          />
+
           {/* Notlar */}
           <div className={section}>
             <h3 className={sectionTitle}>Notlar</h3>
-            <form onSubmit={addNote} className="space-y-2">
-              <textarea
-                rows={2}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-[15px]"
-                placeholder="Not ekle (Ctrl+Enter ile kaydet)"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && e.ctrlKey && addNote(e)}
-              />
-              {note.trim() && <button className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Notu kaydet</button>}
-            </form>
+            <MarkdownEditor
+              minRows={2}
+              placeholder="Not ekle"
+              value={note}
+              onChange={setNote}
+              onSubmit={addNote}
+              submitLabel="Notu kaydet"
+              onFiles={(files) => uploads.upload(files)}
+            />
             <ul className="mt-3 space-y-3">
-              {c.notes.map((n) => (
-                <li key={n.id} className="group border-l-2 border-slate-300 pl-3 text-[15px]">
-                  <div className="mb-0.5 flex justify-between text-[12px] text-slate-500">
-                    <span>{formatDateTime(n.created_at)}</span>
-                    <button onClick={() => m.deleteNote.mutate(n.id)} className="opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-700">Sil</button>
-                  </div>
-                  <div className="[&_li]:ml-4 [&_ul]:list-disc"><Markdown>{n.content}</Markdown></div>
-                </li>
-              ))}
+              {c.notes.map((n) => {
+                const edited = new Date(n.updated_at).getTime() - new Date(n.created_at).getTime() > 5000
+                return (
+                  <li key={n.id} className="group border-l-2 border-slate-300 pl-3 text-[15px]">
+                    <div className="mb-0.5 flex justify-between text-[12px] text-slate-500">
+                      <span>
+                        {formatDateTime(n.created_at)}
+                        {edited && ' (düzenlendi)'}
+                      </span>
+                      {editingNote !== n.id && (
+                        <span className="flex gap-3 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+                          <button onClick={() => startEditNote(n.id, n.content)} className="hover:text-slate-900">Düzenle</button>
+                          <button onClick={() => m.deleteNote.mutate(n.id)} className="hover:text-red-700">Sil</button>
+                        </span>
+                      )}
+                    </div>
+                    {editingNote === n.id ? (
+                      <MarkdownEditor
+                        autoFocus
+                        value={noteDraft}
+                        onChange={setNoteDraft}
+                        onSubmit={() => saveNote(n.id, n.content)}
+                        onCancel={() => cancelNote(n.content)}
+                        onFiles={(files) => uploads.upload(files, n.id)}
+                      />
+                    ) : (
+                      <div onDoubleClick={(e) => onNoteDoubleClick(e, n.id, n.content)} title="Düzenlemek için çift tıkla">
+                        <MarkdownView content={n.content} attachments={c.attachments} />
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
+            {m.updateNote.error && <p className="mt-1 text-sm text-red-700">{m.updateNote.error.message}</p>}
           </div>
 
           {/* Gecmis */}
@@ -312,7 +447,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                   <li key={a.id} className="flex gap-3">
                     <span className="shrink-0 text-slate-500 tabular-nums">{formatDateTime(a.occurred_at)}</span>
                     <span>
-                      {a.entity_type === 'note' ? 'not eklendi' : ACTION_LABEL[a.action] ?? a.action}
+                      {a.entity_type === 'note' ? `not ${NOTE_ACTION[a.action] ?? a.action}` : ACTION_LABEL[a.action] ?? a.action}
                       {a.actor !== 'user' && ` (${a.actor === 'ai' ? 'asistan' : a.actor})`}
                     </span>
                   </li>
@@ -379,8 +514,8 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                       key={l.id}
                       aria-pressed={on}
                       onClick={() => toggleLabel(l.id)}
-                      className={`rounded px-2 py-0.5 text-[13px] ${on ? 'text-white' : 'text-slate-700 ring-1 ring-slate-300'}`}
-                      style={on ? { backgroundColor: l.color } : undefined}
+                      className={`rounded px-2 py-0.5 text-[13px] ${on ? '' : 'text-slate-700 ring-1 ring-slate-300'}`}
+                      style={on ? { backgroundColor: l.color, color: readableTextOn(l.color) } : undefined}
                     >
                       {l.name}
                     </button>
@@ -458,6 +593,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
           </div>
           {m.update.error && <p className="mt-2 text-sm text-red-700">{m.update.error.message}</p>}
         </aside>
+      </div>
       </div>
     </Modal>
   )

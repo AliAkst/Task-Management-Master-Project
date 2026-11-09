@@ -10,11 +10,30 @@ Boylece onay kartinda gordugun sey, onaylayinca yapilan seyin TA KENDISIDIR.
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.llm.types import ToolSpec
+from app.tools.card_content import (
+    CONTENT_ACTION_TYPES,
+    CONTENT_SPECS,
+    CONTENT_TOOL_TO_ACTION,
+    apply_labels,
+    clean_texts,
+    execute_checklist,
+    execute_delete_items,
+    label_line,
+    names_list,
+    split_known,
+)
+from app.tools.delete_tools import (
+    DELETE_ACTION_TYPES,
+    DELETE_SPECS,
+    execute_delete,
+    prepare_cancel_day,
+    prepare_delete_cards,
+)
 from app.tools.memory_tools import (
     MEMORY_ACTION_TYPES,
     MEMORY_SPECS,
@@ -27,6 +46,7 @@ from app.tools.schedule_day import (
     SCHEDULE_SPEC,
     build_timeline,
     find_board,
+    find_conflict,
     hhmm,
     resolve_day,
     to_datetime,
@@ -43,6 +63,9 @@ ACTION_TYPES: dict[str, str] = {
     "link_cards": "Kartları ön koşulla bağlama",
     "plan_day": "Gün planına madde ekleme",
     "schedule_day": "Günü saat saat planlama (kartlar + takvim blokları)",
+    "triage_inbox": "Gelen Kutusu'ndaki kartları board'lara dağıtma",
+    **CONTENT_ACTION_TYPES,
+    **DELETE_ACTION_TYPES,
     **MEMORY_ACTION_TYPES,
 }
 
@@ -57,7 +80,7 @@ _DT = {
 WRITE_SPECS: list[ToolSpec] = [
     ToolSpec(
         "create_card",
-        "Yeni kart oluşturur. Board id'si gerekir (list_boards). Liste verilmezse board'un ilk listesine eklenir. parent_id verilirse alt kart olur.",
+        "Yeni kart oluşturur. Board id'si gerekir (list_boards). Liste verilmezse board'un ilk listesine eklenir. parent_id verilirse alt kart olur. labels (etiket adları) ve checklist (madde metinleri, en fazla 20) ile birlikte oluşturulabilir.",
         {
             "type": "object",
             "properties": {
@@ -69,13 +92,15 @@ WRITE_SPECS: list[ToolSpec] = [
                 "estimated_minutes": {"type": "integer"},
                 "priority": {"type": "string", "enum": list(PRIORITIES)},
                 "parent_id": {"type": "integer"},
+                "labels": {"type": "array", "items": {"type": "string"}},
+                "checklist": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["board_id", "title"],
         },
     ),
     ToolSpec(
         "update_card",
-        "Kartı günceller: başlık, açıklama, son tarih, tahmini süre, öncelik, durum (completed = tamamla) ya da başka listeye taşıma (list_name). Sadece değişecek alanları gönder.",
+        "Kartı günceller: başlık, açıklama, son tarih, tahmini süre, öncelik, durum (completed = tamamla) ya da başka listeye taşıma (list_name). Sadece değişecek alanları gönder. Etiket için set_card_labels, checklist için add_checklist_items / update_checklist_items kullan.",
         {
             "type": "object",
             "properties": {
@@ -170,13 +195,15 @@ WRITE_SPECS: list[ToolSpec] = [
     ),
 ]
 
-WRITE_SPECS += [SCHEDULE_SPEC, *MEMORY_SPECS]
+WRITE_SPECS += [SCHEDULE_SPEC, *CONTENT_SPECS, *DELETE_SPECS, *MEMORY_SPECS]
 WRITE_TOOL_NAMES = {s.name for s in WRITE_SPECS}
 
 
 def action_type_of(tool_name: str) -> str:
     """Arac adi -> izin turu (orn. save_goal -> manage_goal)."""
-    return TOOL_TO_ACTION.get(tool_name, tool_name)
+    return CONTENT_TOOL_TO_ACTION.get(tool_name) or TOOL_TO_ACTION.get(
+        tool_name, tool_name
+    )
 
 
 _DAY_FMT = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
@@ -238,6 +265,21 @@ def _clip(text: str, n: int = 60) -> str:
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
+def triage_summary(moves: list[dict[str, Any]]) -> str:
+    """Gelen Kutusu dagitiminin onay karti metni (cikarilan maddelerden sonra yeniden kurulur)."""
+    lines = [
+        f"• {_clip(m['title'], 50)} → {m['board']} / {m['list']}"
+        + (f" — {_clip(m['reason'], 80)}" if m.get("reason") else "")
+        for m in moves
+    ]
+    return f"📥 Gelen Kutusu'ndan {len(moves)} kart taşınır:\n" + "\n".join(lines)
+
+
+def without_cards(args: dict[str, Any], card_ids: set[int]) -> dict[str, Any]:
+    """Dagitim isleminden kullanicinin cikardigi kartlar (onaydan once)."""
+    return {**args, "moves": [m for m in args["moves"] if m["card_id"] not in card_ids]}
+
+
 @dataclass
 class PreparedAction:
     action_type: str
@@ -290,6 +332,14 @@ class WriteTools:
 
     # ---------------- hazirlik ----------------
     async def prepare(self, name: str, args: dict[str, Any]) -> PreparedAction:
+        if name == "delete_cards":
+            body, summary = await prepare_delete_cards(self.api, self.privacy, **args)
+            return PreparedAction(name, body, summary)
+        if name == "cancel_day":
+            body, summary = await prepare_cancel_day(
+                self.api, self.privacy, self.tz, **args
+            )
+            return PreparedAction(name, body, summary)
         if name == "tidy_facts":
             if self.memory is None:
                 raise ValueError("Hafıza şu an kullanılamıyor")
@@ -318,6 +368,8 @@ class WriteTools:
         estimated_minutes: Any = None,
         priority: str | None = None,
         parent_id: Any = None,
+        labels: list[str] | None = None,
+        checklist: list[str] | None = None,
     ) -> PreparedAction:
         if not str(title).strip():
             raise ValueError("Başlık boş olamaz")
@@ -346,7 +398,140 @@ class WriteTools:
         summary = f"🗂 Yeni kart: '{_clip(body['title'])}' → {board['board']['name']} / {lst['name']}"
         if extra:
             summary += " (" + ", ".join(extra) + ")"
+        names = names_list(labels, "labels")
+        if names:
+            found, missing = split_known(names, board.get("labels", []))
+            if found or missing:
+                body["_labels"] = {
+                    "board_id": board["board"]["id"],
+                    "add_ids": [lb["id"] for lb in found],
+                    "add_new": missing,
+                }
+                summary += "\n🏷 " + label_line(found, missing, board.get("labels", []))
+        if checklist:
+            items = clean_texts(checklist, "checklist")
+            body["_checklist"] = items
+            summary += (
+                f"\n☑️ {len(items)} madde: "
+                + ", ".join(f"«{_clip(i, 40)}»" for i in items)
+            )
         return PreparedAction("create_card", body, summary)
+
+    # ---------------- checklist / etiket (Faz 8a) ----------------
+    async def _prepare_add_checklist_items(
+        self, card_id: Any, items: Any
+    ) -> PreparedAction:
+        card = await self._card(card_id)
+        wanted = clean_texts(items)
+        have = {i["text"].casefold() for i in card.get("checklist", [])}
+        new = [t for t in wanted if t.casefold() not in have]
+        dupes = [t for t in wanted if t.casefold() in have]
+        if not new:
+            raise ValueError(
+                "Bu maddelerin hepsi kartta zaten var: " + ", ".join(dupes)
+            )
+        summary = (
+            f"☑️ '{_clip(card['title'], 40)}' kartına {len(new)} madde: "
+            + ", ".join(f"«{_clip(t, 40)}»" for t in new)
+        )
+        if dupes:
+            summary += " (zaten var: " + ", ".join(_clip(t, 30) for t in dupes) + ")"
+        return PreparedAction(
+            "edit_checklist",
+            {"card_id": card["id"], "add": new, "changes": []},
+            summary,
+        )
+
+    async def _prepare_update_checklist_items(
+        self, card_id: Any, changes: Any
+    ) -> PreparedAction:
+        card = await self._card(card_id)
+        if not isinstance(changes, list) or not changes:
+            raise ValueError("changes en az bir değişiklik içermeli")
+        items = {i["id"]: i for i in card.get("checklist", [])}
+        out: list[dict[str, Any]] = []
+        lines = []
+        for ch in changes:
+            iid = _int(ch.get("item_id"), "item_id")
+            item = items.get(iid)
+            if item is None:
+                raise ValueError(
+                    f"{iid} numaralı madde kartta yok; get_card ile id'leri al"
+                )
+            entry: dict[str, Any] = {"item_id": iid}
+            what = []
+            if ch.get("is_done") is not None:
+                entry["is_done"] = bool(ch["is_done"])
+                what.append("✓ tamamlandı" if entry["is_done"] else "□ yeniden açılır")
+            if ch.get("text") is not None:
+                text = str(ch["text"]).strip()[:500]
+                if not text:
+                    raise ValueError("Madde metni boş olamaz")
+                entry["text"] = text
+                what.append(f"→ «{_clip(text, 40)}»")
+            if not what:
+                raise ValueError("Her değişiklikte is_done ya da text olmalı")
+            lines.append(f"«{_clip(item['text'], 40)}» " + " ".join(what))
+            out.append(entry)
+        summary = f"☑️ '{_clip(card['title'], 40)}': " + "; ".join(lines)
+        return PreparedAction(
+            "edit_checklist",
+            {"card_id": card["id"], "add": [], "changes": out},
+            summary,
+        )
+
+    async def _prepare_delete_checklist_items(
+        self, card_id: Any, item_ids: Any
+    ) -> PreparedAction:
+        card = await self._card(card_id)
+        if not isinstance(item_ids, list) or not item_ids:
+            raise ValueError("item_ids en az bir id içermeli")
+        items = {i["id"]: i for i in card.get("checklist", [])}
+        ids = list(dict.fromkeys(_int(i, "item_id") for i in item_ids))
+        for iid in ids:
+            if iid not in items:
+                raise ValueError(
+                    f"{iid} numaralı madde kartta yok; get_card ile id'leri al"
+                )
+        listing = "\n".join(f"- {_clip(items[i]['text'], 60)}" for i in ids)
+        summary = (
+            f"🗑 '{_clip(card['title'], 40)}' checklist'inden "
+            f"{len(ids)} madde silinir:\n{listing}"
+        )
+        return PreparedAction(
+            "delete_checklist_items", {"card_id": card["id"], "item_ids": ids}, summary
+        )
+
+    async def _prepare_set_card_labels(
+        self, card_id: Any, add: Any = None, remove: Any = None
+    ) -> PreparedAction:
+        card = await self._card(card_id)
+        add_names, remove_names = names_list(add, "add"), names_list(remove, "remove")
+        if not add_names and not remove_names:
+            raise ValueError("add ya da remove ile en az bir etiket adı ver")
+        board = await self._board(card["board_id"])
+        board_labels = board.get("labels", [])
+        on_card = set(card.get("label_ids", []))
+        found, missing = split_known(add_names, board_labels)
+        found = [lb for lb in found if lb["id"] not in on_card]  # zaten takili
+        gone, unknown = split_known(remove_names, board_labels)
+        gone = [lb for lb in gone if lb["id"] in on_card]
+        if not found and not missing and not gone:
+            raise ValueError("Değişiklik yok: etiketler kartta zaten istenen durumda")
+        line = label_line(found, missing, board_labels, gone)
+        if unknown:
+            line += f" (yok sayıldı: {', '.join(unknown)} etiketi board'da yok)"
+        return PreparedAction(
+            "manage_labels",
+            {
+                "card_id": card["id"],
+                "board_id": card["board_id"],
+                "add_ids": [lb["id"] for lb in found],
+                "add_new": missing,
+                "remove_ids": [lb["id"] for lb in gone],
+            },
+            f"🏷 '{_clip(card['title'], 40)}': {line}",
+        )
 
     async def _prepare_update_card(
         self,
@@ -555,6 +740,66 @@ class WriteTools:
             "plan_day", {"date": day.isoformat(), "items": new}, summary
         )
 
+    async def _prepare_triage_inbox(
+        self, moves: list[dict[str, Any]]
+    ) -> PreparedAction:
+        """Gelen Kutusu kartlarini board listelerine tasima onerisi (id'ler cozulur)."""
+        if not moves:
+            raise ValueError("En az bir kart gerekli")
+        resolved: list[dict[str, Any]] = []
+        boards: dict[int, dict[str, Any]] = {}
+        seen: set[int] = set()
+        for m in moves:
+            card = await self._card(m.get("card_id"))
+            if card["id"] in seen:
+                continue
+            seen.add(card["id"])
+            bid = _int(m.get("board_id"), "board_id")
+            if bid not in boards:
+                boards[bid] = await self._board(bid)
+            board = boards[bid]
+            if board["board"].get("system_kind"):
+                raise ValueError("Kart Gelen Kutusu'nun kendisine taşınamaz")
+            if card["board_id"] == bid:
+                continue  # zaten orada
+            wanted = m.get("list_id")
+            lst = next((x for x in board["lists"] if x["id"] == wanted), None)
+            lst = lst or self._find_list(board, None)
+            resolved.append(
+                {
+                    "card_id": card["id"],
+                    "title": card["title"],
+                    "from_board_id": card["board_id"],
+                    "board_id": bid,
+                    "board": board["board"]["name"],
+                    "list_id": lst["id"],
+                    "list": lst["name"],
+                    "reason": str(m["reason"])[:300] if m.get("reason") else None,
+                }
+            )
+        if not resolved:
+            raise ValueError("Taşınacak kart kalmadı")
+        return PreparedAction(
+            "triage_inbox", {"moves": resolved}, triage_summary(resolved)
+        )
+
+    async def _check_calendar_conflicts(self, target: date, timeline: list) -> None:
+        """Yeni bloklar o gunun saatli etkinlikleriyle (Teams toplantisi...) cakismasin."""
+        start = datetime.combine(target, time(0), tzinfo=self.tz)
+        # Bloklar gece yarisini gecebilir: ertesi gunun sonuna kadar bak
+        cal = await self.api.get(
+            "/calendar",
+            start=start.isoformat(),
+            end=(start + timedelta(days=2)).isoformat(),
+        )
+        events = [
+            i if self.privacy.keep(i) else {**i, "title": "Başka bir etkinlik"}
+            for i in cal.get("items", [])
+        ]
+        conflict = find_conflict(timeline, target, self.tz, events)
+        if conflict:
+            raise ValueError(conflict)
+
     async def _prepare_schedule_day(
         self, day: Any, blocks: list[dict[str, Any]]
     ) -> PreparedAction:
@@ -562,6 +807,7 @@ class WriteTools:
         if target < datetime.now(self.tz).date():
             raise ValueError(f"{_fmt_day(target)} geçmişte kaldı; ileri bir gün ver")
         timeline = build_timeline(blocks if isinstance(blocks, list) else [])
+        await self._check_calendar_conflicts(target, timeline)
         boards = [
             b
             for b in await self.api.get("/boards")
@@ -665,8 +911,20 @@ class WriteTools:
                 g = await api.write("PATCH", f"/goals/{args['goal_id']}", args["body"])
             return {"goal_id": g["id"], "title": g["title"], "status": g["status"]}
         if action_type == "create_card":
-            c = await api.write("POST", "/cards", args)
-            return {"card_id": c["id"], "title": c["title"]}
+            return await self._execute_create_card(api, args)
+        if action_type == "edit_checklist":
+            return await execute_checklist(api, args)
+        if action_type == "delete_checklist_items":
+            return await execute_delete_items(api, args)
+        if action_type == "manage_labels":
+            return await apply_labels(
+                api,
+                args["card_id"],
+                args["board_id"],
+                args["add_ids"],
+                args["add_new"],
+                args["remove_ids"],
+            )
         if action_type == "update_card":
             if args["patch"]:
                 await api.write("PATCH", f"/cards/{args['card_id']}", args["patch"])
@@ -704,6 +962,10 @@ class WriteTools:
             return {"linked": True}
         if action_type == "schedule_day":
             return await self._execute_schedule(api, args)
+        if action_type == "triage_inbox":
+            return await self._execute_triage(api, args)
+        if action_type in ("delete_cards", "cancel_day"):
+            return await execute_delete(api, action_type, args)
         if action_type == "plan_day":
             # Onay aninda mevcut planla yeniden birlestir (arada elle degismis olabilir)
             plan = await api.get(f"/day-plans/{args['date']}")
@@ -732,6 +994,63 @@ class WriteTools:
             p = await api.write("PUT", f"/day-plans/{args['date']}", {"items": merged})
             return {"date": p["date"], "items": len(p["items"])}
         raise ValueError(f"Bilinmeyen işlem: {action_type}")
+
+    async def _execute_create_card(
+        self, api: TaskApiClient, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Karti olusturur; etiket/checklist adimlari kartin kendisini bozmaz: biri
+        hata verirse kart yine de olusmustur, sonuc neyin eksik kaldigini soyler."""
+        body = {k: v for k, v in args.items() if not k.startswith("_")}
+        c = await api.write("POST", "/cards", body)
+        out: dict[str, Any] = {"card_id": c["id"], "title": c["title"]}
+        warnings: list[str] = []
+        if args.get("_labels"):
+            lb = args["_labels"]
+            try:
+                await apply_labels(
+                    api, c["id"], lb["board_id"], lb["add_ids"], lb["add_new"], []
+                )
+            except TaskApiError as e:
+                warnings.append(f"etiket eklenemedi: {e.message}")
+        if args.get("_checklist"):
+            try:
+                await execute_checklist(
+                    api, {"card_id": c["id"], "add": args["_checklist"]}
+                )
+            except TaskApiError as e:
+                warnings.append(f"checklist eklenemedi: {e.message}")
+        if warnings:
+            out["note"] = "Kart oluşturuldu; " + "; ".join(warnings)
+        return out
+
+    async def _execute_triage(
+        self, api: TaskApiClient, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Kartlari tasir (X-Actor: ai). Arada baska yere tasinmis karta dokunulmaz;
+        bir kartin hatasi digerlerini durdurmaz."""
+        moved: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
+        for m in args["moves"]:
+            try:
+                card = await api.get(f"/cards/{m['card_id']}")
+                if card.get("board_id") != m["from_board_id"]:
+                    skipped.append({"card_id": m["card_id"], "title": m["title"]})
+                    continue
+                # index sona kirpilir -> listenin sonuna tasi
+                await api.write(
+                    "POST",
+                    f"/cards/{m['card_id']}/move",
+                    {"list_id": m["list_id"], "index": 100000},
+                )
+                moved.append(
+                    {"card_id": m["card_id"], "title": m["title"], "board": m["board"]}
+                )
+            except TaskApiError as err:
+                failed.append({"title": m["title"], "error": err.message})
+        if not moved and failed:
+            raise TaskApiError(422, failed[0]["error"])
+        return {"moved": moved, "skipped": skipped, "failed": failed}
 
     async def _execute_schedule(
         self, api: TaskApiClient, args: dict[str, Any]

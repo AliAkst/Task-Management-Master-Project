@@ -1,13 +1,18 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useIsMutating } from '@tanstack/react-query'
 import {
-  closestCorners,
+  defaultDropAnimationSideEffects,
   DndContext,
   DragOverlay,
   KeyboardSensor,
+  MeasuringStrategy,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -22,12 +27,14 @@ import { useBoard, useBoardMutations, useDeleteBoard, useUpdateBoard } from '../
 import BoardForm, { COLORS } from '../components/BoardForm'
 import CardFace from '../components/CardFace'
 import CardModal from '../components/CardModal'
-import KanbanList, { listKey } from '../components/KanbanList'
+import InboxTriage from '../components/InboxTriage'
+import KanbanList, { ListOverlay, listKey } from '../components/KanbanList'
 import Modal from '../components/Modal'
 import { Segmented } from '../components/Page'
 import { useModels } from '../api/assistant'
 import { Lock, Settings2, Sparkles } from 'lucide-react'
 import type { CardSummary, Label } from '../lib/types'
+import { readableTextOn } from '../lib/color'
 
 // React Flow + dagre buyuk; sadece grafik gorunumu acilinca yuklenir
 const GraphView = lazy(() => import('../components/GraphView'))
@@ -38,6 +45,24 @@ const parseKey = (key: string | number) => {
   const [type, id] = String(key).split('-')
   return { type, id: Number(id) }
 }
+
+// Faz 8e: once imlec altindaki, yoksa kesisen hedef; liste surukleniyorsa yalniz listeler
+const collisionDetection: CollisionDetection = (args) => {
+  const activeIsList = String(args.active.id).startsWith('list-')
+  const containers = args.droppableContainers.filter((c) =>
+    activeIsList ? String(c.id).startsWith('list-') : true,
+  )
+  const a = { ...args, droppableContainers: containers }
+  const hits = pointerWithin(a)
+  const found = hits.length ? hits : rectIntersection(a)
+  if (activeIsList) return found
+  // kart: imlec bir kartin ustundeyse kart, degilse (bosluk/bos liste) liste hedefi
+  const cardHits = found.filter((c) => String(c.id).startsWith('card-'))
+  return cardHits.length ? cardHits : found
+}
+
+const reducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export default function BoardPage() {
   const boardId = Number(useParams().boardId)
@@ -61,6 +86,10 @@ export default function BoardPage() {
   const [columns, setColumns] = useState<Columns>({})
   const [listOrder, setListOrder] = useState<number[]>([])
   const [activeKey, setActiveKey] = useState<string | null>(null)
+  // Iyimser tasima suruyorken sunucu verisiyle yerel siralamayi yeniden kurma
+  const [pendingMoves, setPendingMoves] = useState(0)
+  const mutating =
+    useIsMutating({ mutationKey: ['moveCard'] }) + useIsMutating({ mutationKey: ['moveList'] })
   const dragOrigin = useRef<{ listId: number; index: number } | null>(null)
 
   const cardsById = useMemo(
@@ -73,7 +102,7 @@ export default function BoardPage() {
   )
 
   useEffect(() => {
-    if (!board.data || activeKey) return // surukleme sirasinda sunucu verisiyle ezme
+    if (!board.data || activeKey || pendingMoves > 0 || mutating > 0) return // surukleme/tasima sirasinda sunucu verisiyle ezme
     const cols: Columns = {}
     board.data.lists.forEach((l) => (cols[l.id] = []))
     ;[...board.data.cards]
@@ -81,7 +110,13 @@ export default function BoardPage() {
       .forEach((c) => c.list_id != null && cols[c.list_id]?.push(c.id))
     setColumns(cols)
     setListOrder(board.data.lists.map((l) => l.id))
-  }, [board.data, activeKey])
+  }, [board.data, activeKey, pendingMoves, mutating])
+
+  /** Tasima mutasyonunu baslatir; bitene kadar yerel siralama korunur. */
+  function runMove<V>(mut: { mutate: (v: V, o: { onSettled: () => void }) => void }, vars: V) {
+    setPendingMoves((n) => n + 1)
+    mut.mutate(vars, { onSettled: () => setPendingMoves((n) => Math.max(0, n - 1)) })
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // tik = karti ac
@@ -135,7 +170,7 @@ export default function BoardPage() {
         const newIndex = overList != null ? listOrder.indexOf(overList) : oldIndex
         if (newIndex !== oldIndex) {
           setListOrder(arrayMove(listOrder, oldIndex, newIndex))
-          m.moveList.mutate({ id, index: newIndex })
+          runMove(m.moveList, { id, index: newIndex })
         }
       }
       setActiveKey(null)
@@ -158,7 +193,7 @@ export default function BoardPage() {
     if (listId != null && origin) {
       const index = finalCols[listId].indexOf(id)
       if (origin.listId !== listId || origin.index !== index) {
-        m.moveCard.mutate({ id, list_id: listId, index })
+        runMove(m.moveCard, { id, list_id: listId, index })
       }
     }
     dragOrigin.current = null
@@ -179,6 +214,8 @@ export default function BoardPage() {
   const listsById = new Map(board.data.lists.map((l) => [l.id, l]))
   const activeCard = activeKey?.startsWith('card-') ? cardsById.get(parseKey(activeKey).id) : null
 
+  const activeList = activeKey?.startsWith('list-') ? listsById.get(parseKey(activeKey).id) : null
+
   function addList(e: FormEvent) {
     e.preventDefault()
     if (!newList.trim()) return
@@ -197,7 +234,7 @@ export default function BoardPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-200 bg-white py-3 pr-4 pl-6">
+      <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-200 bg-surface py-3 pr-4 pl-6">
         {/* Ajanda sekmesi: board'un rengi sayfanin kenarinda */}
         <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: b.color }} />
         <div className="min-w-0">
@@ -232,6 +269,10 @@ export default function BoardPage() {
         </div>
       </div>
 
+      {b.system_kind === 'inbox' && (
+        <InboxTriage openCount={board.data.cards.filter((c) => c.status !== 'completed' && !c.is_archived).length} />
+      )}
+
       {view === 'graph' ? (
         <Suspense fallback={<p className="p-6 text-slate-500">İlişki görünümü yükleniyor…</p>}>
           <GraphView boardId={boardId} labels={labels} onOpenCard={openCard} />
@@ -239,13 +280,22 @@ export default function BoardPage() {
       ) : (
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        autoScroll={{ threshold: { x: 0.15, y: 0.1 }, acceleration: 8 }}
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
-        onDragCancel={() => setActiveKey(null)}
+        onDragCancel={() => {
+          dragOrigin.current = null
+          setActiveKey(null)
+        }}
       >
-        <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto p-4">
+        <div
+          className="board-bg flex min-h-0 flex-1 items-start gap-3 overflow-x-auto p-4"
+          data-bg={b.background ?? 'none'}
+          style={{ '--board-color': b.color } as CSSProperties}
+        >
           <SortableContext items={listOrder.map(listKey)} strategy={horizontalListSortingStrategy}>
             {listOrder.map((listId) => {
               const list = listsById.get(listId)
@@ -271,7 +321,7 @@ export default function BoardPage() {
 
           <form onSubmit={addList} className="w-72 shrink-0 rounded-xl bg-slate-100/60 p-2">
             <input
-              className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm placeholder:text-slate-500 focus:border-slate-300 focus:bg-white"
+              className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm placeholder:text-slate-500 focus:border-slate-300 focus:bg-surface"
               placeholder="+ Liste ekle"
               value={newList}
               onChange={(e) => setNewList(e.target.value)}
@@ -279,15 +329,32 @@ export default function BoardPage() {
           </form>
         </div>
 
-        <DragOverlay>
+        <DragOverlay
+          dropAnimation={
+            reducedMotion()
+              ? null
+              : {
+                  duration: 200,
+                  easing: 'cubic-bezier(0.18,0.67,0.6,1.22)',
+                  sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
+                }
+          }
+        >
           {activeCard ? <CardFace card={activeCard} labels={labels} dragging /> : null}
+          {activeList ? (
+            <ListOverlay
+              list={activeList}
+              cards={(columns[activeList.id] ?? []).map((id) => cardsById.get(id)).filter((c): c is CardSummary => !!c)}
+              labels={labels}
+            />
+          ) : null}
         </DragOverlay>
       </DndContext>
       )}
 
-      {(m.moveCard.error || m.deleteList.error || m.createCard.error) && (
+      {(m.moveCard.error || m.moveList.error || m.deleteList.error || m.createCard.error) && (
         <p className="px-4 pb-2 text-sm text-red-600">
-          {(m.moveCard.error ?? m.deleteList.error ?? m.createCard.error)?.message}
+          {(m.moveCard.error ?? m.moveList.error ?? m.deleteList.error ?? m.createCard.error)?.message}
         </p>
       )}
 
@@ -313,7 +380,7 @@ export default function BoardPage() {
           <h3 className="mt-6 mb-2 text-sm font-medium">Etiketler</h3>
           <div className="mb-2 flex flex-wrap gap-1.5">
             {board.data.labels.map((l) => (
-              <span key={l.id} className="rounded px-2 py-0.5 text-xs text-white" style={{ backgroundColor: l.color }}>
+              <span key={l.id} className="rounded px-2 py-0.5 text-xs" style={{ backgroundColor: l.color, color: readableTextOn(l.color) }}>
                 {l.name}
               </span>
             ))}
@@ -341,15 +408,19 @@ export default function BoardPage() {
             >
               Arşivle
             </button>
-            <button
-              className="text-red-600 hover:underline"
-              onClick={() => {
-                if (confirm(`"${b.name}" board'u tüm kartlarıyla silinsin mi?`))
-                  deleteBoard.mutate(b.id, { onSuccess: () => navigate('/') })
-              }}
-            >
-              Board'u sil
-            </button>
+            {b.system_kind === 'inbox' ? (
+              <span className="text-slate-500">Gelen Kutusu silinemez</span>
+            ) : (
+              <button
+                className="text-red-600 hover:underline"
+                onClick={() => {
+                  if (confirm(`"${b.name}" board'u tüm kartlarıyla silinsin mi?`))
+                    deleteBoard.mutate(b.id, { onSuccess: () => navigate('/') })
+                }}
+              >
+                Board'u sil
+              </button>
+            )}
           </div>
         </Modal>
       )}

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Koyu tema: yardimcilar var(--color-...) kullandigi icin degiskenleri yeniden tanimlamak yeter */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
 /*
  * Tasarim sistemi: "kagit uzerine murekkep" + ajanda sekmeleri.
  *
@@ -14,7 +17,7 @@
   --color-slate-200: #d9deea; /* cizgi */
   --color-slate-300: #c2c9da;
   --color-slate-400: #949db7;
-  --color-slate-500: #6b7493;
+  --color-slate-500: #656e8d;
   --color-slate-600: #525b78; /* soluk murekkep */
   --color-slate-700: #3b4461;
   --color-slate-800: #283049;
@@ -31,8 +34,187 @@
   /* Kayit kirmizisi: sadece calisan kronometre */
   --color-rec: #d93a4a;
 
+  /* Yuzey / koyu dugme ustu yazi (8g'de dark mode'da degisir) */
+  --color-surface: #ffffff;
+  --color-on-ink: #ffffff;
+
   --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bricolage Grotesque", "Atkinson Hyperlegible Next", ui-sans-serif, sans-serif;
+}
+
+/* Kod vurgulama renkleri (highlight.js hazir CSS'i kullanilmaz) */
+:root {
+  --code-bg: var(--color-slate-100);
+  --code-fg: var(--color-slate-900);
+  --code-comment: var(--color-slate-500);
+  --code-keyword: #7a3fc4;
+  --code-string: #1f7a4a;
+  --code-number: #b05a00;
+  --code-title: var(--color-blue-700);
+  --code-attr: #a1356b;
+  --code-meta: var(--color-slate-600);
+}
+/* ---------------------------------------------------------------------------
+ * Faz 8g: tema. <html data-theme="light|dark" data-paper="kagit|krem|...">
+ * (lib/theme.ts ve index.html'deki satir ici betik ayarlar.)
+ * ------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-ok: #15803d;
+  --chart-warn: #c27803;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-slate-50: #0f1422; /* gece zemini */
+  --color-slate-100: #1a2134;
+  --color-slate-200: #262e45;
+  --color-slate-300: #363f5a;
+  --color-slate-400: #5d6684;
+  --color-slate-500: #858da9;
+  --color-slate-600: #a5adc5;
+  --color-slate-700: #c4cadb;
+  --color-slate-800: #dbe0ec;
+  --color-slate-900: #edf0f7; /* murekkep (metin) */
+  --color-slate-950: #f8f9fc;
+
+  --color-surface: #161c2d;
+  --color-on-ink: #0f1422;
+
+  --color-blue-50: #1b2350;
+  --color-blue-100: #25306a;
+  --color-blue-500: #8196f6;
+  --color-blue-600: #97a8ff;
+  --color-blue-700: #b8c3ff;
+  --color-blue-800: #cdd5ff;
+  --color-blue-900: #dde3ff;
+  --color-indigo-50: #1d2150;
+  --color-indigo-100: #2a2f6e;
+  --color-indigo-700: #aab4ff;
+
+  --color-rec: #f0606d;
+
+  /* Durum renkleri: zeminler koyu doygun, metin/dolgu tonlari acik */
+  --color-green-100: #163a27;
+  --color-green-600: #5bc88e;
+  --color-green-700: #74d6a0;
+  --color-green-800: #8fe0b4;
+  --color-amber-50: #2a2110;
+  --color-amber-100: #3a2d12;
+  --color-amber-300: #7a5a1c;
+  --color-amber-400: #d9a23a;
+  --color-amber-500: #e0a63a;
+  --color-amber-600: #e8b650;
+  --color-amber-700: #f2c46a;
+  --color-amber-800: #f2c46a;
+  --color-amber-900: #f7d68d;
+  --color-amber-950: #fbe3ae;
+  --color-red-50: #2d151a;
+  --color-red-100: #40202a;
+  --color-red-500: #f0606d;
+  --color-red-600: #ff8f95;
+  --color-red-700: #ff8f95;
+
+  /* Kod renkleri */
+  --code-bg: #1a2134;
+  --code-fg: #edf0f7;
+  --code-comment: #858da9;
+  --code-keyword: #c39bff;
+  --code-string: #7fd6a3;
+  --code-number: #f5b26b;
+  --code-title: #97a8ff;
+  --code-attr: #ff9cc9;
+  --code-meta: #a5adc5;
+
+  /* Grafik paleti: ayni tonlarin acik varyantlari */
+  --chart-1: #6aa5f0;
+  --chart-2: #f28d63;
+  --chart-3: #4fd0a0;
+  --chart-4: #f5c04a;
+  --chart-ok: #74d6a0;
+  --chart-warn: #f2c46a;
+}
+
+/* Uygulama zemini: yalniz sayfa zemini (slate-50) degisir */
+[data-paper="krem"] { --color-slate-50: #f6f2e9; }
+[data-paper="adacayi"] { --color-slate-50: #edf3ee; }
+[data-paper="lavanta"] { --color-slate-50: #f1eff8; }
+[data-paper="gri"] { --color-slate-50: #f1f1f2; }
+[data-theme="dark"][data-paper="krem"] { --color-slate-50: #18150f; }
+[data-theme="dark"][data-paper="adacayi"] { --color-slate-50: #101a15; }
+[data-theme="dark"][data-paper="lavanta"] { --color-slate-50: #16142a; }
+[data-theme="dark"][data-paper="gri"] { --color-slate-50: #141416; }
+
+/* Board arka plani: BoardPage kanban alani <div class="board-bg" data-bg="..."> */
+.board-bg[data-bg="deniz"] { --bg-a: #d7e6f5; --bg-b: #eaf1f9; }
+.board-bg[data-bg="orman"] { --bg-a: #dfeadf; --bg-b: #eef4ec; }
+.board-bg[data-bg="gunbatimi"] { --bg-a: #f7e1d3; --bg-b: #f6ecdf; }
+.board-bg[data-bg="alacakaranlik"] { --bg-a: #e3def3; --bg-b: #efeaf7; }
+.board-bg[data-bg="kum"] { --bg-a: #efe7d6; --bg-b: #f6f1e6; }
+.board-bg[data-bg="grafit"] { --bg-a: #dfe2e8; --bg-b: #eceef2; }
+.board-bg[data-bg="deniz"],
+.board-bg[data-bg="orman"],
+.board-bg[data-bg="gunbatimi"],
+.board-bg[data-bg="alacakaranlik"],
+.board-bg[data-bg="kum"],
+.board-bg[data-bg="grafit"] {
+  background: linear-gradient(135deg, var(--bg-a), var(--bg-b));
+}
+[data-theme="dark"] .board-bg[data-bg]:not([data-bg="tint"]):not([data-bg="none"]) {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bg-a) 22%, var(--color-slate-50)),
+    color-mix(in srgb, var(--bg-b) 22%, var(--color-slate-50))
+  );
+}
+.board-bg[data-bg="tint"] {
+  background: color-mix(in srgb, var(--board-color, #64748b) 10%, var(--color-slate-50));
+}
+[data-theme="dark"] .board-bg[data-bg="tint"] {
+  background: color-mix(in srgb, var(--board-color, #64748b) 18%, var(--color-slate-50));
+}
+
+.hljs {
+  color: var(--code-fg);
+}
+.hljs-keyword,
+.hljs-built_in,
+.hljs-type,
+.hljs-literal {
+  color: var(--code-keyword);
+}
+.hljs-number {
+  color: var(--code-number);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--code-string);
+}
+.hljs-comment {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.hljs-title,
+.hljs-function {
+  color: var(--code-title);
+}
+.hljs-attr,
+.hljs-attribute {
+  color: var(--code-attr);
+}
+.hljs-meta,
+.hljs-variable,
+.hljs-symbol {
+  color: var(--code-meta);
+}
+.hljs-deletion {
+  color: var(--color-rec);
 }
 
 @layer base {
@@ -84,14 +266,14 @@
  */
 .fc {
   --fc-border-color: var(--color-slate-200);
-  --fc-page-bg-color: #fff;
+  --fc-page-bg-color: var(--color-surface);
   --fc-neutral-bg-color: var(--color-slate-50);
   --fc-today-bg-color: color-mix(in srgb, var(--color-blue-50) 70%, transparent);
   --fc-now-indicator-color: var(--color-rec);
   --fc-highlight-color: color-mix(in srgb, var(--color-blue-100) 60%, transparent);
   --fc-event-border-color: transparent;
   --fc-button-text-color: var(--color-slate-700);
-  --fc-button-bg-color: #fff;
+  --fc-button-bg-color: var(--color-surface);
   --fc-button-border-color: var(--color-slate-300);
   --fc-button-hover-bg-color: var(--color-slate-100);
   --fc-button-hover-border-color: var(--color-slate-400);
@@ -107,7 +289,7 @@
 }
 .fc .fc-button-primary:not(:disabled).fc-button-active,
 .fc .fc-button-primary:not(:disabled):active {
-  color: #fff;
+  color: var(--color-on-ink);
 }
 .fc .fc-button-primary:disabled {
   opacity: 0.45;
@@ -146,7 +328,8 @@
 }
 
 /* React Flow v12 temasi (resmi yontem: .react-flow altindaki --xy-* degiskenleri) */
-.react-flow {
+/* .react-flow.react-flow: xyflow stilleri sonradan (lazy) yuklenir; ozgulluk onlari gecer */
+.react-flow.react-flow {
   --xy-background-color-default: var(--color-slate-50);
   --xy-background-pattern-dots-color-default: var(--color-slate-300);
   --xy-edge-stroke-default: var(--color-slate-300);
@@ -155,7 +338,7 @@
   --xy-connectionline-stroke-width-default: 2;
   --xy-selection-background-color-default: color-mix(in srgb, var(--color-blue-100) 40%, transparent);
   --xy-selection-border-default: 1px dashed var(--color-blue-600);
-  --xy-controls-button-background-color-default: #fff;
+  --xy-controls-button-background-color-default: var(--color-surface);
   --xy-controls-button-background-color-hover-default: var(--color-slate-100);
   --xy-controls-button-color-default: var(--color-slate-700);
   --xy-controls-button-border-color-default: var(--color-slate-200);

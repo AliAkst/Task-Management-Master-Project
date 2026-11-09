@@ -1,0 +1,140 @@
+{
+  "id": "board1",
+  "name": "Spor Programı",
+  "desc": "Antrenman ve beslenme işleri",
+  "url": "https://trello.com/b/abc/spor-programi",
+  "prefs": {"background": "orange", "backgroundColor": "#D29034"},
+  "lists": [
+    {"id": "l-todo", "name": "Yapılacak", "pos": 1000, "closed": false},
+    {"id": "l-doing", "name": "Yapılıyor", "pos": 2000, "closed": false},
+    {"id": "l-done", "name": "Bitti", "pos": 3000, "closed": false},
+    {"id": "l-old", "name": "Eski", "pos": 4000, "closed": true}
+  ],
+  "labels": [
+    {"id": "lab-red", "name": "Acil", "color": "red"},
+    {"id": "lab-blue", "name": "", "color": "blue"},
+    {"id": "lab-none", "name": "", "color": null}
+  ],
+  "cards": [
+    {
+      "id": "c1",
+      "name": "Koşu ayakkabısı al",
+      "desc": "Boyut 43",
+      "idList": "l-todo",
+      "pos": 2000,
+      "closed": false,
+      "due": "2026-11-20T12:00:00.000Z",
+      "dueComplete": false,
+      "idLabels": ["lab-red", "lab-blue"],
+      "shortUrl": "https://trello.com/c/c1",
+      "attachments": [{"name": "Mağaza", "url": "https://example.com/shop"}],
+      "checklists": [
+        {
+          "id": "cl1",
+          "name": "Kontrol",
+          "pos": 1,
+          "checkItems": [
+            {"id": "ci1", "name": "Bütçe belirle", "state": "complete", "pos": 1},
+            {"id": "ci2", "name": "Mağazaları karşılaştır", "state": "incomplete", "pos": 2}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c0",
+      "name": "Program hazırla",
+      "desc": "",
+      "idList": "l-todo",
+      "pos": 1000,
+      "closed": false,
+      "due": null,
+      "dueComplete": false,
+      "idLabels": [],
+      "attachments": [],
+      "checklists": []
+    },
+    {
+      "id": "c2",
+      "name": "Haftalık ölçüm",
+      "desc": "",
+      "idList": "l-doing",
+      "pos": 1000,
+      "closed": false,
+      "due": null,
+      "dueComplete": false,
+      "idLabels": [],
+      "attachments": [],
+      "checklists": []
+    },
+    {
+      "id": "c3",
+      "name": "Üyelik yenile",
+      "desc": "",
+      "idList": "l-done",
+      "pos": 1000,
+      "closed": false,
+      "due": null,
+      "dueComplete": false,
+      "idLabels": [],
+      "attachments": [],
+      "checklists": []
+    },
+    {
+      "id": "c4",
+      "name": "Vitamin al",
+      "desc": "",
+      "idList": "l-todo",
+      "pos": 3000,
+      "closed": false,
+      "due": "2026-11-01T09:00:00.000Z",
+      "dueComplete": true,
+      "idLabels": [],
+      "attachments": [],
+      "checklists": []
+    },
+    {
+      "id": "c-archived",
+      "name": "Arşivli kart",
+      "desc": "",
+      "idList": "l-todo",
+      "pos": 4000,
+      "closed": true,
+      "idLabels": [],
+      "attachments": [],
+      "checklists": []
+    },
+    {
+      "id": "c-in-old-list",
+      "name": "Arşivli listedeki kart",
+      "desc": "",
+      "idList": "l-old",
+      "pos": 1000,
+      "closed": false,
+      "idLabels": [],
+      "attachments": [],
+      "checklists": []
+    }
+  ],
+  "actions": [
+    {
+      "id": "a2",
+      "type": "commentCard",
+      "date": "2026-11-03T10:00:00.000Z",
+      "data": {"text": "Numara 44 daha iyi olabilir", "card": {"id": "c1"}},
+      "memberCreator": {"fullName": "Deniz Yılmaz"}
+    },
+    {
+      "id": "a1",
+      "type": "commentCard",
+      "date": "2026-11-02T08:30:00.000Z",
+      "data": {"text": "Fiyatlara bak", "card": {"id": "c1"}},
+      "memberCreator": {"fullName": "Deniz Yılmaz"}
+    },
+    {
+      "id": "a3",
+      "type": "updateCard",
+      "date": "2026-11-02T08:30:00.000Z",
+      "data": {"card": {"id": "c1"}}
+    }
+  ]
+}

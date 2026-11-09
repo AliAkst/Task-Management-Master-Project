@@ -11,6 +11,7 @@ from app.db.repositories.board import (
 )
 from app.db.repositories.card_content import (
     ActivityRepository,
+    AttachmentRepository,
     CardNoteRepository,
     ChecklistRepository,
     DependencyRepository,
@@ -21,6 +22,11 @@ from app.db.repositories.day_plan import (
     DayPlanRepository,
 )
 from app.db.repositories.event import EventRepository
+from app.db.repositories.integration import (
+    ExternalLinkRepository,
+    IntegrationAccountRepository,
+    OAuthClientRepository,
+)
 from app.db.repositories.series import SeriesRepository
 from app.db.repositories.task import TaskRepository
 from app.db.repositories.time_session import TimeSessionRepository
@@ -77,6 +83,7 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.labels = LabelRepository(session)
         self.card_labels = CardLabelRepository(session)
         self.notes = CardNoteRepository(session)
+        self.attachments = AttachmentRepository(session)
         self.checklist = ChecklistRepository(session)
         self.activity = ActivityRepository(session)
         self.events = EventRepository(session)
@@ -86,6 +93,9 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.analytics = AnalyticsRepository(session)
         self.dependencies = DependencyRepository(session)
         self.series = SeriesRepository(session)
+        self.integration_accounts = IntegrationAccountRepository(session)
+        self.external_links = ExternalLinkRepository(session)
+        self.oauth_clients = OAuthClientRepository(session)
     
     @with_db_retry
     async def commit(self):

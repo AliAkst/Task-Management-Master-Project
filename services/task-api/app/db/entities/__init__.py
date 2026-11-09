@@ -8,6 +8,7 @@ from .board import (
     LabelEntity,
 )
 from .card_content import (
+    CardAttachmentEntity,
     CardDependencyEntity,
     CardNoteEntity,
     ChecklistItemEntity,
@@ -15,6 +16,7 @@ from .card_content import (
 from .day_plan import DayPlanEntity, DayPlanItemEntity
 from .event import EventEntity
 from .goal import GoalEntity
+from .integration import ExternalLinkEntity, IntegrationAccountEntity, OAuthClientEntity
 from .series import CardSeriesEntity
 from .task import TaskEntity
 from .time_session import TimeSessionEntity
@@ -27,6 +29,7 @@ __all__ = [
     "BoardEntity",
     "BoardListEntity",
     "BoardPrivacy",
+    "CardAttachmentEntity",
     "CardDependencyEntity",
     "CardSeriesEntity",
     "CardLabelEntity",
@@ -35,8 +38,11 @@ __all__ = [
     "DayPlanEntity",
     "DayPlanItemEntity",
     "EventEntity",
+    "ExternalLinkEntity",
     "GoalEntity",
+    "IntegrationAccountEntity",
     "LabelEntity",
+    "OAuthClientEntity",
     "TaskEntity",
     "TimeSessionEntity",
     "TimestampMixin",

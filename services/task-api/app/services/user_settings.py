@@ -21,6 +21,8 @@ class UserSettingsService:
                     timezone="Europe/Istanbul",
                     reminders_enabled=True,
                     week_start=0,
+                    theme="system",
+                    background="kagit",
                 )
             )
             await self.uow.commit()

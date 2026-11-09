@@ -1,7 +1,18 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type CSSProperties, type FormEvent } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { CLOUD_COST_WARNING, useModels } from '../api/assistant'
 import type { BoardCreate } from '../lib/types'
+
+export const BACKGROUNDS: { key: NonNullable<BoardCreate['background']>; label: string }[] = [
+  { key: 'none', label: 'Yok' },
+  { key: 'tint', label: 'Board rengi' },
+  { key: 'deniz', label: 'Deniz' },
+  { key: 'orman', label: 'Orman' },
+  { key: 'gunbatimi', label: 'Gün batımı' },
+  { key: 'alacakaranlik', label: 'Alacakaranlık' },
+  { key: 'kum', label: 'Kum' },
+  { key: 'grafit', label: 'Grafit' },
+]
 
 export const COLORS = [
   '#64748b', '#ef4444', '#f97316', '#eab308', '#22c55e',
@@ -25,6 +36,7 @@ export default function BoardForm({ initial, submitLabel, busy, onSubmit, onCanc
     initial?.weekly_time_budget_min ? String(initial.weekly_time_budget_min / 60) : '',
   )
   const [privacy, setPrivacy] = useState(initial?.privacy ?? 'cloud_allowed')
+  const [background, setBackground] = useState<string>(initial?.background ?? 'none')
   const [modelId, setModelId] = useState(initial?.default_model_id ?? '')
   const models = useModels()
   const all = models.data?.models ?? []
@@ -41,6 +53,7 @@ export default function BoardForm({ initial, submitLabel, busy, onSubmit, onCanc
       weekly_time_budget_min: Number.isFinite(hours) ? Math.round(hours * 60) : null,
       privacy,
       default_model_id: modelId || null,
+      background: background as NonNullable<BoardCreate['background']>,
     })
   }
 
@@ -74,6 +87,30 @@ export default function BoardForm({ initial, submitLabel, busy, onSubmit, onCanc
           />
         ))}
       </div>
+      <fieldset className="text-sm">
+        <legend className="mb-1 text-slate-600">Arka plan</legend>
+        <div className="flex flex-wrap gap-2">
+          {BACKGROUNDS.map((bg) => (
+            <button
+              type="button"
+              key={bg.key}
+              aria-pressed={background === bg.key}
+              onClick={() => setBackground(bg.key)}
+              className="flex w-16 flex-col items-center gap-1 text-[12px] text-slate-600"
+            >
+              <span
+                aria-hidden
+                data-bg={bg.key}
+                style={{ '--board-color': color } as CSSProperties}
+                className={`board-bg block h-9 w-full rounded-md border border-slate-300 ${
+                  background === bg.key ? 'ring-2 ring-slate-900 ring-offset-2 ring-offset-surface' : ''
+                }`}
+              />
+              {bg.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
       <div className="grid grid-cols-2 gap-3 text-sm">
         <label className="space-y-1">
           <span className="text-slate-600">Haftalık süre hedefi (saat)</span>
@@ -137,7 +174,7 @@ export default function BoardForm({ initial, submitLabel, busy, onSubmit, onCanc
         )}
         <button
           disabled={busy || !name.trim()}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-on-ink disabled:opacity-50"
         >
           {submitLabel}
         </button>

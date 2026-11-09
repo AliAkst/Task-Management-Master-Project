@@ -17,8 +17,10 @@ import { useBoard, useBoards, keys as boardKeys } from '../api/boards'
 import { useCalendar, useCalendarMutations } from '../api/calendar'
 import CardModal from '../components/CardModal'
 import EventDialog, { type EventDraft } from '../components/EventDialog'
-import { Check, Hourglass } from 'lucide-react'
+import { Check, Hourglass, Loader2, RefreshCw, Video } from 'lucide-react'
+import { useIntegrationMutations, useMicrosoftCalendarEnabled } from '../api/integrations'
 import { api } from '../lib/api'
+import { readableTextOn } from '../lib/color'
 import type { BoardDetail, CalendarEvent, CalendarItem, CardSummary, UserSettings } from '../lib/types'
 
 const HOUR = 60 * 60 * 1000
@@ -40,6 +42,8 @@ export default function CalendarPage() {
   const boards = useBoards()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<UserSettings>('/settings/') })
   const m = useCalendarMutations()
+  const msCalendarOn = useMicrosoftCalendarEnabled()
+  const { syncMicrosoftCalendar } = useIntegrationMutations()
 
   const [range, setRange] = useState<{ start: string; end: string } | null>(null)
   const [hidden, setHidden] = useState<Set<number>>(new Set())
@@ -94,12 +98,12 @@ export default function CalendarPage() {
       start: i.start,
       end: i.end ?? undefined,
       allDay: i.all_day,
-      backgroundColor: deadline ? '#fff' : i.color,
+      backgroundColor: deadline ? 'var(--color-surface)' : i.color,
       borderColor: i.color,
-      textColor: deadline ? i.color : '#fff',
-      durationEditable: !deadline && !i.recurrence_rule,
+      textColor: deadline ? i.color : readableTextOn(i.color),
+      durationEditable: !deadline && !i.recurrence_rule && !i.external,
       // Tekrarlar suruklenmez: degisiklik butun seriye uygulanir (pencereden)
-      startEditable: !i.recurrence_rule,
+      startEditable: !i.recurrence_rule && !i.external,
       classNames: done ? ['opacity-50', 'line-through'] : [],
       extendedProps: { item: i },
     }
@@ -158,8 +162,8 @@ export default function CalendarPage() {
       setOpenCard({ cardId: item.card_id!, boardId: item.board_id! })
       return
     }
-    if (item.recurrence_rule) {
-      // Tekrar degil seri duzenlenir: serinin asil zamanini getir
+    if (item.recurrence_rule || item.external) {
+      // Tekrar degil seri duzenlenir (dis etkinlikte not da gerekir): serinin asil zamanini getir
       const ev = await api<CalendarEvent>(`/events/${item.event_id}`)
       setDraft({
         id: ev.id,
@@ -172,6 +176,8 @@ export default function CalendarPage() {
         location: ev.location,
         notes: ev.notes,
         recurrenceRule: ev.recurrence_rule,
+        meetingUrl: ev.meeting_url,
+        external: ev.external,
       })
       return
     }
@@ -201,7 +207,7 @@ export default function CalendarPage() {
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="flex w-72 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-white p-4">
+      <aside className="flex w-72 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-surface p-4">
         <section>
           <h2 className="mb-2 text-[17px]">Gösterilen alanlar</h2>
           <div className="flex flex-wrap gap-1.5">
@@ -212,8 +218,8 @@ export default function CalendarPage() {
                   key={b.id}
                   onClick={() => toggleBoard(b.id)}
                   aria-pressed={on}
-                  className={`rounded-full px-3 py-1 text-[13px] font-semibold ${on ? 'text-white' : 'text-slate-500 line-through ring-1 ring-slate-300'}`}
-                  style={on ? { backgroundColor: b.color } : undefined}
+                  className={`rounded-full px-3 py-1 text-[13px] font-semibold ${on ? '' : 'text-slate-500 line-through ring-1 ring-slate-300'}`}
+                  style={on ? { backgroundColor: b.color, color: readableTextOn(b.color) } : undefined}
                 >
                   {b.name}
                 </button>
@@ -234,7 +240,7 @@ export default function CalendarPage() {
                   data-card-id={c.id}
                   data-title={c.title}
                   data-minutes={c.estimated_minutes || 60}
-                  className="cursor-grab rounded-md border border-l-4 border-slate-200 bg-white px-2.5 py-2 text-[14px] hover:border-slate-400 active:cursor-grabbing"
+                  className="cursor-grab rounded-md border border-l-4 border-slate-200 bg-surface px-2.5 py-2 text-[14px] hover:border-slate-400 active:cursor-grabbing"
                   style={{ borderLeftColor: board?.color }}
                   title={c.blocked ? 'Ön koşulları bitmedi' : undefined}
                 >
@@ -255,7 +261,31 @@ export default function CalendarPage() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col p-4">
         {error && <p className="mb-2 text-sm text-red-700">{error}</p>}
-        <div className="min-h-0 flex-1 rounded-lg border border-slate-200 bg-white p-3">
+        {msCalendarOn && (
+          <div className="mb-2 flex flex-wrap items-center justify-end gap-3 text-[14px]">
+            {syncMicrosoftCalendar.error && <span className="text-red-700">{syncMicrosoftCalendar.error.message}</span>}
+            {syncMicrosoftCalendar.data && !syncMicrosoftCalendar.error && (
+              <span className={syncMicrosoftCalendar.data.errors.length ? 'text-red-700' : 'text-slate-600'} aria-live="polite">
+                {syncMicrosoftCalendar.data.errors.length
+                  ? syncMicrosoftCalendar.data.errors.join('; ')
+                  : `${syncMicrosoftCalendar.data.created} yeni, ${syncMicrosoftCalendar.data.updated} güncellendi, ${syncMicrosoftCalendar.data.removed} silindi`}
+              </span>
+            )}
+            <button
+              disabled={syncMicrosoftCalendar.isPending}
+              onClick={() => syncMicrosoftCalendar.mutate()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1 hover:bg-slate-100 disabled:opacity-40"
+            >
+              {syncMicrosoftCalendar.isPending ? (
+                <Loader2 size={14} className="animate-spin" aria-hidden />
+              ) : (
+                <RefreshCw size={14} aria-hidden />
+              )}
+              Toplantıları çek
+            </button>
+          </div>
+        )}
+        <div className="min-h-0 flex-1 rounded-lg border border-slate-200 bg-surface p-3">
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             locale={trLocale}
@@ -270,6 +300,21 @@ export default function CalendarPage() {
             selectMirror
             droppable
             events={events}
+            eventContent={(arg) => {
+              const item = arg.event.extendedProps.item as CalendarItem
+              if (!item.meeting_url) return true // varsayilan gorunum
+              return (
+                <div className="fc-event-main-frame">
+                  {arg.timeText && <div className="fc-event-time">{arg.timeText}</div>}
+                  <div className="fc-event-title-container">
+                    <div className="fc-event-title fc-sticky">
+                      <Video size={12} className="mr-1 inline-block align-[-1px]" aria-label="Çevrimiçi toplantı" />
+                      {arg.event.title}
+                    </div>
+                  </div>
+                </div>
+              )
+            }}
             datesSet={onDatesSet}
             select={onSelect}
             drop={onDrop}

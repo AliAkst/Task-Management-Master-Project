@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import Markdown from 'react-markdown'
+import MarkdownView from './MarkdownView'
 import { useQueryClient } from '@tanstack/react-query'
-import { useMatch } from 'react-router-dom'
-import { useBoards } from '../api/boards'
+import { useMatch, useSearchParams } from 'react-router-dom'
+import { useBoards, useCard } from '../api/boards'
 import {
   assistantKeys,
   CLOUD_COST_WARNING,
@@ -15,8 +15,11 @@ import {
   type AiAction,
   type ChatMessage,
 } from '../api/assistant'
-import { AlertTriangle, ChevronDown, Loader2, Lock, Search, Sparkles } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Loader2, Lock, Search, Sparkles, X } from 'lucide-react'
 import ActionCard from './ActionCard'
+import { DictationStatus, useMic } from './MicButton'
+import { insertDictated } from '../lib/dictation'
+import { usePrefs } from '../stores/prefs'
 import { useAssistantUi } from '../stores/assistant'
 
 interface LiveTurn {
@@ -67,7 +70,7 @@ function Bubble({
 }) {
   if (m.role === 'user') {
     return (
-      <div className="ml-10 rounded-2xl rounded-br-sm bg-slate-900 px-3 py-2 text-sm whitespace-pre-wrap text-white">
+      <div className="ml-10 rounded-2xl rounded-br-sm bg-slate-900 px-3 py-2 text-sm whitespace-pre-wrap text-on-ink">
         {m.content}
       </div>
     )
@@ -76,8 +79,8 @@ function Bubble({
     <div className="mr-6">
       <ToolChips names={m.tools ?? []} />
       {m.content && (
-        <div className="rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_p+p]:mt-2 [&_ul]:list-disc">
-          <Markdown>{m.content}</Markdown>
+        <div className="rounded-2xl rounded-bl-sm bg-surface px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_p+p]:mt-2 [&_ul]:list-disc">
+          <MarkdownView content={m.content} />
         </div>
       )}
       <Actions items={m.actions ?? []} />
@@ -123,9 +126,41 @@ export default function AssistantPanel() {
   const abort = useRef<AbortController | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
 
+  // Sesli dikte: metin imlec konumuna eklenir; "bitince gonder" aciksa durunca gonderilir
+  const inputEl = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef(input)
+  inputRef.current = input
+  const dictated = useRef(false)
+  const autoSend = usePrefs((s) => s.dictationAutoSend)
+  const mic = useMic((text) => {
+    const el = inputEl.current
+    const r = insertDictated(inputRef.current, el?.selectionStart ?? null, el?.selectionEnd ?? null, text)
+    inputRef.current = r.value
+    dictated.current = true
+    setInput(r.value)
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(r.caret, r.caret)
+    })
+  })
+  const listening = mic.dictation.listening
+  useEffect(() => {
+    if (listening || !dictated.current) return
+    dictated.current = false
+    if (autoSend && inputRef.current.trim()) void send(inputRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening])
+
   // Acik board (varsa): varsayilan modeli "Otomatik" secimini belirler
   const boardMatch = useMatch('/boards/:boardId')
   const boardId = boardMatch ? Number(boardMatch.params.boardId) : null
+  // Acik kart penceresi (?card=<id>): "bu kart" baglami; cipteki X ile kapatilir
+  const [searchParams] = useSearchParams()
+  const rawCard = searchParams.get('card')
+  const openCardId = boardId !== null && rawCard && /^\d+$/.test(rawCard) ? Number(rawCard) : null
+  const [dismissedCard, setDismissedCard] = useState<number | null>(null)
+  const contextCardId = openCardId !== null && dismissedCard !== openCardId ? openCardId : null
+  const contextCard = useCard(contextCardId)
   const boards = useBoards()
   const board = boardId !== null ? boards.data?.find((b) => b.id === boardId) : undefined
   const list = models.data?.models ?? []
@@ -173,7 +208,7 @@ export default function AssistantPanel() {
     let convId = conversationId
     try {
       await streamChat(
-        { message, conversation_id: conversationId, model_id: manual, board_id: boardId },
+        { message, conversation_id: conversationId, model_id: manual, board_id: boardId, card_id: contextCardId },
         (e) => {
           setLive((t) => {
             if (!t) return t
@@ -230,7 +265,7 @@ export default function AssistantPanel() {
 
   return (
     <aside className="flex w-full max-w-md shrink-0 flex-col border-l border-slate-200 bg-slate-50">
-      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
+      <header className="flex items-center gap-2 border-b border-slate-200 bg-surface px-3 py-2">
         <button onClick={() => setShowList((s) => !s)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline" title="Sohbetler">
           <Sparkles size={15} className="mr-1.5 inline align-[-2px]" aria-hidden />
           {conversations.data?.find((c) => c.id === conversationId)?.title ?? 'Yeni sohbet'}
@@ -243,7 +278,7 @@ export default function AssistantPanel() {
       </header>
 
       {showList && (
-        <ul className="max-h-60 overflow-y-auto border-b border-slate-200 bg-white text-sm">
+        <ul className="max-h-60 overflow-y-auto border-b border-slate-200 bg-surface text-sm">
           {(conversations.data ?? []).length === 0 && <li className="px-3 py-2 text-slate-400">Henüz sohbet yok.</li>}
           {conversations.data?.map((c) => (
             <li key={c.id} className={`group flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 ${c.id === conversationId ? 'bg-slate-100' : ''}`}>
@@ -269,7 +304,7 @@ export default function AssistantPanel() {
             <p className="mb-3">Board'larına, takvimine, planlarına ve istatistiklerine bakarak yardım edebilirim.</p>
             <div className="flex flex-wrap justify-center gap-1.5">
               {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => void send(s)} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-slate-200 hover:ring-slate-400">{s}</button>
+                <button key={s} onClick={() => void send(s)} className="rounded-full bg-surface px-3 py-1 text-xs ring-1 ring-slate-200 hover:ring-slate-400">{s}</button>
               ))}
             </div>
             <p className="mt-4 text-xs text-slate-400">Kart, etkinlik ve plan önerebilirim; ne otomatik yapılacağına Ayarlar'dan sen karar verirsin.</p>
@@ -296,8 +331,8 @@ export default function AssistantPanel() {
                 </div>
               )}
               {live.text ? (
-                <div className="rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc">
-                  <Markdown>{live.text}</Markdown>
+                <div className="rounded-2xl rounded-bl-sm bg-surface px-3 py-2 text-sm ring-1 ring-slate-200 [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc">
+                  <MarkdownView content={live.text} />
                 </div>
               ) : (
                 !live.error && <p className="text-xs text-slate-400">{current?.is_local ? 'Local model düşünüyor… (ilk mesajda model belleğe yükleniyor)' : 'Düşünüyor…'}</p>
@@ -310,23 +345,43 @@ export default function AssistantPanel() {
         <div ref={bottom} />
       </div>
 
-      <form onSubmit={onSubmit} className="border-t border-slate-200 bg-white p-2">
+      <form onSubmit={onSubmit} className="border-t border-slate-200 bg-surface p-2">
+        {contextCardId !== null && (
+          <div className="mb-1.5 flex items-center gap-1 rounded-full bg-indigo-50 py-0.5 pl-2.5 pr-1 text-[11px] text-indigo-700">
+            <span className="min-w-0 flex-1 truncate">
+              BaÄŸlam: Â«{contextCard.data?.title ?? `#${contextCardId}`}Â»
+            </span>
+            <button
+              type="button"
+              aria-label="Kart baÄŸlamÄ±nÄ± gÃ¶nderme"
+              title="Bu mesajda kart baÄŸlamÄ±nÄ± gÃ¶nderme"
+              className="rounded-full p-0.5 hover:bg-indigo-100"
+              onClick={() => setDismissedCard(contextCardId)}
+            >
+              <X size={12} aria-hidden />
+            </button>
+          </div>
+        )}
         <textarea
+          ref={inputEl}
           rows={2}
           className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm"
           placeholder="Asistana yaz… (Enter: gönder, Shift+Enter: yeni satır)"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
+            mic.onKey(e)
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               void send(input)
             }
           }}
         />
+        <DictationStatus mic={mic} className="mt-1 px-1" />
         <div className="mt-1 flex items-center gap-2">
+          {mic.button}
           <select
-            className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-1 py-1 text-xs"
+            className="min-w-0 flex-1 rounded border border-slate-200 bg-surface px-1 py-1 text-xs"
             value={manual ?? ''}
             onChange={(e) => {
               const id = e.target.value
@@ -355,7 +410,7 @@ export default function AssistantPanel() {
           {busy ? (
             <button type="button" onClick={() => abort.current?.abort()} className="rounded-md bg-slate-200 px-3 py-1 text-sm">■ Durdur</button>
           ) : (
-            <button disabled={!input.trim() || !effectiveModel} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-40">Gönder</button>
+            <button disabled={!input.trim() || !effectiveModel} className="rounded-md bg-slate-900 px-3 py-1 text-sm text-on-ink disabled:opacity-40">Gönder</button>
           )}
         </div>
         {pendingCloud && (
@@ -372,7 +427,7 @@ export default function AssistantPanel() {
                 type="button"
                 autoFocus
                 onClick={() => { setModel(pendingCloud); setPendingCloud(null) }}
-                className="rounded bg-slate-900 px-2.5 py-1 font-medium text-white"
+                className="rounded bg-slate-900 px-2.5 py-1 font-medium text-on-ink"
               >
                 Bulut modele geç
               </button>

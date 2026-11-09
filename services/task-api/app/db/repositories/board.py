@@ -62,12 +62,26 @@ class BoardRepository(BaseRepository[BoardEntity]):
         )
         return result.scalar_one_or_none()
 
+    @with_db_retry
+    async def find_inbox(self, user_id: int) -> BoardEntity | None:
+        result = await self.session.execute(
+            select(BoardEntity)
+            .where(BoardEntity.user_id == user_id, BoardEntity.system_kind == "inbox")
+            .order_by(BoardEntity.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def delete_cascade(self, board: BoardEntity) -> None:
         """
         Board'u ve icerigini siler. SQLite FK cascade'i varsayilan olarak kapali
         oldugu icin cocuk kayitlari acikca siliyoruz (Postgres'te zararsiz).
         """
-        from app.db.entities import CardNoteEntity, ChecklistItemEntity
+        from app.db.entities import (
+            CardAttachmentEntity,
+            CardNoteEntity,
+            ChecklistItemEntity,
+        )
 
         card_ids = select(TaskEntity.id).where(TaskEntity.board_id == board.id)
         label_ids = select(LabelEntity.id).where(LabelEntity.board_id == board.id)
@@ -75,6 +89,11 @@ class BoardRepository(BaseRepository[BoardEntity]):
             delete(CardLabelEntity).where(
                 CardLabelEntity.card_id.in_(card_ids)
                 | CardLabelEntity.label_id.in_(label_ids)
+            )
+        )
+        await self.session.execute(
+            delete(CardAttachmentEntity).where(
+                CardAttachmentEntity.card_id.in_(card_ids)
             )
         )
         await self.session.execute(

@@ -17,7 +17,7 @@ export class ApiError extends Error {
   }
 }
 
-const BASE = '/api/v1'
+export const BASE = '/api/v1'
 
 /** FastAPI'nin 422 dogrulama hatasi formati: {detail: [{loc, msg}]} */
 interface ValidationDetail {
@@ -31,7 +31,7 @@ function formatDetail(detail: ValidationDetail[] | string | undefined): string |
   return detail.map((d) => `${d.loc[d.loc.length - 1]}: ${d.msg}`).join(' · ')
 }
 
-async function tryRefresh(): Promise<boolean> {
+export async function tryRefresh(): Promise<boolean> {
   const { refreshToken, setTokens, logout } = useAuthStore.getState()
   if (!refreshToken) return false
   const res = await fetch(`${BASE}/auth/refresh`, {

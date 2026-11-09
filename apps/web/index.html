@@ -9,6 +9,19 @@
       href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650;12..96,750&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // Parlama olmasin: tema ilk boyamadan once ayarlanir (lib/theme.ts ile ayni anahtarlar)
+      ;(function () {
+        try {
+          var t = localStorage.getItem('ajanda.theme') || 'system'
+          var p = localStorage.getItem('ajanda.paper') || 'kagit'
+          var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          var el = document.documentElement
+          el.setAttribute('data-theme', dark ? 'dark' : 'light')
+          el.setAttribute('data-paper', p)
+        } catch (e) {}
+      })()
+    </script>
     <title>Yaşam Planlayıcı</title>
   </head>
   <body>

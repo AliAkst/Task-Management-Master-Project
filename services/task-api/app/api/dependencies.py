@@ -17,6 +17,7 @@ from app.db.repositories.user import UserRepository
 from app.db.unit_of_work import TaskUnitOfWork
 from app.services.auth import AuthService
 from app.services.board import BoardService
+from app.services.attachment import AttachmentService
 from app.services.card import CardService
 from app.services.analytics import AnalyticsService
 from app.services.day_plan import DayPlanService
@@ -76,6 +77,13 @@ async def get_card_service(
     actor: str = Depends(get_actor),
 ) -> CardService:
     return CardService(uow, actor)
+
+
+async def get_attachment_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+    actor: str = Depends(get_actor),
+) -> AttachmentService:
+    return AttachmentService(uow, actor)
 
 
 async def get_event_service(
@@ -170,6 +178,7 @@ AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 UserSettingsServiceDep = Annotated[UserSettingsService, Depends(get_user_settings_service)]
 BoardServiceDep = Annotated[BoardService, Depends(get_board_service)]
 CardServiceDep = Annotated[CardService, Depends(get_card_service)]
+AttachmentServiceDep = Annotated[AttachmentService, Depends(get_attachment_service)]
 EventServiceDep = Annotated[EventService, Depends(get_event_service)]
 TimeSessionServiceDep = Annotated[
     TimeSessionService, Depends(get_time_session_service)

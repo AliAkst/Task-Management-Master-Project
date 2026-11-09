@@ -100,7 +100,7 @@ export type StreamEvent =
  * (EventSource POST desteklemedigi icin fetch + stream okuyucu.)
  */
 export async function streamChat(
-  body: { message: string; conversation_id: number | null; model_id: string | null; board_id: number | null },
+  body: { message: string; conversation_id: number | null; model_id: string | null; board_id: number | null; card_id?: number | null },
   onEvent: (e: StreamEvent) => void,
   signal: AbortSignal,
   retried = false,
@@ -159,6 +159,10 @@ export const TOOL_LABEL: Record<string, string> = {
   link_cards: 'bağlantı önerdi',
   plan_day: 'plan önerdi',
   schedule_day: 'günü planlıyor',
+  add_checklist_items: 'checklist maddesi önerdi',
+  update_checklist_items: 'checklist değişikliği önerdi',
+  delete_checklist_items: 'madde silme önerdi',
+  set_card_labels: 'etiket önerdi',
 }
 
 // ---------------- islemler & izinler ----------------
@@ -176,10 +180,10 @@ export function useActionDecision() {
   const refresh = useRefreshAfterAction()
   return {
     approve: useMutation({
-      mutationFn: ({ id, rememberAuto }: { id: number; rememberAuto: boolean }) =>
+      mutationFn: ({ id, rememberAuto, excludeCardIds }: { id: number; rememberAuto: boolean; excludeCardIds?: number[] }) =>
         api<AiAction>(`${BASE}/actions/${id}/approve`, {
           method: 'POST',
-          body: JSON.stringify({ remember_auto: rememberAuto }),
+          body: JSON.stringify({ remember_auto: rememberAuto, exclude_card_ids: excludeCardIds ?? [] }),
         }),
       onSuccess: refresh,
     }),
@@ -339,7 +343,7 @@ export interface DayReviewJob {
 }
 
 const jobKey = (day: string) => ['assistant', 'day-review', day] as const
-const isActive = (j: DayReviewJob | null | undefined) => j?.status === 'queued' || j?.status === 'running'
+const isActive = (j: { status: string } | null | undefined) => j?.status === 'queued' || j?.status === 'running'
 
 /** Is surerken 5 sn'de bir yoklanir; bitince gunun plani/ozeti tazelenir. */
 export function useDayReviewJob(day: string, enabled = true) {
@@ -356,6 +360,55 @@ export function useStartDayReview() {
   return useMutation({
     mutationFn: (day: string) => api<DayReviewJob>(`${BASE}/day-review/${day}`, { method: 'POST' }),
     onSuccess: (job) => qc.setQueryData(jobKey(job.date), job),
+  })
+}
+
+// ---------------- Gelen Kutusu dagitimi (Faz 7d) ----------------
+export interface InboxTriageMove {
+  card_id: number
+  title: string
+  board_id: number
+  board: string
+  list_id: number
+  list: string
+  reason: string | null
+}
+
+export interface InboxTriageJob {
+  id: number
+  status: 'queued' | 'running' | 'done' | 'failed'
+  model_label: string
+  is_local: boolean
+  error: string | null
+  action: AiAction | null
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+  result: {
+    moves: InboxTriageMove[]
+    candidate_count: number
+    action_status: AiAction['status'] | null
+    notes: string[]
+  } | null
+}
+
+const triageKey = ['assistant', 'inbox-triage'] as const
+
+/** Is surerken 5 sn'de bir yoklanir. */
+export function useInboxTriageJob(enabled = true) {
+  return useQuery({
+    queryKey: triageKey,
+    queryFn: () => api<InboxTriageJob | null>(`${BASE}/inbox-triage`),
+    enabled,
+    refetchInterval: (q) => (isActive(q.state.data) ? 5000 : false),
+  })
+}
+
+export function useStartInboxTriage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api<InboxTriageJob>(`${BASE}/inbox-triage`, { method: 'POST' }),
+    onSuccess: (job) => qc.setQueryData(triageKey, job),
   })
 }
 

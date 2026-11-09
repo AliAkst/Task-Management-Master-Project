@@ -21,6 +21,20 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
+    # Entegrasyon token'larini sifreleyen ana anahtar (bos: services/task-api/.secret_key)
+    secret_key: str | None = None
+    # OAuth entegrasyonlari (Faz 7b/7c). Bos: ilgili baglanti kurulamaz
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    microsoft_client_id: str | None = None
+    microsoft_client_secret: str | None = None
+    # OAuth donus adresleri: API'nin ve arayuzun disaridan gorunen adresi
+    api_base_url: str = "http://localhost:8000"
+    web_base_url: str = "http://localhost:5173"
+    # Kart ekleri (Faz 8c)
+    attachments_max_mb: int = 25
+    # Bos: services/task-api/data/attachments
+    attachments_dir: str | None = None
     #RabbitMQ Settings
     rabbitmq_host: str = "localhost"
     rabbitmq_port: int = 5672

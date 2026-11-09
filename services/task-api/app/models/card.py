@@ -3,7 +3,15 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.event import ExternalRef
 from app.models.task import TaskPriority, TaskStatus
+
+
+class CardExternalRef(ExternalRef):
+    """Kartin geldigi dis sistem + geri yazma (outbox) durumu (Faz 7c)."""
+
+    pending_push: bool = False
+    push_error: str | None = None
 
 
 # ---------------- Card ----------------
@@ -66,6 +74,7 @@ class CardSummary(BaseModel):
     checklist_total: int = 0
     checklist_done: int = 0
     note_count: int = 0
+    attachment_count: int = 0
     # --- hiyerarsi & bagimlilik (Faz 1b) ---
     parent_id: int | None = None
     assigned_to: int | None = None
@@ -168,6 +177,19 @@ class ChecklistItemResponse(BaseModel):
     position: float
 
 
+# ---------------- Attachment (Faz 8c) ----------------
+class AttachmentResponse(BaseModel):
+    id: int
+    card_id: int
+    note_id: int | None
+    filename: str
+    mime_type: str
+    size_bytes: int
+    is_image: bool
+    created_at: datetime
+    url: str  # imzali, 60 dk gecerli indirme adresi
+
+
 # ---------------- Detail / Activity ----------------
 class CardDetail(CardSummary):
     user_id: int
@@ -176,11 +198,14 @@ class CardDetail(CardSummary):
     created_at: datetime
     updated_at: datetime
     notes: list[NoteResponse] = Field(default_factory=list)
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
     checklist: list[ChecklistItemResponse] = Field(default_factory=list)
     parent: CardRef | None = None
     subtasks: list[CardSummary] = Field(default_factory=list)
     depends_on: list[CardRef] = Field(default_factory=list)
     dependents: list[CardRef] = Field(default_factory=list)
+    # Kartin geldigi dis sistem (Trello / Microsoft To Do) ve geri yazma durumu
+    external: "CardExternalRef | None" = None
 
 
 class ActivityResponse(BaseModel):

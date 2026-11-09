@@ -11,6 +11,7 @@ import type {
   BoardWithCounts,
   CardCreate,
   CardDetail,
+  CardSummary,
   CardSplit,
   CardUpdate,
   ChecklistItem,
@@ -27,6 +28,47 @@ export const keys = {
 }
 
 const json = (body: unknown) => ({ body: JSON.stringify(body) })
+
+// ---------------- iyimser tasima yardimcilari (Faz 8e) ----------------
+/** Listeyi `index` sirasina tasir (sunucudaki move_list ile ayni anlam). */
+export function applyListMove(data: BoardDetail, id: number, index: number): BoardDetail {
+  const moved = data.lists.find((l) => l.id === id)
+  if (!moved) return data
+  const rest = data.lists.filter((l) => l.id !== id)
+  rest.splice(Math.max(0, Math.min(index, rest.length)), 0, moved)
+  return { ...data, lists: rest }
+}
+
+/** Karti hedef listede `index` sirasina koyar: komsu pozisyonlarin ortasi (uclarda +-1). */
+export function applyCardMove(
+  data: BoardDetail,
+  id: number,
+  listId: number,
+  index: number,
+): BoardDetail {
+  const card = data.cards.find((c) => c.id === id)
+  const target = data.lists.find((l) => l.id === listId)
+  if (!card || !target) return data
+  const siblings = data.cards
+    .filter((c) => c.list_id === listId && c.id !== id)
+    .sort((a, b) => a.position - b.position)
+  const at = Math.max(0, Math.min(index, siblings.length))
+  const before = siblings[at - 1]?.position
+  const after = siblings[at]?.position
+  let position = 1
+  if (before !== undefined && after !== undefined) position = (before + after) / 2
+  else if (before !== undefined) position = before + 1
+  else if (after !== undefined) position = after - 1
+  const done = target.is_done_list
+  const moved: CardSummary = {
+    ...card,
+    list_id: listId,
+    position,
+    status: done ? 'completed' : card.status === 'completed' ? 'pending' : card.status,
+    completed_at: done ? (card.completed_at ?? new Date().toISOString()) : null,
+  }
+  return { ...data, cards: data.cards.map((c) => (c.id === id ? moved : c)) }
+}
 
 // ---------------- sorgular ----------------
 export function useBoards() {
@@ -115,8 +157,18 @@ export function useBoardMutations(boardId: number) {
       onSuccess: refresh,
     }),
     moveList: useMutation({
+      mutationKey: ['moveList'],
       mutationFn: ({ id, index }: { id: number; index: number }) =>
         api<BoardList>(`/lists/${id}/move`, { method: 'POST', ...json({ index }) }),
+      onMutate: async ({ id, index }) => {
+        await qc.cancelQueries({ queryKey: keys.board(boardId), exact: true })
+        const prev = qc.getQueryData<BoardDetail>(keys.board(boardId))
+        if (prev) qc.setQueryData(keys.board(boardId), applyListMove(prev, id, index))
+        return { prev }
+      },
+      onError: (_e, _v, ctx) => {
+        if (ctx?.prev) qc.setQueryData(keys.board(boardId), ctx.prev)
+      },
       onSettled: refresh,
     }),
     createCard: useMutation({
@@ -125,8 +177,18 @@ export function useBoardMutations(boardId: number) {
       onSuccess: refresh,
     }),
     moveCard: useMutation({
+      mutationKey: ['moveCard'],
       mutationFn: ({ id, list_id, index }: { id: number; list_id: number; index: number }) =>
         api<CardDetail>(`/cards/${id}/move`, { method: 'POST', ...json({ list_id, index }) }),
+      onMutate: async ({ id, list_id, index }) => {
+        await qc.cancelQueries({ queryKey: keys.board(boardId), exact: true })
+        const prev = qc.getQueryData<BoardDetail>(keys.board(boardId))
+        if (prev) qc.setQueryData(keys.board(boardId), applyCardMove(prev, id, list_id, index))
+        return { prev }
+      },
+      onError: (_e, _v, ctx) => {
+        if (ctx?.prev) qc.setQueryData(keys.board(boardId), ctx.prev)
+      },
       onSettled: refresh,
     }),
     /** Grafik gorunumde dugum konumu (gecmise yazilmaz). */
@@ -196,6 +258,11 @@ export function useCardMutations(cardId: number, boardId: number) {
     addNote: useMutation({
       mutationFn: (content: string) =>
         api<Note>(`/cards/${cardId}/notes`, { method: 'POST', ...json({ content }) }),
+      onSuccess: refresh,
+    }),
+    updateNote: useMutation({
+      mutationFn: ({ id, content }: { id: number; content: string }) =>
+        api<Note>(`/notes/${id}`, { method: 'PATCH', ...json({ content }) }),
       onSuccess: refresh,
     }),
     deleteNote: useMutation({

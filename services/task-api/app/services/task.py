@@ -26,6 +26,7 @@ from app.db.unit_of_work import TaskUnitOfWork
 from app.models.common import PaginationParams
 from app.models.task import TaskCreate, TaskFilter, TaskResponse, TaskStatus, TaskUpdate
 from app.services.activity import ActivityLogger, diff
+from app.services.attachment_storage import get_storage
 from app.services.ordering import STEP
 
 logger = get_logger(__name__)
@@ -244,6 +245,8 @@ class TaskService:
             changes={"title": entity.title},
         )
         await self.uow.card_labels.set_for_card(entity.id, [])
+        file_keys = await self.uow.attachments.keys_for_card(entity.id)
+        await self.uow.attachments.delete_for_card(entity.id)
         await self.uow.notes.delete_for_card(entity.id)
         await self.uow.checklist.delete_for_card(entity.id)
         await self.uow.dependencies.delete_for_card(entity.id)
@@ -256,6 +259,7 @@ class TaskService:
         await self.uow.tasks.detach_children(entity.id)
         await self.uow.tasks.delete(entity)
         await self.uow.commit()
+        get_storage().delete_many(file_keys)  # commit sonrasi; hata loglanir
         await redis_cache.delete_pattern(get_task_user_pattern(user_id))
 
         # Event Publish

@@ -36,10 +36,18 @@ def _clip(text: str | None, n: int) -> str | None:
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
-def _card(c: dict[str, Any], lists: dict[int, str] | None = None) -> dict[str, Any]:
+def _card(
+    c: dict[str, Any],
+    lists: dict[int, str] | None = None,
+    labels: dict[int, str] | None = None,
+) -> dict[str, Any]:
     out: dict[str, Any] = {"id": c["id"], "title": c["title"], "status": c["status"]}
     if lists and c.get("list_id") in lists:
         out["list"] = lists[c["list_id"]]
+    if labels:
+        names = [labels[i] for i in c.get("label_ids") or [] if i in labels]
+        if names:
+            out["labels"] = names
     for key in ("priority", "due_date", "estimated_minutes"):
         if c.get(key) not in (None, "medium"):
             out[key] = c[key]
@@ -90,7 +98,9 @@ class ToolBox:
         """Cloud model icin gizli board'lari ve kartlarini onceden belirler."""
         box = cls(api, PrivacyFilter(active=cloud), tz)
         if cloud:
-            for b in await box.boards():
+            # Arsivlenmis gizli board'lar da gizli kalir
+            everything = await api.get("/boards", include_archived=True)
+            for b in everything:
                 if b["privacy"] == "local_only":
                     box.privacy.hidden_boards.add(b["id"])
                     detail = await api.get(f"/boards/{b['id']}")
@@ -147,7 +157,7 @@ class ToolBox:
             ),
             ToolSpec(
                 "get_card",
-                "Kart detayı: açıklama, checklist, son notlar, alt kartlar, ön koşullar, harcanan süre, takvim blokları.",
+                "Kart detayı: açıklama, checklist (madde id'leri update/delete için), etiketler, son notlar, alt kartlar, ön koşullar, harcanan süre, takvim blokları.",
                 {
                     "type": "object",
                     "properties": {"card_id": {"type": "integer"}},
@@ -237,11 +247,15 @@ class ToolBox:
             return {"error": HIDDEN_MESSAGE}
         d = await self.api.get(f"/boards/{board_id}")
         lists = {lst["id"]: lst["name"] for lst in d["lists"]}
-        return {
+        labels = {lb["id"]: lb["name"] for lb in d.get("labels", [])}
+        out: dict[str, Any] = {
             "board": {"id": d["board"]["id"], "name": d["board"]["name"]},
             "lists": [lst["name"] for lst in d["lists"]],
-            "cards": [_card(c, lists) for c in d["cards"]],
         }
+        if labels:
+            out["labels"] = list(labels.values())
+        out["cards"] = [_card(c, lists, labels) for c in d["cards"]]
+        return out
 
     async def search_cards(self, query: str, include_completed: bool = False) -> Any:
         q = query.casefold().strip()
@@ -270,8 +284,17 @@ class ToolBox:
         out["description"] = _clip(c.get("description"), 1500)
         if c["checklist"]:
             out["checklist_items"] = [
-                ("✓ " if i["is_done"] else "□ ") + i["text"] for i in c["checklist"]
+                {"id": i["id"], "text": i["text"], "is_done": i["is_done"]}
+                for i in c["checklist"]
             ]
+        if c.get("label_ids"):
+            board = await self.api.get(f"/boards/{c['board_id']}")
+            names = {lb["id"]: lb["name"] for lb in board.get("labels", [])}
+            out["labels"] = [
+                {"id": i, "name": names[i]} for i in c["label_ids"] if i in names
+            ]
+        if c.get("attachments"):  # yalniz dosya adlari; icerik modele gitmez (Faz 8c)
+            out["attachments"] = [a["filename"] for a in c["attachments"]]
         if c["notes"]:
             out["recent_notes"] = [_clip(n["content"], 300) for n in c["notes"][:5]]
         if c["subtasks"]:

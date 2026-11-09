@@ -187,6 +187,22 @@ class FakeTaskApi:
         self.writes: list[dict[str, Any]] = []
         self.plans: dict[str, list[dict[str, Any]]] = {}
         self.goals: dict[int, dict[str, Any]] = {}
+        # Faz 8a: etiket / checklist durumu (yoksa fake_task_api'nin statik cevabi)
+        self.board_labels: dict[int, list[dict[str, Any]]] = {}
+        self.card_extra: dict[int, dict[str, Any]] = {}
+        self.fail_paths: set[str] = set()  # bu yola yazma -> 422
+        self._next_id = 500
+
+    def _new_id(self) -> int:
+        self._next_id += 1
+        return self._next_id
+
+    def _find_item(self, item_id: int) -> dict[str, Any] | None:
+        for extra in self.card_extra.values():
+            for it in extra.get("checklist", []):
+                if it["id"] == item_id:
+                    return it
+        return None
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path.removeprefix("/api/v1")
@@ -227,7 +243,20 @@ class FakeTaskApi:
             status = request.url.params.get("status")
             return ok([g for g in goals if not status or g["status"] == status])
         if method == "GET":
-            return fake_task_api(request)
+            res = fake_task_api(request)
+            parts = path.strip("/").split("/")
+            if parts[0] == "boards" and len(parts) == 2:
+                data = json.loads(res.content)["data"]
+                bid = int(parts[1])
+                data["labels"] = list(self.board_labels.get(bid, []))
+                for c in data["cards"]:
+                    c.update(self.card_extra.get(c["id"], {}))
+                return ok(data)
+            if parts[0] == "cards" and len(parts) == 2:
+                data = json.loads(res.content)["data"]
+                data.update(self.card_extra.get(int(parts[1]), {}))
+                return ok(data)
+            return res
 
         body = json.loads(request.content or b"null")
         self.writes.append(
@@ -246,6 +275,47 @@ class FakeTaskApi:
             g = self.goals[int(path.split("/")[2])]
             g.update(body)
             return ok(g)
+        if path in self.fail_paths:
+            return httpx.Response(
+                422, json={"success": False, "error": {"message": "reddedildi"}}
+            )
+        if method == "POST" and path.startswith("/boards/") and path.endswith("/labels"):
+            bid = int(path.split("/")[2])
+            label = {
+                "id": self._new_id(),
+                "board_id": bid,
+                "name": body["name"],
+                "color": "#64748b",
+            }
+            self.board_labels.setdefault(bid, []).append(label)
+            return ok(label)
+        if method == "POST" and path.endswith("/checklist"):
+            cid = int(path.split("/")[2])
+            item = {
+                "id": self._new_id(),
+                "text": body["text"],
+                "is_done": False,
+            }
+            self.card_extra.setdefault(cid, {}).setdefault("checklist", []).append(item)
+            return ok(item)
+        if path.startswith("/checklist/"):
+            item = self._find_item(int(path.split("/")[2]))
+            if item is None:
+                return httpx.Response(
+                    404, json={"success": False, "error": {"message": "yok"}}
+                )
+            if method == "PATCH":
+                item.update(body)
+                return ok(item)
+            for extra in self.card_extra.values():
+                if item in extra.get("checklist", []):
+                    extra["checklist"].remove(item)
+            return ok(None)
+        if method == "PATCH" and path.startswith("/cards/") and "label_ids" in body:
+            self.card_extra.setdefault(int(path.split("/")[2]), {})["label_ids"] = body[
+                "label_ids"
+            ]
+            return ok(CARDS.get(11))
         if method == "POST" and path == "/cards":
             return ok({"id": 100, "title": body["title"]})
         if method == "POST" and path == "/events":

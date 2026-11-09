@@ -19,18 +19,48 @@ function SortableCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: cardKey(card.id),
     data: { type: 'card' },
+    transition: { duration: 180, easing: 'ease' },
   })
   return (
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={isDragging ? 'opacity-30' : ''}
+      className={isDragging ? 'opacity-40 [&>div]:border-dashed [&>div]:border-slate-400' : ''}
       {...attributes}
       {...listeners}
       onClick={() => onOpen(card.id)}
     >
       <CardFace card={card} labels={labels} />
     </li>
+  )
+}
+
+/** Liste surukleme overlay'i: baslik + ilk 3 kartin ozeti. */
+export function ListOverlay({
+  list,
+  cards,
+  labels,
+}: {
+  list: BoardList
+  cards: CardSummary[]
+  labels: Map<number, Label>
+}) {
+  return (
+    <section className="w-72 rotate-2 scale-[1.02] cursor-grabbing rounded-xl bg-slate-100/90 pb-2 backdrop-blur-sm shadow-[0_12px_32px_-8px_rgb(23_32_56/0.4)]">
+      <h3 className="px-3 pt-3 pb-2 text-sm font-medium">
+        {list.is_done_list && <span className="mr-1 text-green-600">✓</span>}
+        {list.name}
+        <span className="ml-2 text-xs font-normal text-slate-400">{cards.length}</span>
+      </h3>
+      <ul className="flex flex-col gap-2 px-2">
+        {cards.slice(0, 3).map((c) => (
+          <li key={c.id}>
+            <CardFace card={c} labels={labels} />
+          </li>
+        ))}
+      </ul>
+      {cards.length > 3 && <p className="px-3 pt-2 text-xs text-slate-500">+{cards.length - 3} kart daha</p>}
+    </section>
   )
 }
 
@@ -58,6 +88,7 @@ export default function KanbanList({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: listKey(list.id),
     data: { type: 'list' },
+    transition: { duration: 180, easing: 'ease' },
   })
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
@@ -83,7 +114,7 @@ export default function KanbanList({
     <section
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100 ${isDragging ? 'opacity-40' : ''}`}
+      className={`flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100/90 backdrop-blur-sm ${isDragging ? 'opacity-40' : ''}`}
     >
       <header className="relative flex items-center gap-2 px-3 pt-3 pb-2" {...attributes} {...listeners}>
         {editing ? (
@@ -119,7 +150,7 @@ export default function KanbanList({
         </button>
         {menu && (
           <div
-            className="absolute top-9 right-2 z-10 w-56 rounded-lg bg-white py-1 text-sm shadow-lg ring-1 ring-slate-200"
+            className="absolute top-9 right-2 z-10 w-56 rounded-lg bg-surface py-1 text-sm shadow-lg ring-1 ring-slate-200"
             onPointerDown={(e) => e.stopPropagation()}
           >
             <button className="block w-full px-3 py-1.5 text-left hover:bg-slate-100" onClick={() => { setMenu(false); setEditing(true) }}>
@@ -164,7 +195,7 @@ export default function KanbanList({
               }}
             />
             <div className="flex gap-2">
-              <button className="rounded-md bg-slate-900 px-3 py-1 text-sm text-white">Ekle</button>
+              <button className="rounded-md bg-slate-900 px-3 py-1 text-sm text-on-ink">Ekle</button>
               <button type="button" className="text-sm text-slate-500" onClick={() => setAdding(false)}>
                 Vazgeç
               </button>
