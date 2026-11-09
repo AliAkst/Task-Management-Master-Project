@@ -238,6 +238,7 @@ class MicrosoftCalendarService:
                     bool(cfg["teams_only"]),
                     items,
                     window_start,
+                    window_end,
                     result,
                 )
                 await self.uow.commit()
@@ -264,6 +265,7 @@ class MicrosoftCalendarService:
         teams_only: bool,
         items: list[dict[str, Any]],
         window_start: datetime,
+        window_end: datetime,
         result: SyncResult,
     ) -> None:
         seen: set[str] = set()
@@ -308,6 +310,7 @@ class MicrosoftCalendarService:
             seen=seen,
             result=result,
             window_start=window_start,
+            window_end=window_end,
         )
 
     async def _mark_error(self, user_id: int, message: str) -> None:

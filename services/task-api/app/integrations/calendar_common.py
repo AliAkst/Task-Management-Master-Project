@@ -152,6 +152,7 @@ async def delete_unseen_in_window(
     seen: set[str],
     result: SyncResult,
     window_start: datetime | None = None,
+    window_end: datetime | None = None,
 ) -> None:
     """
     Tam senkronda gorunmeyen etkinlikleri siler. `window_start` verilirse
@@ -165,6 +166,10 @@ async def delete_unseen_in_window(
         if window_start is not None:
             event = await uow.events.get_by_id(link.entity_id)
             if event is not None and event.start_at < window_start:
+                continue
+        if window_end is not None:
+            event = await uow.events.get_by_id(link.entity_id)
+            if event is not None and event.start_at >= window_end:
                 continue
         await delete_linked_event(uow, link)
         result.removed += 1

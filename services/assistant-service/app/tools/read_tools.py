@@ -98,7 +98,9 @@ class ToolBox:
         """Cloud model icin gizli board'lari ve kartlarini onceden belirler."""
         box = cls(api, PrivacyFilter(active=cloud), tz)
         if cloud:
-            for b in await box.boards():
+            # Arsivlenmis gizli board'lar da gizli kalir
+            everything = await api.get("/boards", include_archived=True)
+            for b in everything:
                 if b["privacy"] == "local_only":
                     box.privacy.hidden_boards.add(b["id"])
                     detail = await api.get(f"/boards/{b['id']}")

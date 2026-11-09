@@ -29,13 +29,13 @@
 | 7c — Microsoft To Do | ✅ Tamam | `b8b46d1` (7a–7c ortak) | Samsung Reminder → To Do → Gelen Kutusu; tamamlamayı geri yazma (outbox) (§4.1) |
 | 7d — Gelen Kutusu dağıtımı | ✅ Tamam | `b21b062` | asistan kartlara board önerir, madde madde onay kartı (§4.1) |
 | 7 denetimi (Opus) | ✅ Tamam | `d0a2c3c` | plan ↔ kod uyumlu; eksik: OAuth kimliği yalnız `.env`'den → **arayüzde kurulum sihirbazı** eklendi (aşağıda) |
-| 8a — Asistan: checklist + etiket + "bu kart" | 🟡 Commit'lendi, push bekliyor (gerçek-model kabulü kullanıcıyla) | `6b7e233` | `planlar/faz8/8a-asistan-kart-araclari.md` (genel: `planlar/faz8/00-genel.md`) |
-| 8b — Not editörü (çift tıkla düzenle, kod, GFM) | 🟡 Commit'lendi, push bekliyor (görsel kontrol kullanıcıda) | `dcfb1e1` | `planlar/faz8/8b-not-editoru.md` |
-| 8c — Kart ekleri | 🟡 Commit'lendi, push bekliyor (2026-11-09; PDF "Aç" CSP riski + gerçek yapıştırma kullanıcıda) | `ab4571c` | `planlar/faz8/8c-ekler.md` · migration `a5c9e1b3d7f2` `card_attachments` |
-| 8d — Teams/Outlook toplantıları | 🟡 Commit'lendi, push bekliyor (2026-11-09; gerçek Microsoft hesabı + tarayıcı doğrulaması kullanıcıda) | `45c4175` | `planlar/faz8/8d-teams-toplantilari.md` · migration `events.meeting_url` |
-| 8e — Sürükle-bırak iyimser güncelleme | 🟡 Commit'lendi, push bekliyor (2026-11-09; tarayıcı doğrulaması yapılmadı) | `d222784` | `planlar/faz8/8e-surukle-birak.md` · migration yok |
-| 8f — Sesli dikte | 🟡 Commit `e3006ac` (push bekliyor; 2026-11-09; tarayıcı/mikrofon doğrulaması yapılmadı) | — | `planlar/faz8/8f-sesli-dikte.md` |
-| 8g — Dark mode + arka plan | 🟡 Commit `7ad066f` (push bekliyor; 2026-11-09; kopya portta koyu/açık gözle doğrulandı, kapsamlı ekran turu yapılmadı) | — | `planlar/faz8/8g-tema-dark-mode.md` · migration `theme_settings` |
+| 8a — Asistan: checklist + etiket + "bu kart" | ✅ Commit'lendi + push edildi (gerçek-model kabulü kullanıcıyla) | `6b7e233` | `planlar/faz8/8a-asistan-kart-araclari.md` (genel: `planlar/faz8/00-genel.md`) |
+| 8b — Not editörü (çift tıkla düzenle, kod, GFM) | ✅ Commit'lendi + push edildi (görsel kontrol kullanıcıda) | `dcfb1e1` | `planlar/faz8/8b-not-editoru.md` |
+| 8c — Kart ekleri | ✅ Commit'lendi + push edildi (2026-11-09; PDF "Aç" CSP riski + gerçek yapıştırma kullanıcıda) | `ab4571c` | `planlar/faz8/8c-ekler.md` · migration `a5c9e1b3d7f2` `card_attachments` |
+| 8d — Teams/Outlook toplantıları | ✅ Commit'lendi + push edildi (2026-11-09; gerçek Microsoft hesabı + tarayıcı doğrulaması kullanıcıda) | `45c4175` | `planlar/faz8/8d-teams-toplantilari.md` · migration `events.meeting_url` |
+| 8e — Sürükle-bırak iyimser güncelleme | ✅ Commit'lendi + push edildi (2026-11-09; tarayıcı doğrulaması yapılmadı) | `d222784` | `planlar/faz8/8e-surukle-birak.md` · migration yok |
+| 8f — Sesli dikte | ✅ Commit `e3006ac` (push edildi; 2026-11-09; tarayıcı/mikrofon doğrulaması yapılmadı) | — | `planlar/faz8/8f-sesli-dikte.md` |
+| 8g — Dark mode + arka plan | ✅ Commit `7ad066f` (push edildi; 2026-11-09; kopya portta koyu/açık gözle doğrulandı, kapsamlı ekran turu yapılmadı) | — | `planlar/faz8/8g-tema-dark-mode.md` · migration `theme_settings` |
 
 ### Faz 5b'de yapılanlar (ayrıntı)
 - **Tasarım yenilemesi (frontend-design skill'iyle):** jenerik SaaS kart kiti → "kâğıt üstüne mürekkep + ajanda sekmeleri".
@@ -673,3 +673,6 @@ Bu yüzden `provider_configs`'e ek olarak `model_routes` (task_type → provider
 
 ### Önerilen sıra
 1) Bulgu 1 (uzak resim) ve 4 (arşivli gizli board) küçük Sonnet düzeltmeleri; 2) bulgu 3 tek satırlık renk kararı; 3) kullanıcıyla elle tur (bulgu 7); 4) kalanlar isteğe bağlı.
+
+### Denetim bulgularının düzeltilmesi (2026-11-09)
+Düzeltildi: **1** (`MarkdownView` dış resmi yüklemez, bağlantı olarak gösterir), **2** (`Content-Length` yoksa 411; chunked gövde alınmaz), **3** (`slate-500` → `#656e8d`), **4** (`ToolBox.create` arşivli `local_only` board'ları da gizler; +1 test), **5** (indirme yanıtına `Referrer-Policy: no-referrer`), **8** (`moveList` hatası bantta), **9** (Teams silme penceresi `window_end` ile sınırlı), **10a/b** (durum tablosu). Bilerek bırakıldı: **6** (PDF `sandbox`: önce elle denenmeli), **7** (elle tur kullanıcıda), **10c** (`.env` `JWT_SECRET_KEY` kontrolü kullanıcıda). Testler: task-api 337, assistant-service 153, build temiz.

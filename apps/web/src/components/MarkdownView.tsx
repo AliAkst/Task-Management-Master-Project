@@ -71,7 +71,12 @@ const components: Components = {
       <span className="text-slate-500">📎 ek silinmiş</span>
     ),
   img: ({ src, alt }) =>
-    src ? (
+    src && /^(https?:)?\/\//i.test(src) ? (
+      // Dis resim otomatik yuklenmez (istek ile veri sizdirma/izleme); baglanti olarak sunulur
+      <a href={src} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">
+        🖼 {alt || 'dış resim'}
+      </a>
+    ) : src ? (
       <img src={src} alt={alt ?? ''} loading="lazy" className="my-1 inline-block max-h-80 max-w-full rounded border border-slate-200" />
     ) : (
       <span className="text-slate-500">📎 ek silinmiş</span>
