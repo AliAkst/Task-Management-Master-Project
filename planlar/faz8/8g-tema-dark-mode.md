@@ -65,7 +65,7 @@
 - task-api testleri yeşil (+4), `npm run build` temiz, grep kontrolü temiz.
 
 ## İlerleme
-**Durum:** kod tamam, commit edilmedi (2026-11-09). Migration `c7f1a9d3b5e2_theme_settings` (down = `b6d2f8a4c1e9`), DB kopyasında upgrade → downgrade → upgrade denendi. Testler: task-api 337 passed (+4 `tests/integration/test_theme.py`), assistant-service 152 passed, `npm run build` temiz.
+**Durum:** kod tamam, commit edildi `7ad066f` (2026-11-09, push edilmedi). Migration `c7f1a9d3b5e2_theme_settings` (down = `b6d2f8a4c1e9`), DB kopyasında upgrade → downgrade → upgrade denendi. Testler: task-api 337 passed (+4 `tests/integration/test_theme.py`), assistant-service 152 passed, `npm run build` temiz.
 
 ### Yapılanlar
 - **Backend:** `user_settings.theme` (String(10), `system`) ve `background` (String(20), `kagit`), `boards.background` (nullable). Pydantic `Literal` doğrulama (geçersiz değer 422): tema `system|light|dark`, zemin `kagit|krem|adacayi|lavanta|gri`, board arka planı `none|tint|deniz|orman|gunbatimi|alacakaranlik|kum|grafit`. `api-schema.d.ts` elle güncellendi.

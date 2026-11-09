@@ -2,7 +2,7 @@
 
 > ## 📍 İlerleme Durumu — 2026-11-08 (yeni oturum buradan devam eder)
 >
-> **Faz 8 (2026-11-08) planlandı:** `planlar/faz8/00-genel.md` + faz başına detay dosyası (8a–8g, sırayla; her faz yeni Sonnet oturumu, ardından Haiku push). 8d commit'lendi (`45c4175`, push bekliyor). 8e kodu commit'lendi (`d222784`, push bekliyor). 8f commit'lendi (`e3006ac`, push bekliyor). 8g kodu yazıldı (commit bekliyor). **Sıradaki: Faz 8 denetimi (Opus).**
+> **Faz 8 (2026-11-08) planlandı:** `planlar/faz8/00-genel.md` + faz başına detay dosyası (8a–8g, sırayla; her faz yeni Sonnet oturumu, ardından Haiku push). 8d commit'lendi (`45c4175`, push bekliyor). 8e kodu commit'lendi (`d222784`, push bekliyor). 8f commit'lendi (`e3006ac`, push bekliyor). 8g commit'lendi (`7ad066f`, push bekliyor). **Sıradaki: Faz 8 denetimi (Opus).**
 >
 > **Branch:** `feature/ai-life-manager` · Faz 0–6 tamam, **7a–7d commit'lendi** (7a–7c: `b8b46d1`, 7d: `b21b062`) ve push edildi. **Opus Faz 7 denetimi yapıldı** (aşağıda "Faz 7 denetimi"); denetimde eklenen OAuth kurulum sihirbazı **commit'lenmedi** (Haiku oturumu). **Sıradaki:** commit/push → kullanıcı gerçek hesaplarla kabul denemesi (Google, Microsoft, Trello, gemma4 triage).
 
@@ -35,7 +35,7 @@
 | 8d — Teams/Outlook toplantıları | 🟡 Commit'lendi, push bekliyor (2026-11-09; gerçek Microsoft hesabı + tarayıcı doğrulaması kullanıcıda) | `45c4175` | `planlar/faz8/8d-teams-toplantilari.md` · migration `events.meeting_url` |
 | 8e — Sürükle-bırak iyimser güncelleme | 🟡 Commit'lendi, push bekliyor (2026-11-09; tarayıcı doğrulaması yapılmadı) | `d222784` | `planlar/faz8/8e-surukle-birak.md` · migration yok |
 | 8f — Sesli dikte | 🟡 Commit `e3006ac` (push bekliyor; 2026-11-09; tarayıcı/mikrofon doğrulaması yapılmadı) | — | `planlar/faz8/8f-sesli-dikte.md` |
-| 8g — Dark mode + arka plan | 🟡 Kod tamam, commit bekliyor (2026-11-09; kopya portta koyu/açık gözle doğrulandı, kapsamlı ekran turu yapılmadı) | — | `planlar/faz8/8g-tema-dark-mode.md` · migration `theme_settings` |
+| 8g — Dark mode + arka plan | 🟡 Commit `7ad066f` (push bekliyor; 2026-11-09; kopya portta koyu/açık gözle doğrulandı, kapsamlı ekran turu yapılmadı) | — | `planlar/faz8/8g-tema-dark-mode.md` · migration `theme_settings` |
 
 ### Faz 5b'de yapılanlar (ayrıntı)
 - **Tasarım yenilemesi (frontend-design skill'iyle):** jenerik SaaS kart kiti → "kâğıt üstüne mürekkep + ajanda sekmeleri".
