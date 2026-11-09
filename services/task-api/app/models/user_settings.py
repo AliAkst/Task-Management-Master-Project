@@ -1,4 +1,5 @@
 from datetime import datetime, time
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -12,6 +13,8 @@ class UserSettingsUpdate(BaseModel):
     review_time: time | None = None
     reminders_enabled: bool | None = None
     week_start: int | None = Field(None, ge=0, le=6)
+    theme: Literal["system", "light", "dark"] | None = None
+    background: Literal["kagit", "krem", "adacayi", "lavanta", "gri"] | None = None
 
     @field_validator("timezone")
     @classmethod
@@ -33,4 +36,6 @@ class UserSettingsResponse(BaseModel):
     review_time: time | None
     reminders_enabled: bool
     week_start: int
+    theme: str
+    background: str
     updated_at: datetime

@@ -22,7 +22,7 @@ function PendingInsight({ insight }: { insight: Insight }) {
           autoFocus
           rows={2}
           maxLength={1000}
-          className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-[16px]"
+          className="w-full rounded-md border border-slate-300 bg-surface px-2 py-1 text-[16px]"
           value={text}
           onChange={(e) => setText(e.target.value)}
           aria-label="Kaydedilecek cümle"
@@ -45,7 +45,7 @@ function PendingInsight({ insight }: { insight: Insight }) {
           <button
             disabled={busy}
             onClick={() => reject.mutate({ id: insight.id, reason: reason.trim() || null })}
-            className="rounded-md bg-slate-700 px-3 py-1 text-[14px] text-white disabled:opacity-50"
+            className="rounded-md bg-slate-700 px-3 py-1 text-[14px] text-on-ink disabled:opacity-50"
           >
             Reddet
           </button>
@@ -56,7 +56,7 @@ function PendingInsight({ insight }: { insight: Insight }) {
           <button
             disabled={busy || !text.trim()}
             onClick={() => confirm.mutate({ id: insight.id, content: mode === 'edit' ? text.trim() : undefined })}
-            className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1 text-[14px] text-white hover:bg-slate-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1 text-[14px] text-on-ink hover:bg-slate-700 disabled:opacity-50"
           >
             <Check size={14} aria-hidden /> Doğru, hatırla
           </button>

@@ -28,3 +28,7 @@ class UserSettingsEntity(Base, TimestampMixin):
     reminders_enabled: Mapped[bool] = mapped_column(default=True)
     # 0 = Pazartesi ... 6 = Pazar
     week_start: Mapped[int] = mapped_column(SmallInteger, default=0)
+    # Gorunum (Faz 8g): tema "system" | "light" | "dark"; uygulama zemini
+    # (kagit | krem | adacayi | lavanta | gri)
+    theme: Mapped[str] = mapped_column(String(10), default="system")
+    background: Mapped[str] = mapped_column(String(20), default="kagit")

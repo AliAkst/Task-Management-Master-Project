@@ -77,7 +77,7 @@ export function Segmented<T extends string | number>({
           onClick={() => onChange(o.value)}
           className={`rounded-md px-3.5 py-1.5 disabled:opacity-40 ${
             value === o.value
-              ? 'bg-white font-semibold text-slate-900 shadow-[0_0_0_1px_var(--color-slate-200)]'
+              ? 'bg-surface font-semibold text-slate-900 shadow-[0_0_0_1px_var(--color-slate-200)]'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >

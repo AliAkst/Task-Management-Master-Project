@@ -122,7 +122,7 @@ function FactsSection() {
           ))}
       </div>
       <form onSubmit={add} className="mt-5 flex flex-wrap gap-2">
-        <select className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
+        <select className="rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
           {categories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
         </select>
         <input
@@ -132,7 +132,7 @@ function FactsSection() {
           value={content}
           onChange={(e) => setContent(e.target.value)}
         />
-        <button disabled={!content.trim() || m.create.isPending} className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40">
+        <button disabled={!content.trim() || m.create.isPending} className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-3 py-1.5 text-sm text-on-ink disabled:opacity-40">
           <Plus size={15} aria-hidden /> Ekle
         </button>
       </form>
@@ -173,12 +173,12 @@ function GoalsSection() {
         {ordered.map((g) => {
           const board = g.board_id != null ? boardName.get(g.board_id) : undefined
           return (
-            <li key={g.id} className={`relative rounded-md border border-slate-200 bg-white py-3 pr-3 pl-5 ${g.status !== 'active' ? 'opacity-60' : ''}`}>
+            <li key={g.id} className={`relative rounded-md border border-slate-200 bg-surface py-3 pr-3 pl-5 ${g.status !== 'active' ? 'opacity-60' : ''}`}>
               <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 rounded-l-md" style={{ backgroundColor: board?.color ?? 'var(--color-slate-300)' }} />
               <div className="flex flex-wrap items-baseline gap-x-3">
                 <p className={`flex-1 text-[16px] font-semibold ${g.status === 'achieved' ? 'line-through decoration-slate-400' : ''}`}>{g.title}</p>
                 <select
-                  className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs"
+                  className="rounded border border-slate-200 bg-surface px-1.5 py-0.5 text-xs"
                   value={g.status}
                   onChange={(e) => m.update.mutate({ id: g.id, status: e.target.value as GoalStatus })}
                   aria-label="Hedef durumu"
@@ -203,11 +203,11 @@ function GoalsSection() {
         <input className="rounded-md border border-slate-300 px-3 py-1.5 text-sm sm:col-span-2" placeholder="Yeni hedef (ör. Mart'a kadar Docker sertifikası)" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
         <input className="rounded-md border border-slate-300 px-3 py-1.5 text-sm sm:col-span-2" placeholder="Neden önemli? (opsiyonel)" maxLength={5000} value={why} onChange={(e) => setWhy(e.target.value)} />
         <input type="date" className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Hedef tarih" />
-        <select className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm" value={boardId} onChange={(e) => setBoardId(e.target.value)} aria-label="İlgili alan">
+        <select className="rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-sm" value={boardId} onChange={(e) => setBoardId(e.target.value)} aria-label="İlgili alan">
           <option value="">İlgili alan (opsiyonel)</option>
           {boards.data?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
-        <button disabled={!title.trim() || m.create.isPending} className="inline-flex items-center justify-center gap-1 rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40 sm:col-span-2 sm:justify-self-end">
+        <button disabled={!title.trim() || m.create.isPending} className="inline-flex items-center justify-center gap-1 rounded-md bg-slate-900 px-3 py-1.5 text-sm text-on-ink disabled:opacity-40 sm:col-span-2 sm:justify-self-end">
           <Plus size={15} aria-hidden /> Hedef ekle
         </button>
       </form>
@@ -226,7 +226,7 @@ export default function ProfilePage() {
         </div>
         <button
           onClick={() => startConversation(ACQUAINT_MESSAGE)}
-          className="ml-auto inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-[15px] text-white hover:bg-slate-700"
+          className="ml-auto inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-[15px] text-on-ink hover:bg-slate-700"
         >
           <Sparkles size={16} aria-hidden /> Tanışma sohbetini başlat
         </button>

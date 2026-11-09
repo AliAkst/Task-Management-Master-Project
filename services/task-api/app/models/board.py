@@ -1,10 +1,14 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.entities.board import BoardPrivacy
 from app.models.card import CardSummary
 
+BoardBackground = Literal[
+    "none", "tint", "deniz", "orman", "gunbatimi", "alacakaranlik", "kum", "grafit"
+]
 HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
 MODEL_ID = r"^[a-z_]+:[\w.\-:/@]{1,150}$"
 LOCAL_MODEL_PREFIX = "ollama:"
@@ -23,6 +27,7 @@ class BoardCreate(BaseModel):
     weekly_time_budget_min: int | None = Field(None, ge=0, le=10080)
     privacy: BoardPrivacy = BoardPrivacy.CLOUD_ALLOWED
     default_model_id: str | None = Field(None, pattern=MODEL_ID)
+    background: BoardBackground | None = None
     # Bos birakilirsa varsayilan listeler: Yapilacak, Yapiliyor, Tamamlandi
     lists: list[str] | None = Field(None, max_length=20)
 
@@ -35,6 +40,7 @@ class BoardUpdate(BaseModel):
     weekly_time_budget_min: int | None = Field(None, ge=0, le=10080)
     privacy: BoardPrivacy | None = None
     default_model_id: str | None = Field(None, pattern=MODEL_ID)
+    background: BoardBackground | None = None
     is_archived: bool | None = None
     position: float | None = None
 
@@ -51,6 +57,7 @@ class BoardResponse(BaseModel):
     weekly_time_budget_min: int | None
     privacy: BoardPrivacy
     default_model_id: str | None = None
+    background: BoardBackground | None = None
     system_kind: str | None = None
     is_archived: bool
     created_at: datetime

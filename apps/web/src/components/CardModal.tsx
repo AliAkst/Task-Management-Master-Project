@@ -16,6 +16,7 @@ import CardTime, { CardTimerButton } from './CardTime'
 import MarkdownEditor from './MarkdownEditor'
 import { DictationStatus, useMic } from './MicButton'
 import { insertDictated } from '../lib/dictation'
+import { readableTextOn } from '../lib/color'
 import MarkdownView from './MarkdownView'
 import Modal from './Modal'
 import RecurrencePicker from './RecurrencePicker'
@@ -37,7 +38,7 @@ const NOTE_ACTION: Record<string, string> = { created: 'eklendi', updated: 'düz
 const section = 'mt-7'
 const sectionTitle = 'mb-2 text-[15px] font-semibold text-slate-900'
 const fieldLabel = 'block text-[13px] text-slate-600'
-const input = 'w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[14px]'
+const input = 'w-full rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-[14px]'
 
 /** Alt kart / on kosul durumu: ikon + erisilebilir ad (renk tek basina anlam tasimaz). */
 function StatusMark({ status, blocked }: { status: string; blocked?: boolean }) {
@@ -210,7 +211,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
           aria-label={done ? 'Yeniden aç' : 'Tamamla'}
           onClick={() => m.update.mutate({ status: done ? 'pending' : 'completed' })}
           className={`mt-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-            done ? 'border-green-700 bg-green-700 text-white' : 'border-slate-300 hover:border-green-700'
+            done ? 'border-green-700 bg-green-700 text-on-ink' : 'border-slate-300 hover:border-green-700'
           }`}
         >
           {done && <Check size={14} strokeWidth={3} aria-hidden />}
@@ -355,7 +356,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                   <input type="checkbox" checked={splitChain} onChange={(e) => setSplitChain(e.target.checked)} />
                   Sırayla bağla
                 </label>
-                <button disabled={m.split.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-white disabled:opacity-50">Böl</button>
+                <button disabled={m.split.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-on-ink disabled:opacity-50">Böl</button>
                 {m.split.error && <span className="text-red-700">{m.split.error.message}</span>}
               </form>
             )}
@@ -513,8 +514,8 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
                       key={l.id}
                       aria-pressed={on}
                       onClick={() => toggleLabel(l.id)}
-                      className={`rounded px-2 py-0.5 text-[13px] ${on ? 'text-white' : 'text-slate-700 ring-1 ring-slate-300'}`}
-                      style={on ? { backgroundColor: l.color } : undefined}
+                      className={`rounded px-2 py-0.5 text-[13px] ${on ? '' : 'text-slate-700 ring-1 ring-slate-300'}`}
+                      style={on ? { backgroundColor: l.color, color: readableTextOn(l.color) } : undefined}
                     >
                       {l.name}
                     </button>

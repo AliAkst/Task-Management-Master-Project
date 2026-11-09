@@ -19,7 +19,8 @@ import { useBoardGraph, useBoardMutations } from '../api/boards'
 import type { CardSummary, GraphEdge, Label } from '../lib/types'
 import CardFace from './CardFace'
 
-const EDGE = { child: '#949db7', waiting: '#c27803', done: '#15803d' } as const
+// CSS degiskenleri: tema degisince ip renkleri de degisir
+const EDGE = { child: 'var(--color-slate-400)', waiting: 'var(--chart-warn)', done: 'var(--chart-ok)' } as const
 
 /** Cizgi aciklamasi: renk tek basina anlam tasimasin diye yaninda yazi. */
 function EdgeKey({ color, dashed, children }: { color: string; dashed?: boolean; children: string }) {
@@ -43,10 +44,10 @@ function CardNodeView({ data }: NodeProps<CardNode>) {
   return (
     <div style={{ width: NODE_W }} className={data.external ? 'opacity-60' : ''}>
       {/* Sol: bu kartin on kosullari buraya baglanir. Sag: bu karti bekleyenler. */}
-      <Handle type="target" position={Position.Left} className="!h-3 !w-3 !border-2 !border-white !bg-slate-400" />
+      <Handle type="target" position={Position.Left} className="!h-3 !w-3 !border-2 !border-surface !bg-slate-400" />
       <CardFace card={data.card} labels={data.labels} />
       {data.external && <p className="mt-0.5 text-[12px] text-slate-500">Başka board'dan</p>}
-      <Handle type="source" position={Position.Right} className="!h-3 !w-3 !border-2 !border-white !bg-slate-900" />
+      <Handle type="source" position={Position.Right} className="!h-3 !w-3 !border-2 !border-surface !bg-slate-900" />
     </div>
   )
 }
@@ -156,7 +157,7 @@ export default function GraphView({ boardId, labels, onOpenCard }: Props) {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-slate-200 bg-white px-4 py-2.5 text-[13px] text-slate-600">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-slate-200 bg-surface px-4 py-2.5 text-[13px] text-slate-600">
         <span>
           <b className="text-slate-900">Sağ</b> noktadan diğer kartın <b className="text-slate-900">sol</b> noktasına çek:
           “bu bitmeden o başlamaz”. İpi seçip Delete ile kaldır.

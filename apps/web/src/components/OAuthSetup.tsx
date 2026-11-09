@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { Check, Copy, ExternalLink, Loader2 } from 'lucide-react'
 import { useIntegrationMutations, type OAuthClientInfo } from '../api/integrations'
 
-const input = 'rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm'
+const input = 'rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-sm'
 
 function Link({ href, children }: { href: string; children: ReactNode }) {
   return (
@@ -152,7 +152,7 @@ export default function OAuthSetup({ info, onCancel }: { info: OAuthClientInfo; 
         </label>
         <button
           disabled={busy || !clientId.trim() || !secret.trim()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-white hover:bg-slate-700 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink hover:bg-slate-700 disabled:opacity-40"
         >
           {busy && <Loader2 size={14} className="animate-spin" aria-hidden />} Kaydet ve bağlan
         </button>

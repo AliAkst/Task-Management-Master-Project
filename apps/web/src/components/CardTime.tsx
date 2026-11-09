@@ -28,7 +28,7 @@ export function CardTimerButton({ cardId }: { cardId: number }) {
       onClick={() => m.start.mutate(cardId)}
       disabled={m.start.isPending}
       title={active.data ? 'Çalışan kronometre durdurulup bu kart için başlatılır' : undefined}
-      className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
+      className="rounded-full bg-slate-900 px-3 py-1 text-sm text-on-ink hover:bg-slate-700 disabled:opacity-50"
     >
       ▶ Başla
     </button>
@@ -96,7 +96,7 @@ export default function CardTime({ card }: { card: CardDetail }) {
             <input type="number" min={1} className="w-20 rounded border border-slate-300 px-2 py-1" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
             dk
           </label>
-          <button disabled={m.createManual.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-white disabled:opacity-50">Ekle</button>
+          <button disabled={m.createManual.isPending} className="rounded-md bg-slate-900 px-3 py-1 text-on-ink disabled:opacity-50">Ekle</button>
           {m.createManual.error && <span className="text-red-600">{m.createManual.error.message}</span>}
         </form>
       )}

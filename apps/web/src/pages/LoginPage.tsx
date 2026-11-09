@@ -46,7 +46,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
+        className="w-full max-w-sm space-y-4 rounded-xl bg-surface p-6 shadow-sm ring-1 ring-slate-200"
       >
         <h1 className="text-xl font-semibold">
           {mode === 'login' ? 'Giriş yap' : 'Hesap oluştur'}
@@ -82,7 +82,7 @@ export default function LoginPage() {
 
         <button
           disabled={busy}
-          className="w-full rounded-md bg-slate-900 py-2 font-medium text-white disabled:opacity-50"
+          className="w-full rounded-md bg-slate-900 py-2 font-medium text-on-ink disabled:opacity-50"
         >
           {busy ? 'Bekleyin…' : mode === 'login' ? 'Giriş yap' : 'Kaydol'}
         </button>

@@ -127,12 +127,12 @@ export default function Reminders() {
               href={b.link}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-blue-700"
+              className="inline-flex items-center gap-1 rounded bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-on-ink hover:bg-blue-700"
             >
               <Video size={12} aria-hidden /> {b.cta}
             </a>
           ) : (
-            <Link to={b.link} className="rounded bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-blue-700">
+            <Link to={b.link} className="rounded bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-on-ink hover:bg-blue-700">
               {b.cta}
             </Link>
           )}

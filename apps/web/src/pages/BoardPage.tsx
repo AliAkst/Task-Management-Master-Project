@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useIsMutating } from '@tanstack/react-query'
 import {
@@ -34,6 +34,7 @@ import { Segmented } from '../components/Page'
 import { useModels } from '../api/assistant'
 import { Lock, Settings2, Sparkles } from 'lucide-react'
 import type { CardSummary, Label } from '../lib/types'
+import { readableTextOn } from '../lib/color'
 
 // React Flow + dagre buyuk; sadece grafik gorunumu acilinca yuklenir
 const GraphView = lazy(() => import('../components/GraphView'))
@@ -233,7 +234,7 @@ export default function BoardPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-200 bg-white py-3 pr-4 pl-6">
+      <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-200 bg-surface py-3 pr-4 pl-6">
         {/* Ajanda sekmesi: board'un rengi sayfanin kenarinda */}
         <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: b.color }} />
         <div className="min-w-0">
@@ -290,7 +291,11 @@ export default function BoardPage() {
           setActiveKey(null)
         }}
       >
-        <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto p-4">
+        <div
+          className="board-bg flex min-h-0 flex-1 items-start gap-3 overflow-x-auto p-4"
+          data-bg={b.background ?? 'none'}
+          style={{ '--board-color': b.color } as CSSProperties}
+        >
           <SortableContext items={listOrder.map(listKey)} strategy={horizontalListSortingStrategy}>
             {listOrder.map((listId) => {
               const list = listsById.get(listId)
@@ -316,7 +321,7 @@ export default function BoardPage() {
 
           <form onSubmit={addList} className="w-72 shrink-0 rounded-xl bg-slate-100/60 p-2">
             <input
-              className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm placeholder:text-slate-500 focus:border-slate-300 focus:bg-white"
+              className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm placeholder:text-slate-500 focus:border-slate-300 focus:bg-surface"
               placeholder="+ Liste ekle"
               value={newList}
               onChange={(e) => setNewList(e.target.value)}
@@ -375,7 +380,7 @@ export default function BoardPage() {
           <h3 className="mt-6 mb-2 text-sm font-medium">Etiketler</h3>
           <div className="mb-2 flex flex-wrap gap-1.5">
             {board.data.labels.map((l) => (
-              <span key={l.id} className="rounded px-2 py-0.5 text-xs text-white" style={{ backgroundColor: l.color }}>
+              <span key={l.id} className="rounded px-2 py-0.5 text-xs" style={{ backgroundColor: l.color, color: readableTextOn(l.color) }}>
                 {l.name}
               </span>
             ))}

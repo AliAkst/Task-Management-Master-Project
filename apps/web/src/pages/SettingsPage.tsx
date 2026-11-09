@@ -8,6 +8,8 @@ import IntegrationsSettings from '../components/IntegrationsSettings'
 import ModelSettings from '../components/ModelSettings'
 import { PageHeader, Row, Segmented } from '../components/Page'
 import { usePrefs } from '../stores/prefs'
+import { useSaveTheme } from '../hooks/useThemeSync'
+import { PAPERS, useTheme, type Theme } from '../lib/theme'
 
 const MODE_LABEL: Record<Permission['mode'], string> = {
   ask: 'Bana sor',
@@ -17,6 +19,7 @@ const MODE_LABEL: Record<Permission['mode'], string> = {
 
 const SECTIONS = [
   { id: 'ritim', label: 'Günün ritmi' },
+  { id: 'gorunum', label: 'Görünüm' },
   { id: 'model', label: 'Asistan modeli' },
   { id: 'izinler', label: 'Asistan izinleri' },
   { id: 'ses', label: 'Ses' },
@@ -70,6 +73,60 @@ function VoiceSettings() {
         </Row>
         <Row title="Dikte bitince mesajı gönder" hint="Yalnız asistan panelinde; kapalıyken metin yalnız girişe yazılır.">
           <Segmented label="Dikte bitince mesajı gönder" value={autoSend ? 'on' : 'off'} onChange={(v) => setAutoSend(v === 'on')} options={onOff} />
+        </Row>
+      </div>
+    </section>
+  )
+}
+
+const THEME_LABEL: Record<Theme, string> = { system: 'Sistem', light: 'Açık', dark: 'Koyu' }
+
+/** Tema ve uygulama zemini: aninda uygulanir, sunucuya ve localStorage'a kaydedilir. */
+function Appearance() {
+  const { theme, paper, resolved } = useTheme()
+  const { save, set } = useSaveTheme()
+  return (
+    <section id="gorunum" className="scroll-mt-6">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-[22px]">Görünüm</h2>
+        <span className="text-[13px] text-slate-500" aria-live="polite">
+          {save.isPending ? 'Kaydediliyor…' : save.isSuccess ? 'Kaydedildi' : ''}
+        </span>
+      </div>
+      <p className="mt-1 mb-2 max-w-prose text-[15px] text-slate-600">
+        Açık ya da koyu tema ve uygulamanın zemin rengi. Seçimin hesabına kaydedilir; başka cihazda da gelir.
+      </p>
+      {save.error && <p className="text-[14px] text-red-700">{save.error.message}</p>}
+      <div className="divide-y divide-slate-200 border-y border-slate-200">
+        <Row title="Tema" hint="“Sistem” cihazının açık/koyu ayarını izler.">
+          <Segmented
+            label="Tema"
+            value={theme}
+            onChange={(v) => set(v, paper)}
+            options={(Object.keys(THEME_LABEL) as Theme[]).map((t) => ({ value: t, label: THEME_LABEL[t] }))}
+          />
+        </Row>
+        <Row title="Zemin" hint="Yalnız sayfa zemini değişir; kartlar ve yazılar aynı kalır.">
+          <div className="flex gap-2" role="group" aria-label="Zemin">
+            {PAPERS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                aria-pressed={paper === p.key}
+                onClick={() => set(theme, p.key)}
+                className="flex w-14 flex-col items-center gap-1 text-[12px] text-slate-600"
+              >
+                <span
+                  aria-hidden
+                  className={`block h-8 w-full rounded-md border border-slate-300 ${
+                    paper === p.key ? 'ring-2 ring-slate-900 ring-offset-2 ring-offset-surface' : ''
+                  }`}
+                  style={{ backgroundColor: resolved === 'dark' ? p.dark : p.light }}
+                />
+                {p.label}
+              </button>
+            ))}
+          </div>
         </Row>
       </div>
     </section>
@@ -137,10 +194,10 @@ function DayRhythm() {
       {settings.data && (
         <div className="divide-y divide-slate-200 border-y border-slate-200">
           <Row title="Planlama saati" hint="“Bugün” sayfası bu saatte planlama ile açılır.">
-            <input type="time" className="rounded-md border border-slate-300 bg-white px-2 py-1" value={planning} onChange={(e) => setPlanning(e.target.value)} onBlur={(e) => saveTime('planning_time', e.target.value)} aria-label="Planlama saati" />
+            <input type="time" className="rounded-md border border-slate-300 bg-surface px-2 py-1" value={planning} onChange={(e) => setPlanning(e.target.value)} onBlur={(e) => saveTime('planning_time', e.target.value)} aria-label="Planlama saati" />
           </Row>
           <Row title="Gün sonu değerlendirme saati" hint="Bu saatten sonra “Bugün” sayfası değerlendirmeyle açılır.">
-            <input type="time" className="rounded-md border border-slate-300 bg-white px-2 py-1" value={review} onChange={(e) => setReview(e.target.value)} onBlur={(e) => saveTime('review_time', e.target.value)} aria-label="Gün sonu değerlendirme saati" />
+            <input type="time" className="rounded-md border border-slate-300 bg-surface px-2 py-1" value={review} onChange={(e) => setReview(e.target.value)} onBlur={(e) => saveTime('review_time', e.target.value)} aria-label="Gün sonu değerlendirme saati" />
           </Row>
           <Row title="Hatırlatmalar" hint={`Saat dilimi: ${settings.data.timezone}`}>
             <Segmented
@@ -175,6 +232,7 @@ export default function SettingsPage() {
         </nav>
         <div className="max-w-3xl space-y-12">
           <DayRhythm />
+          <Appearance />
           <div id="model" className="scroll-mt-6"><ModelSettings /></div>
           <AssistantPermissions />
           <VoiceSettings />

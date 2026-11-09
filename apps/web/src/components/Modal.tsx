@@ -20,14 +20,14 @@ export default function Modal({ title, onClose, children, wide, size, label }: P
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === 'string' ? title : label}
-        className={`w-full ${WIDTH[size ?? (wide ? 'lg' : 'md')]} rounded-xl bg-white p-6 shadow-[0_24px_64px_-16px_rgb(23_32_56/0.35)]`}
+        className={`w-full ${WIDTH[size ?? (wide ? 'lg' : 'md')]} rounded-xl bg-surface p-6 shadow-[0_24px_64px_-16px_rgb(23_32_56/0.35)]`}
       >
         {title && <h2 className="mb-4 text-[22px]">{title}</h2>}
         {children}

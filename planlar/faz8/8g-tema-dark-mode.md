@@ -65,4 +65,45 @@
 - task-api testleri yeşil (+4), `npm run build` temiz, grep kontrolü temiz.
 
 ## İlerleme
-_(oturum sonunda doldurulur)_
+**Durum:** kod tamam, commit edilmedi (2026-11-09). Migration `c7f1a9d3b5e2_theme_settings` (down = `b6d2f8a4c1e9`), DB kopyasında upgrade → downgrade → upgrade denendi. Testler: task-api 337 passed (+4 `tests/integration/test_theme.py`), assistant-service 152 passed, `npm run build` temiz.
+
+### Yapılanlar
+- **Backend:** `user_settings.theme` (String(10), `system`) ve `background` (String(20), `kagit`), `boards.background` (nullable). Pydantic `Literal` doğrulama (geçersiz değer 422): tema `system|light|dark`, zemin `kagit|krem|adacayi|lavanta|gri`, board arka planı `none|tint|deniz|orman|gunbatimi|alacakaranlik|kum|grafit`. `api-schema.d.ts` elle güncellendi.
+- **`index.css`:** `@custom-variant dark`, `[data-theme=dark]` altında tüm skala/surface/on-ink/mavi/durum (green/amber/red/indigo)/`--code-*`/`--chart-*` değişkenleri, `data-paper` zeminleri (açık+koyu), `.board-bg` arka plan kuralları (koyuda `color-mix` %22, `tint` %10/%18), `.fc` ve `.react-flow` `#fff` → surface/on-ink.
+- **`index.html`** satır içi betik (parlamasız ilk boyama), `lib/theme.ts` (`applyTheme`, `useTheme`, sistem teması dinleme), `hooks/useThemeSync.ts` (sunucu tercihi → yerel; `useSaveTheme`), `hooks/useThemeColors.ts`, `lib/color.ts` (`readableTextOn`).
+- **Toplu dönüşüm:** `bg-white` → `bg-surface` (tümü); `text-white` → `text-on-ink` (slate-700/900, blue-600/700 ve ayrıca green/amber/red katı dolguları, çünkü bu tonlar koyuda açılıyor); etiket/board çiplerinde `readableTextOn`; Modal perdesi `bg-slate-900/40` → `bg-black/40`; GraphView ip renkleri CSS değişkenine, handle kenarı `border-surface`; StatsPage renkleri `useThemeColors`; CalendarPage deadline `var(--color-surface)`.
+- **UI:** Ayarlar → "Görünüm" (Sistem/Açık/Koyu `Segmented` + 5 zemin örneği, anında uygular, sunucuya ve localStorage'a yazar); sol rayda Ay/Güneş hızlı düğmesi; `BoardForm` "Arka plan" (8 örnek); `BoardPage` kanban alanı `board-bg`, liste sütunları `bg-slate-100/90 backdrop-blur-sm`.
+
+### Tarayıcı doğrulaması (8001/5175, DB kopyası, `dev@example.com`)
+Koyu: Board (arka planlı Deniz), İlişkiler, Kart penceresi, Takvim, İstatistik (grafikler), Bugün, Ayarlar, Board formu görüldü; açık: Board (Deniz). Zemin `lavanta` seçimi sunucuya yazıldı, yenilemede koyu+lavanta parlamasız geldi; hızlı düğme açık↔koyu çalıştı. Bulunan/giderilen: React Flow kontrol düğmeleri koyuda beyaz kalıyordu (xyflow stili lazy yüklenip `.react-flow` özgüllüğünü eziyordu) → seçici `.react-flow.react-flow`.
+
+### Kontrast (Node betiği, WCAG)
+| çift | açık | koyu |
+|---|---|---|
+| mürekkep/zemin | 14.67 | 16.10 |
+| slate-500/surface | 4.62 | 5.15 |
+| slate-500/zemin | **4.20** | 5.58 |
+| blue-600/surface | 7.57 | 7.56 |
+| yeşil/kırmızı/amber metin/surface | 5.02 / 6.47 / 7.09 | 9.59 / 7.77 / 10.40 |
+| kırmızı/red-50, amber/amber-50 | 5.91 / 6.84 | 7.79 / 9.73 |
+| on-ink/slate-900 düğme | 16.15 | 16.10 |
+Açık temada slate-500 sayfa zemini (slate-50) üzerinde 4.20 ve krem/adaçayı/lavanta/gri zeminlerde 4.06–4.14 (<4.5): **8g öncesinden gelen** değer, plan açık palete dokunmuyor; denetimde karar verilsin (slate-500'ü `#656e8d` civarına koyulaştırmak yeter).
+
+### Sapmalar
+| Plan | Yapılan | Neden |
+|---|---|---|
+| `text-white` yalnız slate/blue-600/700 üstünde → `text-on-ink`; green/red üstünde aynen kalır | green/amber/red katı dolgular (`bg-green-600/700`, `bg-amber-600`, `bg-red-700`) da `text-on-ink` | Koyuda bu tonlar açık (#74d6a0 vb.); beyaz yazı okunmazdı. `bg-rec` üstü beyaz kaldı |
+| Durum renkleri koyu tonları | Plandaki değerlere ek olarak green-100/600/800, amber-100/300/400/500/600/900/950, red-100/500, indigo-50/100/700, blue-800/900 tanımlandı | Kodda kullanılan tüm tonlar koyuda ters dönsün |
+| Etiket/board çipinde beyaz yazı | `readableTextOn` (CardModal, BoardPage, CalendarPage çipleri + takvim olay yazısı) | Plan adım 4 |
+| GraphView renkleri `useThemeColors` | `var(--chart-ok/warn)` / `var(--color-slate-400)` doğrudan | SVG stroke CSS değişkeni kabul ediyor, kanca gereksiz |
+| `.react-flow` seçicisi | `.react-flow.react-flow` | Yukarıdaki özgüllük sorunu |
+| Modal perdesi | `bg-slate-900/40` → `bg-black/40` | Koyuda slate-900 açık renk; perde açık olurdu |
+| Hızlı tema düğmesi | Düğme sunucuya da kaydeder (`useSaveTheme`) | "Başka cihazda gelir" ölçütü |
+| `frontend-design` eleştiri turu ve 1440 px tam ekran görüntü seti | Kısmen: kopya portta ekranlar gözle kontrol edildi; Giriş, Profil, Asistan paneli (yalnız açık görüldü), Boards sayfası, board arka planlarının 8'i ve 5 zeminin her biri tek tek görülmedi; `frontend-design` skill'i çağrılmadı | Uykuda oturum, zaman |
+
+### Doğrulanmayanlar
+- Giriş, Profil, Kart penceresinde kod bloklu not + ekler, EventDialog, Reminders, DayReviewForm, İnsights, Entegrasyon ayarları koyuda görülmedi (yalnız sınıf dönüşümü yapıldı). 8 board arka planından yalnız `deniz` iki temada görüldü; `tint` ve diğerleri CSS'ten.
+- "Sistem" seçiliyken işletim sistemi teması canlı değişimi (matchMedia dinleyicisi) denenmedi; ilk açılışta sistem koyuydu ve doğru çözüldü.
+- Başka tarayıcı profilinde sunucu tercihinin gelmesi (useThemeSync) yalnız aynı tarayıcıda yenilemeyle görüldü.
+- Gerçek DB'ye migration uygulanmadı (kullanıcı "Ajanda - Durdur" → "Ajanda" yapınca çalışır; öncesinde gerçek DB yedeği alınmalı).
+

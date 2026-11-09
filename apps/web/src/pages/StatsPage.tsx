@@ -14,14 +14,9 @@ import {
 import { localDay, shiftDay, useAnalytics } from '../api/dayPlans'
 import { PageHeader, Segmented } from '../components/Page'
 import { formatDuration } from '../lib/format'
+import { useThemeColors } from '../hooks/useThemeColors'
 
-// Dogrulanmis kategorik palet (dataviz referans paleti, ilk 4 slot, sabit sira)
-const C = { s1: '#2a78d6', s2: '#eb6834', s3: '#1baf7a', s4: '#eda100' }
-// Kagit zemin uzerinde: 2px bosluk/halka zemin renginde; eksen ve izgara geri planda
-const SURFACE = '#f2f4f8' // slate-50 (kagit)
-const GRID = '#d9deea' // slate-200 (cizgi)
-const AXIS = { fontSize: 12, fill: '#6b7493' } // slate-500
-const CURSOR = { fill: '#e8ebf2' } // slate-100
+// Kategorik palet ve zemin/eksen renkleri CSS degiskenlerinden (--chart-1..4, slate) gelir: useThemeColors
 const BAR_RADIUS: [number, number, number, number] = [4, 4, 0, 0]
 
 const RANGES = [
@@ -82,7 +77,7 @@ function ChartTip({
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] shadow-[0_2px_8px_rgb(23_32_56/0.08)]">
+    <div className="rounded-md border border-slate-200 bg-surface px-3 py-2 text-[13px] shadow-[0_2px_8px_rgb(23_32_56/0.08)]">
       <p className="mb-1 font-semibold text-slate-900">{label}</p>
       {payload.map((p) => (
         <p key={String(p.dataKey)} className="flex items-center gap-2 text-slate-700">
@@ -97,11 +92,17 @@ function ChartTip({
   )
 }
 
-// Lejant metni metin renginde; kimligi yanindaki renkli isaret tasir
-const legendText = (value: string) => <span style={{ color: '#525b78' }}>{value}</span>
 
 
 export default function StatsPage() {
+  const tc = useThemeColors()
+  const C = { s1: tc.s1, s2: tc.s2, s3: tc.s3, s4: tc.s4 }
+  const SURFACE = tc.paper // sayfa zemini: 2px bosluk/halka zemin renginde
+  const GRID = tc.grid
+  const AXIS = { fontSize: 12, fill: tc.axis }
+  const CURSOR = { fill: tc.cursor }
+  // Lejant metni metin renginde; kimligi yanindaki renkli isaret tasir
+  const legendText = (value: string) => <span style={{ color: tc.legend }}>{value}</span>
   const [days, setDays] = useState(7)
   const [showTable, setShowTable] = useState(false)
   const end = localDay()

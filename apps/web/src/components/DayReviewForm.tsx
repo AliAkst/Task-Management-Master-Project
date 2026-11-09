@@ -6,10 +6,10 @@ import type { BoardWithCounts, DayPlan, ItemOutcome, PlanSuggestion } from '../l
 
 // Sonuc renkleri durum bildirir (yapildi/kismen/yapilmadi/ertelendi); her biri ikon + yaziyla
 const OUTCOMES: { value: ItemOutcome; label: string; icon: LucideIcon; on: string }[] = [
-  { value: 'done', label: 'Yapıldı', icon: Check, on: 'bg-green-700 text-white' },
-  { value: 'partial', label: 'Kısmen', icon: Contrast, on: 'bg-amber-600 text-white' },
-  { value: 'not_done', label: 'Yapılmadı', icon: X, on: 'bg-red-700 text-white' },
-  { value: 'postponed', label: 'Ertele', icon: ArrowRight, on: 'bg-blue-700 text-white' },
+  { value: 'done', label: 'Yapıldı', icon: Check, on: 'bg-green-700 text-on-ink' },
+  { value: 'partial', label: 'Kısmen', icon: Contrast, on: 'bg-amber-600 text-on-ink' },
+  { value: 'not_done', label: 'Yapılmadı', icon: X, on: 'bg-red-700 text-on-ink' },
+  { value: 'postponed', label: 'Ertele', icon: ArrowRight, on: 'bg-blue-700 text-on-ink' },
 ]
 // 1-5 olcegi sozcukle: emoji yerine ne secildigi okunur
 const MOODS = ['Çok kötü', 'Kötü', 'İdare eder', 'İyi', 'Çok iyi']
@@ -38,7 +38,7 @@ function Scale({ label, words, value, onChange }: { label: string; words: string
               aria-checked={on}
               onClick={() => onChange(on ? null : v)}
               className={`flex flex-col items-center rounded-md border px-1 py-1.5 leading-tight ${
-                on ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
+                on ? 'border-slate-900 bg-slate-900 text-on-ink' : 'border-slate-200 bg-surface text-slate-700 hover:border-slate-400'
               }`}
             >
               <span className="font-display text-[18px] font-[650] tabular-nums">{v}</span>
@@ -161,7 +161,7 @@ export default function DayReviewForm({
                   aria-checked={on}
                   onClick={() => set(i.id, { outcome: o.value })}
                   className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[13px] ${
-                    on ? o.on : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-slate-400'
+                    on ? o.on : 'bg-surface text-slate-700 ring-1 ring-slate-200 hover:ring-slate-400'
                   }`}
                 >
                   <Icon size={13} strokeWidth={2.25} aria-hidden />
@@ -282,14 +282,14 @@ export default function DayReviewForm({
           <span className="mb-1.5 block text-[15px] font-semibold">Günün notu</span>
           <textarea
             rows={5}
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[15px]"
+            className="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-[15px]"
             placeholder="Ne iyi gitti, ne zorladı?"
             value={reflection}
             onChange={(e) => setReflection(e.target.value)}
           />
         </label>
         <div className="space-y-2">
-          <button disabled={m.review.isPending} className="w-full rounded-md bg-slate-900 px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+          <button disabled={m.review.isPending} className="w-full rounded-md bg-slate-900 px-4 py-2.5 text-[15px] font-semibold text-on-ink hover:bg-slate-700 disabled:opacity-50">
             {plan.status === 'reviewed' ? 'Değerlendirmeyi güncelle' : 'Günü değerlendir'}
           </button>
           <p className="text-center text-[14px]" aria-live="polite">

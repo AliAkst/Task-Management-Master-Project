@@ -149,7 +149,7 @@ export default function PlanEditor({
                     <button
                       onClick={() => toggle(s)}
                       aria-pressed={on}
-                      className={`flex w-full items-center gap-2 rounded-md border border-l-4 px-2.5 py-2 text-left text-[15px] ${on ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-400'}`}
+                      className={`flex w-full items-center gap-2 rounded-md border border-l-4 px-2.5 py-2 text-left text-[15px] ${on ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-surface hover:border-slate-400'}`}
                       style={{ borderLeftColor: board?.color ?? '#cbd5e1' }}
                     >
                       {on ? <Check size={15} className="shrink-0 text-blue-700" aria-hidden /> : <Plus size={15} className="shrink-0 text-slate-400" aria-hidden />}
@@ -184,7 +184,7 @@ export default function PlanEditor({
                 step={5}
                 title="Planlanan dakika"
                 aria-label={`${d.title} için planlanan dakika`}
-                className="w-16 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right text-[13px] tabular-nums"
+                className="w-16 rounded border border-slate-300 bg-surface px-1.5 py-0.5 text-right text-[13px] tabular-nums"
                 value={d.planned_minutes ?? ''}
                 placeholder="dk"
                 onChange={(e) => {
@@ -204,7 +204,7 @@ export default function PlanEditor({
         <div className="mt-4 flex items-center justify-end gap-3">
           {m.save.isSuccess && !dirty && <span className="text-[14px] text-green-700">Plan kaydedildi</span>}
           {m.save.error && <span className="text-[14px] text-red-700">{m.save.error.message}</span>}
-          <button onClick={save} disabled={m.save.isPending || (!dirty && plan.exists)} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+          <button onClick={save} disabled={m.save.isPending || (!dirty && plan.exists)} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-on-ink disabled:opacity-50">
             Planı kaydet
           </button>
         </div>

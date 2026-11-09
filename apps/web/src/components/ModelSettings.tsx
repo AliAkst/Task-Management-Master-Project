@@ -29,7 +29,7 @@ function DefaultModel() {
         </p>
       </div>
       <select
-        className="min-w-56 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+        className="min-w-56 rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-sm"
         value={value}
         disabled={set.isPending || local.length === 0}
         onChange={(e) => set.mutate(e.target.value)}
@@ -74,7 +74,7 @@ function BackgroundModel() {
         </p>
       </div>
       <select
-        className="min-w-56 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+        className="min-w-56 rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-sm"
         value={value}
         disabled={set.isPending || !prefs.data}
         onChange={(e) => set.mutate(e.target.value || null)}
@@ -127,7 +127,7 @@ function ModelPicker({
       <ul className="flex flex-wrap gap-1.5" aria-label="Kullanılacak modeller">
         {value.length === 0 && <li className="text-[13px] text-slate-500">Henüz model seçilmedi.</li>}
         {value.map((m) => (
-          <li key={m} className="inline-flex items-center gap-1 rounded-full bg-slate-900 py-0.5 pr-1 pl-2.5 text-[13px] text-white">
+          <li key={m} className="inline-flex items-center gap-1 rounded-full bg-slate-900 py-0.5 pr-1 pl-2.5 text-[13px] text-on-ink">
             {m}
             <button type="button" onClick={() => onChange(value.filter((x) => x !== m))} className="rounded-full p-0.5 hover:bg-slate-700" aria-label={`${m} modelini çıkar`}>
               <X size={12} />
@@ -243,7 +243,7 @@ function ProviderEditor({ p, onClose }: { p: ProviderConfig; onClose: () => void
         {m.test.error && <span className="text-[13px] text-red-700">{m.test.error.message}</span>}
         <span className="flex-1" />
         <button type="button" onClick={onClose} className="px-2 py-1.5 text-sm text-slate-600">Vazgeç</button>
-        <button disabled={!canSave || m.save.isPending} className="rounded-md bg-slate-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40">
+        <button disabled={!canSave || m.save.isPending} className="rounded-md bg-slate-900 px-4 py-1.5 text-sm font-medium text-on-ink disabled:opacity-40">
           {p.connected ? 'Değişiklikleri kaydet' : 'Bağla'}
         </button>
       </div>

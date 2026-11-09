@@ -21,7 +21,7 @@ export default function RecurrencePicker({
   onChange,
   startDay,
   label = 'Tekrar',
-  inputClass = 'w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm',
+  inputClass = 'w-full rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-sm',
 }: {
   value: string | null
   onChange: (rule: string | null) => void
@@ -65,7 +65,7 @@ export default function RecurrencePicker({
                 aria-pressed={on}
                 title={d.long}
                 onClick={() => toggleDay(d.code)}
-                className={`w-10 rounded-md py-1 text-[13px] ${on ? 'bg-slate-900 text-white' : 'text-slate-700 ring-1 ring-slate-300 hover:ring-slate-900'}`}
+                className={`w-10 rounded-md py-1 text-[13px] ${on ? 'bg-slate-900 text-on-ink' : 'text-slate-700 ring-1 ring-slate-300 hover:ring-slate-900'}`}
               >
                 {d.short}
               </button>
@@ -91,7 +91,7 @@ export default function RecurrencePicker({
           Bitiş
           <input
             type="date"
-            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[13px]"
+            className="rounded-md border border-slate-300 bg-surface px-2 py-1 text-[13px]"
             value={s.until}
             onChange={(e) => update({ until: e.target.value })}
           />

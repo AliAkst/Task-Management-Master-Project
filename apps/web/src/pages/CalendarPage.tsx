@@ -20,6 +20,7 @@ import EventDialog, { type EventDraft } from '../components/EventDialog'
 import { Check, Hourglass, Loader2, RefreshCw, Video } from 'lucide-react'
 import { useIntegrationMutations, useMicrosoftCalendarEnabled } from '../api/integrations'
 import { api } from '../lib/api'
+import { readableTextOn } from '../lib/color'
 import type { BoardDetail, CalendarEvent, CalendarItem, CardSummary, UserSettings } from '../lib/types'
 
 const HOUR = 60 * 60 * 1000
@@ -97,9 +98,9 @@ export default function CalendarPage() {
       start: i.start,
       end: i.end ?? undefined,
       allDay: i.all_day,
-      backgroundColor: deadline ? '#fff' : i.color,
+      backgroundColor: deadline ? 'var(--color-surface)' : i.color,
       borderColor: i.color,
-      textColor: deadline ? i.color : '#fff',
+      textColor: deadline ? i.color : readableTextOn(i.color),
       durationEditable: !deadline && !i.recurrence_rule && !i.external,
       // Tekrarlar suruklenmez: degisiklik butun seriye uygulanir (pencereden)
       startEditable: !i.recurrence_rule && !i.external,
@@ -206,7 +207,7 @@ export default function CalendarPage() {
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="flex w-72 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-white p-4">
+      <aside className="flex w-72 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-surface p-4">
         <section>
           <h2 className="mb-2 text-[17px]">Gösterilen alanlar</h2>
           <div className="flex flex-wrap gap-1.5">
@@ -217,8 +218,8 @@ export default function CalendarPage() {
                   key={b.id}
                   onClick={() => toggleBoard(b.id)}
                   aria-pressed={on}
-                  className={`rounded-full px-3 py-1 text-[13px] font-semibold ${on ? 'text-white' : 'text-slate-500 line-through ring-1 ring-slate-300'}`}
-                  style={on ? { backgroundColor: b.color } : undefined}
+                  className={`rounded-full px-3 py-1 text-[13px] font-semibold ${on ? '' : 'text-slate-500 line-through ring-1 ring-slate-300'}`}
+                  style={on ? { backgroundColor: b.color, color: readableTextOn(b.color) } : undefined}
                 >
                   {b.name}
                 </button>
@@ -239,7 +240,7 @@ export default function CalendarPage() {
                   data-card-id={c.id}
                   data-title={c.title}
                   data-minutes={c.estimated_minutes || 60}
-                  className="cursor-grab rounded-md border border-l-4 border-slate-200 bg-white px-2.5 py-2 text-[14px] hover:border-slate-400 active:cursor-grabbing"
+                  className="cursor-grab rounded-md border border-l-4 border-slate-200 bg-surface px-2.5 py-2 text-[14px] hover:border-slate-400 active:cursor-grabbing"
                   style={{ borderLeftColor: board?.color }}
                   title={c.blocked ? 'Ön koşulları bitmedi' : undefined}
                 >
@@ -284,7 +285,7 @@ export default function CalendarPage() {
             </button>
           </div>
         )}
-        <div className="min-h-0 flex-1 rounded-lg border border-slate-200 bg-white p-3">
+        <div className="min-h-0 flex-1 rounded-lg border border-slate-200 bg-surface p-3">
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             locale={trLocale}
