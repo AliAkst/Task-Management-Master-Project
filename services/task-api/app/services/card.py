@@ -4,7 +4,9 @@ Kart is mantigi: olusturma, guncelleme, tasima, notlar, checklist.
 Durum senkronu kurallari:
 - Kart 'tamamlandi' listesine (is_done_list) girerse -> status=completed,
   completed_at=simdi
-- Oradan cikarsa -> status=pending, completed_at=None
+- Tamamlandi listesinden normal bir listeye cikarsa -> status=pending,
+  completed_at=None
+- Normal listeler (ayni ya da baska board) arasinda tasima durumu degistirmez
 - status=completed olarak guncellenirse ve board'da tamamlandi listesi varsa kart
   oraya tasinir; tekrar acilirsa ilk normal listeye doner.
 """
@@ -209,7 +211,12 @@ class CardService:
         return result
 
     async def _move_into(
-        self, card: TaskEntity, target: BoardListEntity, index: int | None
+        self,
+        card: TaskEntity,
+        target: BoardListEntity,
+        index: int | None,
+        *,
+        source_is_done: bool,
     ) -> None:
         """Karti hedef listeye (index None ise sona) yerlestirir, durumu senkronlar."""
         siblings = [
@@ -218,7 +225,11 @@ class CardService:
         card.list_id = target.id
         card.board_id = target.board_id
         place_at(siblings, card, len(siblings) if index is None else index)
-        self._set_completion(card, target.is_done_list)
+        if target.is_done_list:
+            self._set_completion(card, True)
+        elif source_is_done:
+            self._set_completion(card, False)
+        # normal -> normal: durum ve completed_at degismez
 
     # ---------------- kart ----------------
     async def create(self, user_id: int, data: CardCreate) -> CardDetail:
@@ -524,13 +535,13 @@ class CardService:
         if status == TaskStatus.COMPLETED:
             target = next((lst for lst in lists if lst.is_done_list), None)
             if target and (current is None or not current.is_done_list):
-                await self._move_into(card, target, None)
+                await self._move_into(card, target, None, source_is_done=False)
             self._set_completion(card, True)
         else:
             if current is not None and current.is_done_list:
                 target = next((lst for lst in lists if not lst.is_done_list), None)
                 if target:
-                    await self._move_into(card, target, None)
+                    await self._move_into(card, target, None, source_is_done=True)
             self._set_completion(card, False)
             card.status = status
 
@@ -551,7 +562,12 @@ class CardService:
         if target.board_id != card.board_id:
             # Etiketler board'a ozel; baska board'a tasinan kartin etiketleri dusur
             await self.uow.card_labels.set_for_card(card.id, [])
-        await self._move_into(card, target, index)
+        source_is_done = False
+        if card.board_id and card.list_id:
+            src_lists = await self.uow.lists.list_for_board(card.board_id)
+            src = next((lst for lst in src_lists if lst.id == card.list_id), None)
+            source_is_done = bool(src and src.is_done_list)
+        await self._move_into(card, target, index, source_is_done=source_is_done)
         after = snapshot()
 
         changes = {k: [before[k], after[k]] for k in before if before[k] != after[k]}

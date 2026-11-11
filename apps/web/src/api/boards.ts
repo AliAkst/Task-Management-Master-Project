@@ -39,7 +39,10 @@ export function applyListMove(data: BoardDetail, id: number, index: number): Boa
   return { ...data, lists: rest }
 }
 
-/** Karti hedef listede `index` sirasina koyar: komsu pozisyonlarin ortasi (uclarda +-1). */
+/**
+ * Karti hedef listede `index` sirasina koyar: komsu pozisyonlarin ortasi (uclarda +-1).
+ * Tamamlanma: done listesine girmek tamamlar, done listesinden cikmak acar; normal->normal degistirmez.
+ */
 export function applyCardMove(
   data: BoardDetail,
   id: number,
@@ -59,14 +62,17 @@ export function applyCardMove(
   if (before !== undefined && after !== undefined) position = (before + after) / 2
   else if (before !== undefined) position = before + 1
   else if (after !== undefined) position = after - 1
-  const done = target.is_done_list
-  const moved: CardSummary = {
-    ...card,
-    list_id: listId,
-    position,
-    status: done ? 'completed' : card.status === 'completed' ? 'pending' : card.status,
-    completed_at: done ? (card.completed_at ?? new Date().toISOString()) : null,
-  }
+  const source = data.lists.find((l) => l.id === card.list_id)
+  const toDone = target.is_done_list
+  const fromDone = !!source?.is_done_list
+  const moved: CardSummary = { ...card, list_id: listId, position }
+  if (toDone) {
+    moved.status = 'completed'
+    moved.completed_at = card.completed_at ?? new Date().toISOString()
+  } else if (fromDone) {
+    moved.status = card.status === 'completed' ? 'pending' : card.status
+    moved.completed_at = null
+  } // normal -> normal: durum ve completed_at aynen kalir
   return { ...data, cards: data.cards.map((c) => (c.id === id ? moved : c)) }
 }
 

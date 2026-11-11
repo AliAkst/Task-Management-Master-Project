@@ -581,6 +581,27 @@ class TestOutbox:
         # Son durum (yeniden açık) tek PATCH ile gönderilir
         assert graph.patches == [("L1", "a", {"status": "notStarted"})]
 
+    async def test_move_completed_between_normal_lists_is_not_pushed(
+        self, client, auth_headers, graph, pushes, test_session
+    ):
+        card = await self._synced_card(client, auth_headers, graph)
+        await client.patch(
+            f"{API}/cards/{card['id']}", json={"status": "completed"}, headers=auth_headers
+        )
+        await sync(client, auth_headers)  # tamamlama push'u gitti, bekleyen kalmadı
+        assert [link.pending_push for link in await links(test_session)] == [False]
+        pushes_before = len(pushes)
+        board = await create_board(client, auth_headers, name="Düz", lists=["A", "B"])
+        for lst in board["lists"]:  # önce A, sonra B: normal -> normal -> normal
+            res = await client.post(
+                f"{API}/cards/{card['id']}/move",
+                json={"list_id": lst["id"], "index": 0},
+                headers=auth_headers,
+            )
+            assert res.json()["data"]["status"] == "completed"
+        assert len(pushes) == pushes_before
+        assert [link.pending_push for link in await links(test_session)] == [False]
+
     async def test_pending_push_wins_over_remote_state(
         self, client, auth_headers, graph, pushes
     ):
