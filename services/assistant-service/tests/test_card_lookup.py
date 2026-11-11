@@ -602,3 +602,108 @@ async def test_focus_line_sets_focus_card(task_api_transport):
     box3 = await make_box(task_api_transport, cloud=True)
     await focus_line(api, box3, 2, 21)
     assert box3.writer.focus_card_id is None
+
+
+# ---------------- Faz 9 denetim duzeltmeleri (D2-D5) ----------------
+class TestAuditFixes:
+    async def test_d2_subcard_with_parent_skips_duplicate_guard(
+        self, cards, task_api_transport
+    ):
+        # Baska bir kartin altinda "Python Eğitimi" adli acik kart var; parent_id verilince
+        # mukerrer korumasi devreye girmez (yanlis pozitif).
+        p = await writer(task_api_transport).prepare(
+            "create_card", {"board_id": 1, "title": "Python Eğitimi", "parent_id": 11}
+        )
+        assert p.action_type == "create_card" and p.args["parent_id"] == 11
+
+    async def test_d3_move_to_done_list_says_completes(self, cards, task_api_transport):
+        p = await writer(task_api_transport).prepare(
+            "move_card", {"card": "31", "board": "Date planları", "list_name": "tamamlandı"}
+        )
+        assert "kart tamamlanır" in p.summary
+
+    async def test_d3_move_out_of_done_list_says_reopens(
+        self, cards, fake_api, task_api_transport
+    ):
+        CARDS[31]["list_id"] = 11  # Spor > Tamamlandı (is_done_list)
+        CARDS[31]["status"] = "completed"
+        p = await writer(task_api_transport).prepare(
+            "move_card", {"card": "31", "board": "Date planları", "list_name": "Yapılacak"}
+        )
+        assert "kart yeniden açılır" in p.summary
+
+    async def test_d3_plain_move_has_no_status_note(self, cards, task_api_transport):
+        p = await writer(task_api_transport).prepare(
+            "move_card", {"card": "31", "board": "Date planları"}
+        )
+        assert "tamamlanır" not in p.summary and "yeniden açılır" not in p.summary
+
+    async def test_d4_schedule_card_today_past_start_errors(
+        self, cards, task_api_transport
+    ):
+        today = datetime.now(TZ).date().isoformat()
+        with pytest.raises(ValueError, match="geçmişte"):
+            await writer(task_api_transport).prepare(
+                "schedule_card", {"card": "31", "day": today, "start": "00:00"}
+            )
+
+    async def test_d4_reschedule_block_into_past_errors(self, cards, fake_api, task_api_transport):
+        base = future_day(2)
+        fake_api.card_events[31] = [
+            event(71, f"{base}T14:00:00+03:00", f"{base}T15:30:00+03:00")
+        ]
+        today = datetime.now(TZ).date().isoformat()
+        with pytest.raises(ValueError, match="geçmişte"):
+            await writer(task_api_transport).prepare(
+                "reschedule_card", {"card": "31", "day": today, "start": "00:00"}
+            )
+
+    async def test_d5_hash_id_resolves(self, cards, task_api_transport):
+        api, privacy = api_for(task_api_transport)
+        assert (await resolve_card(api, privacy, "#31"))["id"] == 31
+        assert (await resolve_card(api, privacy, " #31 "))["id"] == 31
+
+
+# ---------------- K1: schedule_day var olan karti bulmali (kullanici hatasi) ----------------
+class TestScheduleDayExistingCard:
+    """'7-8.5 arasi Egitim board'indaki p2 kartini ekle': model baslik/board'u farkli
+    bicimlerde verebilir; var olan acik kart yerine yeni kart acilmamali."""
+
+    @pytest.fixture
+    def p2(self, monkeypatch):
+        monkeypatch.setitem(CARDS, 41, _card(41, "P2", 1))
+
+    async def _prep(self, transport, title, board="Spor"):
+        blk = {"title": title, "start": "07:00", "end": "08:30", "card": True}
+        if board:
+            blk["board"] = board
+        return await writer(transport).prepare(
+            "schedule_day", {"day": future_day().isoformat(), "blocks": [blk]}
+        )
+
+    @pytest.mark.parametrize(
+        "title",
+        ["P2", "p2", "P2 kartı", "p2 kartını", "Spor board'ındaki P2 kartı", "Spor boardındaki p2"],
+    )
+    async def test_title_variants_use_existing_card(self, p2, task_api_transport, title):
+        p = await self._prep(task_api_transport, title)
+        assert p.args["blocks"][0]["card_id"] == 41, p.summary
+        assert "var olan kart #41" in p.summary
+
+    async def test_board_hint_picks_card_on_that_board(self, p2, monkeypatch, task_api_transport):
+        monkeypatch.setitem(CARDS, 42, _card(42, "P2", 2))
+        p = await self._prep(task_api_transport, "P2", board="Date planları")
+        assert p.args["blocks"][0]["card_id"] == 42
+
+    async def test_unrelated_title_still_creates_new_card(self, p2, task_api_transport):
+        p = await self._prep(task_api_transport, "P3 raporu")
+        assert "card_id" not in p.args["blocks"][0]
+        assert "YENİ kart" in p.summary
+
+    async def test_extra_word_card_does_not_steal_exact_match(
+        self, p2, monkeypatch, task_api_transport
+    ):
+        # ayni board'da iki aday: tahmin yok, yeni kart (kullanici onay kartinda gorur)
+        monkeypatch.setitem(CARDS, 43, _card(43, "P2 ikinci", 1))
+        p = await self._prep(task_api_transport, "P2 kartı")
+        assert p.args["blocks"][0].get("card_id") == 41  # tam token eslesmesi tek: "P2"

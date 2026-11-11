@@ -180,6 +180,44 @@ async def find_exact_open(
     return None
 
 
+# "board'ındaki" kesmede bolununce kalan ek parcalari
+_LOCATIVE = {"indaki", "inda", "inde", "ndaki", "ndeki", "daki", "deki", "nda", "nde"}
+
+
+def find_open_for_block(
+    cards: list[dict[str, Any]],
+    title: str,
+    board: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """schedule_day blogu icin var olan ACIK kart. Once verilen board'daki kartlara, sonra
+    tum gorunur kartlara bakar. Eslesme: baslik token dizisi birebir ya da dolgu kelimeleri
+    ("kart"), board adi ve "board..." sozcukleri atildiktan sonra token KUMESI birebir
+    ("P2 kartı", "Eğitim board'ındaki P2" -> "P2"). Belirsizse None (yeni kart)."""
+    want = tokens(title)
+    if not want:
+        return None
+    drop = {t for t in tokens(board["name"])} if board else set()
+    core = {
+        t
+        for t in query_tokens(title)
+        if t not in drop and not t.startswith("board") and t not in _LOCATIVE
+    }
+    open_cards = [c for c in cards if c["status"] != "completed"]
+    pools = []
+    if board:
+        pools.append([c for c in open_cards if c.get("board_id") == board["id"]])
+    pools.append(open_cards)
+    for pool in pools:
+        exact = [c for c in pool if tokens(c["title"]) == want]
+        if exact:
+            return exact[0]
+        if core:
+            loose = [c for c in pool if set(query_tokens(c["title"])) == core]
+            if len(loose) == 1:
+                return loose[0]
+    return None
+
+
 async def resolve_card(
     api: TaskApiClient,
     privacy: PrivacyFilter,
@@ -192,8 +230,9 @@ async def resolve_card(
     text = str(ref).strip() if ref is not None else ""
     if not text:
         raise ValueError("card gerekli: kartın id'si ya da başlığı")
-    if text.isdigit():
-        cid = int(text)
+    id_text = text.lstrip("#").strip()
+    if id_text.isdigit():
+        cid = int(id_text)
         if privacy.card_hidden(cid):
             raise ValueError(HIDDEN_MESSAGE)
         card = await api.get(f"/cards/{cid}")

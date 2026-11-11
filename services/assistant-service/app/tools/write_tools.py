@@ -31,6 +31,7 @@ from app.tools.card_lookup import (
     CARD_TOOL_SPECS,
     CARD_TOOL_TO_ACTION,
     find_exact_open,
+    find_open_for_block,
     free_slot,
     resolve_board,
     resolve_card,
@@ -407,7 +408,8 @@ class WriteTools:
     ) -> PreparedAction:
         if not str(title).strip():
             raise ValueError("Başlık boş olamaz")
-        if not force_new:
+        # Alt kart (parent_id) ayni adi baska kartin altinda tasiyabilir: koruma yalniz ust duzey kartlar icin
+        if not force_new and parent_id is None:
             dupe = await find_exact_open(self.api, self.privacy, str(title))
             if dupe:
                 raise ValueError(
@@ -758,6 +760,10 @@ class WriteTools:
             begin = datetime.combine(target, time(0), tzinfo=self.tz) + timedelta(
                 minutes=parse_clock(start, "start")
             )
+            if begin <= now:
+                raise ValueError(
+                    f"{_fmt_day(target)} {begin:%H:%M} geçmişte kaldı; ileri bir saat ver"
+                )
             end = begin + timedelta(minutes=length)
             clash = next((b for b in busy if begin < b[1] and b[0] < end), None)
             if clash:
@@ -832,6 +838,10 @@ class WriteTools:
                 )
             else:
                 new_s = datetime.combine(target, s.time().replace(tzinfo=None), tzinfo=self.tz)
+            if new_s <= now:
+                raise ValueError(
+                    f"{_fmt_day(target)} {new_s:%H:%M} geçmişte kaldı; ileri bir saat ver"
+                )
             new_e = new_s + (e_end - s)
             out_events.append(
                 {"id": e["id"], "start_at": new_s.isoformat(), "end_at": new_e.isoformat()}
@@ -869,6 +879,15 @@ class WriteTools:
         )
         if c.get("label_ids") and c.get("board_id") != target["id"]:
             summary += " (etiketler board'a özel olduğu için düşer)"
+        # 9a kurali: tamamlandi listesine girmek tamamlar, oradan normal listeye cikmak yeniden acar
+        src = detail if c.get("board_id") == target["id"] else await self._board(c["board_id"])
+        src_done = any(
+            x["id"] == c.get("list_id") and x.get("is_done_list") for x in src["lists"]
+        )
+        if lst.get("is_done_list") and not src_done:
+            summary += " (kart tamamlanır)"
+        elif src_done and not lst.get("is_done_list"):
+            summary += " (kart yeniden açılır)"
         return PreparedAction(
             "update_card",
             {"card_id": c["id"], "patch": {}, "move_to": lst["id"]},
@@ -1057,9 +1076,7 @@ class WriteTools:
                     open_cards = await visible_cards(
                         self.api, self.privacy, include_completed=False
                     )
-                existing = await find_exact_open(
-                    self.api, self.privacy, blk.title, open_cards
-                )
+                existing = find_open_for_block(open_cards, blk.title, board)
             if existing:
                 item["card_id"] = existing["id"]
                 item["board_id"] = existing["board_id"]
@@ -1078,7 +1095,7 @@ class WriteTools:
             if existing:
                 kind = f"var olan kart #{existing['id']}, {existing['board_name']}"
             else:
-                kind = f"kart, {board['name']}" if blk.card and board else "etkinlik"
+                kind = f"YENİ kart, {board['name']}" if blk.card and board else "etkinlik"
             lines.append(f"{hhmm(blk.start)}–{hhmm(blk.end)} {blk.title} ({kind})")
             out.append(item)
         cards = sum(1 for i in out if i["card"])

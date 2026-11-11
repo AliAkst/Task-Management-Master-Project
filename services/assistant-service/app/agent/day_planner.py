@@ -64,6 +64,7 @@ Nasıl:
    card=true ve uygun board.
 6. Kullanıcının verdiği süreleri aynen kullan; birlikte söylediği şeyleri tek blok yap.
 7. Boş kalan zamana kullanıcının söylemediği iş ekleme.
+8. Kullanıcı var olan bir kartı adıyla anıyorsa ("eğitim board'ındaki P2 kartı") title'a SADECE kartın adını yaz ("P2"), board'a board adını ver; araç var olan açık kartı bulup kullanır, yeni kart açmaz.
 
 Örnek: "Yarın 10-17 dersteyim, okula yol 1 saat. Dersten sonra market 20 dk, eve 1 saat,
 sonra 45 dk koşu."

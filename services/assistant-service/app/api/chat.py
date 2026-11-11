@@ -428,8 +428,8 @@ async def _stream(
                 if planned is not None:
                     reply = (
                         f"Planı hazırladım ({planner.info.label}). Onay kartından "
-                        "saatleri kontrol et: onaylarsan yapılacak işler kart olarak "
-                        "açılır, hepsi takvime ve kartlar günün planına eklenir. Bir "
+                        "saatleri kontrol et: onaylarsan özetteki YENİ kartlar açılır, var olan kartlar "
+                        "kullanılır; hepsi takvime ve kartlar günün planına eklenir. Bir "
                         "şey yanlışsa nedenini yazarak reddet, düzelteyim."
                     )
                     yield sse("token", {"text": reply})

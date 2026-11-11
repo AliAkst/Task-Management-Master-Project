@@ -112,7 +112,7 @@ async def test_prepare_and_execute(fake_api, task_api_transport):
     )
     assert prepared.action_type == "schedule_day"
     assert "07:00–09:00 Ofise yol (etkinlik)" in prepared.summary
-    assert "09:00–09:45 Yüzme (kart, Spor)" in prepared.summary
+    assert "09:00–09:45 Yüzme (YENİ kart, Spor)" in prepared.summary
     run, card = prepared.args["blocks"]
     assert card["list_id"] == 10 and card["minutes"] == 45 and run["card"] is False
     assert fake_api.writes == []  # hazirlik yazmaz

@@ -251,8 +251,10 @@ export function useBoardMutations(boardId: number) {
         if (ctx?.prev) qc.setQueryData(keys.board(boardId), ctx.prev)
       },
       onSettled: (_d, _e, { id }) => {
-        refresh()
         qc.invalidateQueries({ queryKey: keys.card(id) })
+        // Hizli art arda tiklamada ara refetch sonraki iyimser durumu ezip karti zipletir:
+        // yalniz bekleyen son toggle bittiginde (kendisi hala 'pending' sayilir) board'u yenile.
+        if (qc.isMutating({ mutationKey: ['toggleCard'] }) <= 1) refresh()
       },
     }),
     /** Grafik gorunumde dugum konumu (gecmise yazilmaz). */
