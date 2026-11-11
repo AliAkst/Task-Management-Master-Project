@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { memo, useState, type FormEvent } from 'react'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { BoardList, CardSummary, Label } from '../lib/types'
@@ -7,15 +7,17 @@ import CardFace from './CardFace'
 export const cardKey = (id: number) => `card-${id}`
 export const listKey = (id: number) => `list-${id}`
 
-function SortableCard({
+const SortableCard = memo(function SortableCard({
   card,
   labels,
   onOpen,
+  tracking,
   onToggle,
 }: {
   card: CardSummary
   labels: Map<number, Label>
   onOpen: (id: number) => void
+  tracking: boolean
   onToggle: (card: CardSummary) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -32,10 +34,10 @@ function SortableCard({
       {...listeners}
       onClick={() => onOpen(card.id)}
     >
-      <CardFace card={card} labels={labels} onToggle={onToggle} />
+      <CardFace card={card} labels={labels} tracking={tracking} onToggle={onToggle} />
     </li>
   )
-}
+})
 
 /** Liste surukleme overlay'i: baslik + ilk 3 kartin ozeti. */
 export function ListOverlay({
@@ -48,7 +50,7 @@ export function ListOverlay({
   labels: Map<number, Label>
 }) {
   return (
-    <section className="w-72 rotate-2 scale-[1.02] cursor-grabbing rounded-xl bg-slate-100/90 pb-2 backdrop-blur-sm shadow-[0_12px_32px_-8px_rgb(23_32_56/0.4)]">
+    <section className="w-72 rotate-2 scale-[1.02] cursor-grabbing rounded-xl bg-slate-100/95 pb-2 shadow-[0_12px_32px_-8px_rgb(23_32_56/0.4)]">
       <h3 className="px-3 pt-3 pb-2 text-sm font-medium">
         {list.is_done_list && <span className="mr-1 text-green-600">✓</span>}
         {list.name}
@@ -70,6 +72,8 @@ interface Props {
   list: BoardList
   cards: CardSummary[]
   labels: Map<number, Label>
+  /** Kronometresi calisan kartin id'si (BoardPage tek yerde okur; 9c). */
+  trackingCardId: number | null
   onOpenCard: (id: number) => void
   onToggleCard: (card: CardSummary) => void
   onAddCard: (listId: number, title: string) => void
@@ -78,10 +82,27 @@ interface Props {
   onDelete: (listId: number) => void
 }
 
-export default function KanbanList({
+/** Surukleme sirasinda yalniz icerigi degisen liste yeniden cizilsin: cards dizisi sig karsilastirilir. */
+function areEqual(a: Props, b: Props) {
+  if (a.cards.length !== b.cards.length || !a.cards.every((c, i) => c === b.cards[i])) return false
+  return (
+    a.list === b.list &&
+    a.labels === b.labels &&
+    a.trackingCardId === b.trackingCardId &&
+    a.onOpenCard === b.onOpenCard &&
+    a.onToggleCard === b.onToggleCard &&
+    a.onAddCard === b.onAddCard &&
+    a.onRename === b.onRename &&
+    a.onToggleDone === b.onToggleDone &&
+    a.onDelete === b.onDelete
+  )
+}
+
+function KanbanList({
   list,
   cards,
   labels,
+  trackingCardId,
   onOpenCard,
   onToggleCard,
   onAddCard,
@@ -118,7 +139,7 @@ export default function KanbanList({
     <section
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100/90 backdrop-blur-sm ${isDragging ? 'opacity-40' : ''}`}
+      className={`flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100/95 ${isDragging ? 'opacity-40' : ''}`}
     >
       <header className="relative flex items-center gap-2 px-3 pt-3 pb-2" {...attributes} {...listeners}>
         {editing ? (
@@ -178,7 +199,14 @@ export default function KanbanList({
       <SortableContext items={cards.map((c) => cardKey(c.id))} strategy={verticalListSortingStrategy}>
         <ul className="flex min-h-2 flex-col gap-2 overflow-y-auto px-2 pb-2">
           {cards.map((c) => (
-            <SortableCard key={c.id} card={c} labels={labels} onOpen={onOpenCard} onToggle={onToggleCard} />
+            <SortableCard
+              key={c.id}
+              card={c}
+              labels={labels}
+              tracking={trackingCardId === c.id}
+              onOpen={onOpenCard}
+              onToggle={onToggleCard}
+            />
           ))}
         </ul>
       </SortableContext>
@@ -217,3 +245,5 @@ export default function KanbanList({
     </section>
   )
 }
+
+export default memo(KanbanList, areEqual)

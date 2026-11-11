@@ -13,7 +13,7 @@ import {
   Timer,
   type LucideIcon,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 import { describeRule } from '../lib/rrule'
 import type { CardSummary, Label } from '../lib/types'
 import { useActiveSession } from '../api/sessions'
@@ -23,6 +23,8 @@ interface Props {
   card: CardSummary
   labels: Map<number, Label>
   dragging?: boolean
+  /** Bu kart icin kronometre calisiyor mu (ust bilesen hesaplar; 9c: kart basina sorgu yok). */
+  tracking?: boolean
   /** Verilirse sol ustteki daire tikla-tamamla dugmesi olur; verilmezse etkisiz gorsel. */
   onToggle?: (card: CardSummary) => void
 }
@@ -37,10 +39,8 @@ function Meta({ icon: Icon, children, className = '', title }: { icon: LucideIco
 }
 
 /** Kanban'daki kart yuzu (liste icinde ve suruklenirken ayni gorunum). */
-export default function CardFace({ card, labels, dragging, onToggle }: Props) {
+function CardFaceBase({ card, labels, dragging, tracking = false, onToggle }: Props) {
   const done = card.status === 'completed'
-  const active = useActiveSession()
-  const tracking = active.data?.card_id === card.id
   const trackedSec = card.tracked_seconds + card.subtask_tracked_seconds
   const overdue = !done && isOverdue(card.due_date)
   const high = card.priority === 'high'
@@ -149,4 +149,13 @@ export default function CardFace({ card, labels, dragging, onToggle }: Props) {
       </div>
     </div>
   )
+}
+
+const CardFace = memo(CardFaceBase)
+export default CardFace
+
+/** Kronometre durumunu kendisi okuyan sarmalayici (graf gorunumu gibi tek tek kullanimlar icin). */
+export function CardFaceLive(props: Omit<Props, 'tracking'>) {
+  const active = useActiveSession()
+  return <CardFace {...props} tracking={active.data?.card_id === props.card.id} />
 }
