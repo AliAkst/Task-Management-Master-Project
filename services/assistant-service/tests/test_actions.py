@@ -37,6 +37,7 @@ class TestPrepare:
             {
                 "board_id": 1,
                 "title": "Koşu",
+                "force_new": True,
                 "due_date": "2026-11-09",
                 "estimated_minutes": 45,
             },
@@ -130,7 +131,7 @@ class TestGate:
         self, task_api_transport, fake_api, db_session_maker
     ):
         box = await make_box(task_api_transport, db_session_maker, {})
-        r = await box.execute(call("create_card", board_id=1, title="Koşu").tool_call)
+        r = await box.execute(call("create_card", board_id=1, title="Koşu", force_new=True).tool_call)
         body = json.loads(r.text)
         assert body["status"] == "pending_approval" and "YAPILMADI" in body["note"]
         assert r.action["status"] == "proposed"
@@ -142,7 +143,7 @@ class TestGate:
         box = await make_box(
             task_api_transport, db_session_maker, {"create_card": "auto"}
         )
-        r = await box.execute(call("create_card", board_id=1, title="Koşu").tool_call)
+        r = await box.execute(call("create_card", board_id=1, title="Koşu", force_new=True).tool_call)
         assert json.loads(r.text)["status"] == "done"
         assert r.action["status"] == "executed"
         assert fake_api.writes == [
@@ -212,7 +213,7 @@ async def chat(client, message, conversation_id=None):
 async def test_approval_flow(client, fake_api):
     client.providers["fake:local"] = FakeProvider(
         [
-            [call("create_card", board_id=1, title="Koşu")],
+            [call("create_card", board_id=1, title="Koşu", force_new=True)],
             [text("Kartı önerdim, onaylarsan eklenecek.")],
             [call("create_card", board_id=1, title="Yüzme")],
             [text("Eklendi.")],

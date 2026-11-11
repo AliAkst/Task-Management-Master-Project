@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from app.llm.types import ToolCall, ToolSpec
+from app.tools.card_lookup import query_tokens, score, visible_cards
 from app.tools.privacy import HIDDEN_MESSAGE, PrivacyFilter
 from app.tools.task_api import TaskApiClient, TaskApiError
 from app.tools.write_tools import (
@@ -145,7 +146,7 @@ class ToolBox:
             ),
             ToolSpec(
                 "search_cards",
-                "Tüm board'larda kart başlığı/açıklamasında arar. Kart id'sini bulmak için kullan.",
+                "Tüm board'larda kart başlığında arar (açıklamada aramaz). Kart id'sini bulmak için kullan.",
                 {
                     "type": "object",
                     "properties": {
@@ -258,20 +259,22 @@ class ToolBox:
         return out
 
     async def search_cards(self, query: str, include_completed: bool = False) -> Any:
-        q = query.casefold().strip()
-        if not q:
+        if not query_tokens(query):
             raise ValueError("Boş arama")
-        found = []
-        for b in await self.boards():
-            if self.privacy.board_hidden(b["id"]):
-                continue
-            d = await self.api.get(f"/boards/{b['id']}")
-            for c in d["cards"]:
-                if not include_completed and c["status"] == "completed":
-                    continue
-                if q in c["title"].casefold():
-                    found.append({**_card(c), "board": b["name"]})
-        return found[:30] or {"result": "Eşleşen kart yok"}
+        cards = await visible_cards(
+            self.api, self.privacy, include_completed=include_completed
+        )
+        ranked = []
+        for order, c in enumerate(cards):
+            full, exact, matched = score(query, c["title"])
+            if full:
+                ranked.append((not exact, -matched, order, c))
+        ranked.sort(key=lambda r: r[:3])
+        found = [
+            {**_card(c), "board": c["board_name"], "list": c["list_name"]}
+            for *_, c in ranked[:30]
+        ]
+        return found or {"result": "Eşleşen kart yok"}
 
     async def get_card(self, card_id: int) -> Any:
         if self.privacy.card_hidden(card_id):
@@ -333,6 +336,8 @@ class ToolBox:
                 "start": i["start"],
                 "end": i.get("end"),
                 "all_day": i["all_day"],
+                **({"event_id": i["event_id"]} if i.get("event_id") else {}),
+                **({"read_only": True} if i.get("external") else {}),
                 **({"card_id": i["card_id"]} if i.get("card_id") else {}),
                 **({"card_status": i["card_status"]} if i.get("card_status") else {}),
             }

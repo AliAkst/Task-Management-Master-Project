@@ -252,6 +252,7 @@ class TestExecute:
             {
                 "board_id": 1,
                 "title": "Tez",
+                "force_new": True,
                 "labels": ["Acil", "Okul"],
                 "checklist": ["Özet", "Giriş"],
             },
@@ -270,7 +271,8 @@ class TestExecute:
         api.fail_paths.add("/cards/100/checklist")
         w = writer(task_api_transport)
         p = await w.prepare(
-            "create_card", {"board_id": 1, "title": "Tez", "checklist": ["Özet"]}
+            "create_card",
+            {"board_id": 1, "title": "Tez", "checklist": ["Özet"], "force_new": True},
         )
         r = await w.execute(p.action_type, p.args)
         assert r["card_id"] == 100
