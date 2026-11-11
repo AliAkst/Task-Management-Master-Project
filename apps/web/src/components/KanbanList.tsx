@@ -11,10 +11,12 @@ function SortableCard({
   card,
   labels,
   onOpen,
+  onToggle,
 }: {
   card: CardSummary
   labels: Map<number, Label>
   onOpen: (id: number) => void
+  onToggle: (card: CardSummary) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: cardKey(card.id),
@@ -30,7 +32,7 @@ function SortableCard({
       {...listeners}
       onClick={() => onOpen(card.id)}
     >
-      <CardFace card={card} labels={labels} />
+      <CardFace card={card} labels={labels} onToggle={onToggle} />
     </li>
   )
 }
@@ -69,6 +71,7 @@ interface Props {
   cards: CardSummary[]
   labels: Map<number, Label>
   onOpenCard: (id: number) => void
+  onToggleCard: (card: CardSummary) => void
   onAddCard: (listId: number, title: string) => void
   onRename: (listId: number, name: string) => void
   onToggleDone: (listId: number, isDone: boolean) => void
@@ -80,6 +83,7 @@ export default function KanbanList({
   cards,
   labels,
   onOpenCard,
+  onToggleCard,
   onAddCard,
   onRename,
   onToggleDone,
@@ -174,7 +178,7 @@ export default function KanbanList({
       <SortableContext items={cards.map((c) => cardKey(c.id))} strategy={verticalListSortingStrategy}>
         <ul className="flex min-h-2 flex-col gap-2 overflow-y-auto px-2 pb-2">
           {cards.map((c) => (
-            <SortableCard key={c.id} card={c} labels={labels} onOpen={onOpenCard} />
+            <SortableCard key={c.id} card={c} labels={labels} onOpen={onOpenCard} onToggle={onToggleCard} />
           ))}
         </ul>
       </SortableContext>

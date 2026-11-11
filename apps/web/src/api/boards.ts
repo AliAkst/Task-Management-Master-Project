@@ -76,6 +76,41 @@ export function applyCardMove(
   return { ...data, cards: data.cards.map((c) => (c.id === id ? moved : c)) }
 }
 
+/**
+ * Kart yuzundeki tamamla/geri al dairesi icin iyimser guncelleme (sunucudaki `_apply_status` taklidi).
+ * Tamamlanir: board'da done listesi varsa kart oraya (sona) gider. Acilir: done listesindeyse ilk normal listeye (sona).
+ */
+export function applyCardToggle(data: BoardDetail, id: number, done: boolean): BoardDetail {
+  const card = data.cards.find((c) => c.id === id)
+  if (!card) return data
+  const moved: CardSummary = { ...card }
+  const endPosition = (listId: number) => {
+    const ps = data.cards.filter((c) => c.list_id === listId && c.id !== id).map((c) => c.position)
+    return ps.length ? Math.max(...ps) + 1 : 1
+  }
+  if (done) {
+    moved.status = 'completed'
+    moved.completed_at = card.completed_at ?? new Date().toISOString()
+    const doneList = data.lists.find((l) => l.is_done_list)
+    if (doneList && doneList.id !== card.list_id) {
+      moved.list_id = doneList.id
+      moved.position = endPosition(doneList.id)
+    }
+  } else {
+    moved.status = 'pending'
+    moved.completed_at = null
+    const current = data.lists.find((l) => l.id === card.list_id)
+    if (current?.is_done_list) {
+      const firstNormal = [...data.lists].sort((a, b) => a.position - b.position).find((l) => !l.is_done_list)
+      if (firstNormal) {
+        moved.list_id = firstNormal.id
+        moved.position = endPosition(firstNormal.id)
+      }
+    }
+  }
+  return { ...data, cards: data.cards.map((c) => (c.id === id ? moved : c)) }
+}
+
 // ---------------- sorgular ----------------
 export function useBoards() {
   return useQuery({ queryKey: keys.boards, queryFn: () => api<BoardWithCounts[]>('/boards') })
@@ -196,6 +231,29 @@ export function useBoardMutations(boardId: number) {
         if (ctx?.prev) qc.setQueryData(keys.board(boardId), ctx.prev)
       },
       onSettled: refresh,
+    }),
+    /**
+     * Kart yuzundeki daire: tamamla / yeniden ac (iyimser). BoardPage'deki sutun-yeniden-kurma
+     * effect korumasina eklenmez: surukleme yokken sutunlarin iyimser board.data'dan kurulmasi
+     * istenen davranis (kart done listesine aninda kayar).
+     */
+    toggleCard: useMutation({
+      mutationKey: ['toggleCard'],
+      mutationFn: ({ id, done }: { id: number; done: boolean }) =>
+        api<CardDetail>(`/cards/${id}`, { method: 'PATCH', ...json({ status: done ? 'completed' : 'pending' }) }),
+      onMutate: async ({ id, done }) => {
+        await qc.cancelQueries({ queryKey: keys.board(boardId), exact: true })
+        const prev = qc.getQueryData<BoardDetail>(keys.board(boardId))
+        if (prev) qc.setQueryData(keys.board(boardId), applyCardToggle(prev, id, done))
+        return { prev }
+      },
+      onError: (_e, _v, ctx) => {
+        if (ctx?.prev) qc.setQueryData(keys.board(boardId), ctx.prev)
+      },
+      onSettled: (_d, _e, { id }) => {
+        refresh()
+        qc.invalidateQueries({ queryKey: keys.card(id) })
+      },
     }),
     /** Grafik gorunumde dugum konumu (gecmise yazilmaz). */
     savePosition: useMutation({

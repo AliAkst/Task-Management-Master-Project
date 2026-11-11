@@ -310,6 +310,7 @@ export default function BoardPage() {
                   cards={cards}
                   labels={labels}
                   onOpenCard={openCard}
+                  onToggleCard={(c) => m.toggleCard.mutate({ id: c.id, done: c.status !== 'completed' })}
                   onAddCard={(list_id, title) => m.createCard.mutate({ list_id, title })}
                   onRename={(id, name) => m.updateList.mutate({ id, name })}
                   onToggleDone={(id, is_done_list) => m.updateList.mutate({ id, is_done_list })}
@@ -352,9 +353,11 @@ export default function BoardPage() {
       </DndContext>
       )}
 
-      {(m.moveCard.error || m.moveList.error || m.deleteList.error || m.createCard.error) && (
+      {(m.moveCard.error || m.moveList.error || m.deleteList.error || m.createCard.error || m.toggleCard.error) && (
         <p className="px-4 pb-2 text-sm text-red-600">
-          {(m.moveCard.error ?? m.moveList.error ?? m.deleteList.error ?? m.createCard.error)?.message}
+          {m.toggleCard.error && !(m.moveCard.error || m.moveList.error || m.deleteList.error || m.createCard.error)
+            ? `Kart güncellenemedi: ${m.toggleCard.error.message}`
+            : (m.moveCard.error ?? m.moveList.error ?? m.deleteList.error ?? m.createCard.error)?.message}
         </p>
       )}
 
