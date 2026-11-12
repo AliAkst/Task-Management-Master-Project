@@ -58,6 +58,8 @@ def fake_task_api(request: httpx.Request) -> httpx.Response:
     def ok(data: Any) -> httpx.Response:
         return httpx.Response(200, json={"success": True, "data": data})
 
+    if path == "/cards/parse-title":
+        return ok({"match": None})
     if path == "/auth/me":
         return ok({"id": 7, "email": "a@example.com", "full_name": "Ali"})
     if path == "/settings/":
@@ -196,6 +198,10 @@ class FakeTaskApi:
         self.calendar_items: list[dict[str, Any]] | None = None
         self.event_patch_status: dict[int, int] = {}
         self._next_id = 500
+        # Faz 10c: POST /cards/parse-title (yalniz okur; writes'a girmez)
+        self.parse_result: dict[str, Any] | None = None
+        self.parse_calls: list[dict[str, Any]] = []
+        self.parse_status: int | None = None
 
     def _new_id(self) -> int:
         self._next_id += 1
@@ -267,6 +273,16 @@ class FakeTaskApi:
             return res
 
         body = json.loads(request.content or b"null")
+        if method == "POST" and path == "/cards/parse-title":
+            self.parse_calls.append(
+                {"text": body["text"], "actor": request.headers.get("X-Actor")}
+            )
+            if self.parse_status:
+                return httpx.Response(
+                    self.parse_status,
+                    json={"success": False, "error": {"message": "x"}},
+                )
+            return ok({"match": self.parse_result})
         self.writes.append(
             {
                 "method": method,

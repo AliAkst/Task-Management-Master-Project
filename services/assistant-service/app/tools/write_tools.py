@@ -83,6 +83,10 @@ ACTION_TYPES: dict[str, str] = {
 PRIORITIES = ("low", "medium", "high")
 STATUSES = ("pending", "in_progress", "completed")
 _DAY = {"type": "string", "description": "YYYY-MM-DD"}
+_DUE = {
+    "type": "string",
+    "description": "YYYY-MM-DD ya da saatliyse YYYY-MM-DDTHH:MM",
+}
 _DT = {
     "type": "string",
     "description": "ISO 8601, kullanıcının saat dilimi ofsetiyle (örn. 2026-11-09T18:00:00+03:00)",
@@ -91,7 +95,7 @@ _DT = {
 WRITE_SPECS: list[ToolSpec] = [
     ToolSpec(
         "create_card",
-        "Yeni kart oluşturur (yalnız kullanıcı YENİ bir iş söylediğinde; var olan kart için schedule_card / reschedule_card / move_card / update_card). Board id'si gerekir (list_boards). Liste verilmezse board'un ilk listesine eklenir. parent_id verilirse alt kart olur. labels (etiket adları) ve checklist (madde metinleri, en fazla 20) ile birlikte oluşturulabilir. Aynı adlı açık kart varsa hata verir; gerçekten yeni kart isteniyorsa force_new=true.",
+        "Yeni kart oluşturur (yalnız kullanıcı YENİ bir iş söylediğinde; var olan kart için schedule_card / reschedule_card / move_card / update_card). Board id'si gerekir (list_boards). Liste verilmezse board'un ilk listesine eklenir. parent_id verilirse alt kart olur. labels (etiket adları) ve checklist (madde metinleri, en fazla 20) ile birlikte oluşturulabilir. Aynı adlı açık kart varsa hata verir; gerçekten yeni kart isteniyorsa force_new=true. Başlıkta 'yarın 15'te', '2 saat' gibi ifade kalırsa kod ayıklayıp son tarih/süreye çevirir.",
         {
             "type": "object",
             "properties": {
@@ -99,7 +103,7 @@ WRITE_SPECS: list[ToolSpec] = [
                 "title": {"type": "string"},
                 "description": {"type": "string"},
                 "list_name": {"type": "string"},
-                "due_date": _DAY,
+                "due_date": _DUE,
                 "estimated_minutes": {"type": "integer"},
                 "priority": {"type": "string", "enum": list(PRIORITIES)},
                 "parent_id": {"type": "integer"},
@@ -122,7 +126,7 @@ WRITE_SPECS: list[ToolSpec] = [
                 },
                 "title": {"type": "string"},
                 "description": {"type": "string"},
-                "due_date": _DAY,
+                "due_date": _DUE,
                 "estimated_minutes": {"type": "integer"},
                 "priority": {"type": "string", "enum": list(PRIORITIES)},
                 "status": {"type": "string", "enum": list(STATUSES)},
@@ -261,9 +265,32 @@ def _parse_day(value: Any, field: str) -> date:
 
 
 def _due_iso(value: Any, tz: ZoneInfo) -> str:
-    """Son tarih: o gunun yerel 23:59'u (kanban'daki tarih secici ile ayni mantik)."""
-    d = _parse_day(value, "due_date")
-    return datetime.combine(d, time(23, 59), tzinfo=tz).isoformat()
+    """Son tarih: YYYY-MM-DD -> o gunun yerel 23:59'u (kanban'daki tarih secici ile
+    ayni mantik); YYYY-MM-DDTHH:MM -> saatli (naive ise kullanici dilimi)."""
+    if len(str(value)) <= 10:
+        try:
+            d = date.fromisoformat(str(value))
+        except ValueError as e:
+            raise ValueError(
+                f"due_date YYYY-MM-DD ya da YYYY-MM-DDTHH:MM olmalı (gelen: {value})"
+            ) from e
+        return datetime.combine(d, time(23, 59), tzinfo=tz).isoformat()
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except ValueError as e:
+        raise ValueError(
+            f"due_date YYYY-MM-DD ya da YYYY-MM-DDTHH:MM olmalı (gelen: {value})"
+        ) from e
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=tz)
+    return dt.replace(second=0, microsecond=0).isoformat()
+
+
+def _due_label(iso: str, tz: ZoneInfo) -> str:
+    d = datetime.fromisoformat(iso).astimezone(tz)
+    if (d.hour, d.minute) == (23, 59):
+        return _fmt_day(d.date())
+    return _fmt_dt(d)
 
 
 def _parse_dt(value: Any, field: str, tz: ZoneInfo) -> datetime:
@@ -392,6 +419,17 @@ class WriteTools:
             raise ValueError(f"Bilinmeyen araç: {name}")
         return await handler(**args)
 
+    async def _parse_title(self, title: str) -> dict[str, Any] | None:
+        """task-api parse-title (yalniz okur). Hata/eski surum -> None: kart yine acilir."""
+        text = title.strip()
+        if len(text) < 3:
+            return None
+        try:
+            res = await self.api.post_read("/cards/parse-title", {"text": text[:200]})
+        except TaskApiError:
+            return None
+        return (res or {}).get("match")
+
     async def _prepare_create_card(
         self,
         board_id: Any,
@@ -408,6 +446,27 @@ class WriteTools:
     ) -> PreparedAction:
         if not str(title).strip():
             raise ValueError("Başlık boş olamaz")
+        # Faz 10c (K12): basliktaki zaman ifadesi; model baska gun verdiyse model kazanir
+        model_due = _due_iso(due_date, self.tz) if due_date else None
+        due_final = model_due
+        due_from_title = est_from_title = False
+        m = await self._parse_title(str(title))
+        if m:
+            m_due = m.get("due_date")
+            same_day = (
+                not model_due
+                or not m_due
+                or datetime.fromisoformat(model_due).astimezone(self.tz).date()
+                == datetime.fromisoformat(m_due).astimezone(self.tz).date()
+            )
+            if same_day:
+                title = m.get("clean_title") or title
+                model_has_time = bool(due_date) and len(str(due_date)) > 10
+                if m_due and not model_has_time:
+                    due_final, due_from_title = m_due, True
+                if estimated_minutes is None and m.get("estimated_minutes"):
+                    estimated_minutes = m["estimated_minutes"]
+                    est_from_title = True
         # Alt kart (parent_id) ayni adi baska kartin altinda tasiyabilir: koruma yalniz ust duzey kartlar icin
         if not force_new and parent_id is None:
             dupe = await find_exact_open(self.api, self.privacy, str(title))
@@ -424,12 +483,18 @@ class WriteTools:
         extra = []
         if description:
             body["description"] = description
-        if due_date:
-            body["due_date"] = _due_iso(due_date, self.tz)
-            extra.append(f"son tarih {_fmt_day(_parse_day(due_date, 'due_date'))}")
+        if due_final:
+            body["due_date"] = due_final
+            extra.append(
+                f"son tarih {_due_label(due_final, self.tz)}"
+                + (" (başlıktan)" if due_from_title else "")
+            )
         if estimated_minutes is not None:
             body["estimated_minutes"] = _int(estimated_minutes, "estimated_minutes")
-            extra.append(f"⏱ {body['estimated_minutes']} dk")
+            extra.append(
+                f"⏱ {body['estimated_minutes']} dk"
+                + (" (başlıktan)" if est_from_title else "")
+            )
         if priority:
             if priority not in PRIORITIES:
                 raise ValueError(
@@ -604,7 +669,7 @@ class WriteTools:
             changes.append("açıklama güncellenir")
         if due_date:
             patch["due_date"] = _due_iso(due_date, self.tz)
-            changes.append(f"son tarih → {_fmt_day(_parse_day(due_date, 'due_date'))}")
+            changes.append(f"son tarih → {_due_label(patch['due_date'], self.tz)}")
         if estimated_minutes is not None:
             patch["estimated_minutes"] = _int(estimated_minutes, "estimated_minutes")
             changes.append(f"tahmin → {patch['estimated_minutes']} dk")

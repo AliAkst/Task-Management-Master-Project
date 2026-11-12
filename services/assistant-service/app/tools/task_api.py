@@ -37,6 +37,10 @@ class TaskApiClient:
         """Yazma istegi. `X-Actor: ai`: task-api kaydi 'AI yapti' diye isaretler."""
         return await self._send(method, path, json=body, headers={"X-Actor": "ai"})
 
+    async def post_read(self, path: str, body: Any) -> Any:
+        """Yalnız okuyan POST (ör. parse-title): X-Actor yok, yazma sayılmaz."""
+        return await self._send("POST", path, json=body)
+
     async def _send(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
             res = await self.client.request(method, path, **kwargs)
