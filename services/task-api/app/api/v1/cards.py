@@ -1,8 +1,11 @@
 """Kart, not ve checklist endpoint'leri."""
 
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Response, status
 
-from app.api.dependencies import CardServiceDep, CurrentUserDep
+from app.api.dependencies import CardServiceDep, CurrentUserDep, UnitOfWorkDep
 from app.models.card import (
     ActivityResponse,
     BoardGraph,
@@ -19,8 +22,13 @@ from app.models.card import (
     NoteCreate,
     NoteResponse,
     NoteUpdate,
+    TitleParseRequest,
+    TitleParseResponse,
+    WhenMatchOut,
 )
 from app.models.common import ApiResponse
+from app.services.nl_when import parse_when
+from app.services.timeutil import DEFAULT_TZ
 
 cards_router = APIRouter(tags=["Cards"])
 
@@ -34,6 +42,35 @@ cards_router = APIRouter(tags=["Cards"])
 async def create_card(data: CardCreate, service: CardServiceDep, user: CurrentUserDep):
     """Karti verilen listenin sonuna ekler."""
     return ApiResponse(success=True, data=await service.create(user.id, data))
+
+
+@cards_router.post(
+    "/cards/parse-title",
+    response_model=ApiResponse[TitleParseResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def parse_card_title(
+    data: TitleParseRequest, uow: UnitOfWorkDep, user: CurrentUserDep
+):
+    """Basliktaki Turkce tarih/saat/sure ifadesini ayiklar (yalniz okur, yazmaz)."""
+    s = await uow.user_settings.get_by_user_id(user.id)
+    tz = ZoneInfo(s.timezone if s else DEFAULT_TZ)
+    ws = s.week_start if s else 0
+    m = parse_when(data.text, data.now or datetime.now(UTC), tz, ws)
+    out = (
+        WhenMatchOut(
+            spans=[[a, b] for a, b in m.spans],
+            phrase=m.phrase,
+            due_date=m.due_date,
+            has_time=m.has_time,
+            estimated_minutes=m.estimated_minutes,
+            label=m.label,
+            clean_title=m.clean_title,
+        )
+        if m
+        else None
+    )
+    return ApiResponse(success=True, data=TitleParseResponse(match=out))
 
 
 @cards_router.get("/cards/{card_id}", response_model=ApiResponse[CardDetail])
