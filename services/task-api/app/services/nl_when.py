@@ -115,8 +115,13 @@ _R_DUR1 = _c(
     r"(\d{1,3}(?:[.,]\d{1,2})?|@NUM@ bucuk|\d{1,2} bucuk|@NUM@|yarim|ceyrek)"
     r" ?(saatlik|saat|sa\.?|dakikalik|dakika|dk\.?|dak\.?)"
 )
-_R_MON = _c(r"(\d{1,2})@SUFNUMDAY@ (@AY@)@SUFMON@(?: (\d{4}))?")
-_R_NUMDATE = _c(r"(\d{1,2})[./](\d{2})(?:[./](\d{4}|\d{2}))?(?! ?(?:saat|sa|dakika|dk))")
+_R_MON = _c(
+    r"(\d{1,2})@SUFNUMDAY@ (@AY@)@SUFMON@(?: (\d{4})@SUFMON@)?"
+)
+_R_NUMDATE = _c(
+    r"(\d{1,2})[./](\d{2})(?:[./](\d{4}|\d{2}))?(@SUFTIME@)?"
+    r"(?! ?(?:saat|sa|dakika|dk))"
+)
 _R_AYIN = _c(r"ayin (\d{1,2})(?:'?(?:si|i|u|unda|inde|sinde|ine|sine|ne))?")
 _R_NEXTWEEK_DAY = _c(
     r"(?:haftaya|gelecek hafta(?:nin)?|onumuzdeki hafta(?:nin)?|sonraki hafta(?:nin)?)"
@@ -262,9 +267,10 @@ def _scan(f: str, today: date, ws: int) -> list[Piece]:  # noqa: C901
             continue
         s_min = sh[0] * 60 + sh[1]
         e_min = eh_raw * 60 + (int(em_raw) if em_raw else 0)
-        if e_min <= s_min and eh_raw < 12:
+        if e_min <= s_min and eh_raw < 12 and not em_raw:
             e_min += 12 * 60
         if e_min <= s_min:
+            taken.append((m.start(), m.end()))  # gecersiz aralik: parcalari tek saat sayma
             continue
         add("range", m, (sh, e_min - s_min))
 
@@ -322,6 +328,9 @@ def _scan(f: str, today: date, ws: int) -> list[Piece]:  # noqa: C901
         if not free(m):
             continue
         dd, mon = int(m.group(1)), int(m.group(2))
+        suf = (m.group(4) or "").lstrip("'")
+        if suf and not m.group(3) and (suf.startswith("t") or dd >= 7):
+            continue  # "10.05'te" saat yazimi: T-DOT alsin
         if m.group(3):
             y = int(m.group(3))
             d = _safe_date(y + 2000 if y < 100 else y, mon, dd)

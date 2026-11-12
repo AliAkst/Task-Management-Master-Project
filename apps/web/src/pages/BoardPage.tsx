@@ -90,7 +90,8 @@ export default function BoardPage() {
   const m = useBoardMutations(boardId)
   const { createCard, updateList, deleteList, toggleCard } = m
   const createCardMutate = createCard.mutate
-  const createEvent = useCalendarMutations().create.mutate
+  const createEventM = useCalendarMutations().create
+  const createEvent = createEventM.mutate
   const updateListMutate = updateList.mutate
   const deleteListMutate = deleteList.mutate
   const toggleCardMutate = toggleCard.mutate
@@ -409,6 +410,12 @@ export default function BoardPage() {
           {m.toggleCard.error && !(m.moveCard.error || m.moveList.error || m.deleteList.error || m.createCard.error)
             ? `Kart güncellenemedi: ${m.toggleCard.error.message}`
             : (m.moveCard.error ?? m.moveList.error ?? m.deleteList.error ?? m.createCard.error)?.message}
+        </p>
+      )}
+
+      {createEventM.error && (
+        <p className="px-4 pb-2 text-sm text-red-600">
+          Takvim bloğu oluşturulamadı: {createEventM.error.message}
         </p>
       )}
 

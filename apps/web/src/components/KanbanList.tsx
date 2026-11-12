@@ -131,7 +131,9 @@ function KanbanList({
     e.preventDefault()
     if (!title.trim()) return
     const data = applyWhen(title, match, ready, dismissed)
-    onAddCard(list.id, data, schedule && 'due_date' in data && !!data.estimated_minutes)
+    // Kutu yalniz rozet gorunurken (saat + sure) vardir; gizliyken kalan durum sayilmaz
+    const showBox = !!match && ready && match.phrase !== dismissed && match.has_time
+    onAddCard(list.id, data, schedule && showBox && 'due_date' in data && !!data.estimated_minutes)
     setTitle('')
     setDismissed(null)
     setSchedule(false)

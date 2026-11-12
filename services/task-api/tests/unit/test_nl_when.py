@@ -176,3 +176,39 @@ def test_timezone_utc_vs_istanbul():
     assert m.due_date == datetime(2026, 11, 13, 23, 59, tzinfo=ZoneInfo("UTC"))
     m = parse_when("Rapor yarın", now, TZ, 0)
     assert m.due_date == L(2026, 11, 14)
+
+
+# Faz 10 denetim duzeltmesi (D1, D4)
+D1_D4 = [
+    ("D1a", "Ders 10.05'te", L(2026, 11, 12, 10, 5), True, None, "Ders"),
+    ("D1b", "Ders 10.10'da", L(2026, 11, 12, 10, 10), True, None, "Ders"),
+    ("D1c", "Görüşme 1.12'de", L(2026, 12, 1), False, None, "Görüşme"),
+    ("D1d", "Ödev 3.10'a kadar", L(2026, 10, 3).replace(year=2027), False, None, "Ödev"),
+    ("D1e", "Proje 10 Kasım 2026'da", L(2026, 11, 10), False, None, "Proje"),
+    ("D4c", "ders 11-2 arası", L(2026, 11, 12, 11, 0), True, 180, "ders"),
+]
+
+
+@pytest.mark.parametrize("text", ["toplantı 10:30-09:00", "toplantı 18:00-18:00"])
+def test_audit_invalid_range_not_split(text):
+    assert parse_when(text, NOW, TZ, 0) is None
+
+
+@pytest.mark.parametrize(
+    "pid,text,due,has_time,minutes,clean", D1_D4, ids=[p[0] for p in D1_D4]
+)
+def test_audit_fixes(pid, text, due, has_time, minutes, clean):
+    m = parse_when(text, NOW, TZ, 0)
+    assert m is not None, text
+    assert m.due_date == due
+    assert m.has_time is has_time
+    assert m.estimated_minutes == minutes
+    assert m.clean_title == clean
+
+
+def test_known_false_positive_oda_12de():
+    """K10'da bilerek kabul edilen yanlis pozitif (belge amacli, davranis kilidi)."""
+    m = parse_when("Oda 12'de toplantı", NOW, TZ, 0)
+    assert m is not None
+    assert m.due_date == L(2026, 11, 12, 12, 0)
+    assert m.clean_title == "Oda toplantı"
