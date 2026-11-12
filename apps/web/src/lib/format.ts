@@ -34,11 +34,40 @@ export function toDateInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-/** <input type="date"> degerini o gunun yerel 23:59'una cevirir (son tarih mantigi). */
-export function fromDateInput(value: string): string | null {
+/** Son tarih saatsizse yerel 23:59 tutulur; baska her saat 'saatli' sayilir (00-genel K2). */
+export function hasDueTime(iso: string | null | undefined): boolean {
+  if (!iso) return false
+  const d = new Date(iso)
+  return !(d.getHours() === 23 && d.getMinutes() === 59)
+}
+
+/** Saatliyse gun+saat, degilse yalniz gun. */
+export const formatDue = (iso: string) => (hasDueTime(iso) ? formatDateTime(iso) : formatShortDate(iso))
+
+/** <input type="time"> degeri (HH:MM, yerel); saatsizse bos. */
+export function toTimeInput(iso: string | null | undefined): string {
+  if (!iso || !hasDueTime(iso)) return ''
+  const d = new Date(iso)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/**
+ * <input type="date"> degerini yerel ISO'ya cevirir. Saat: keepTimeFrom saatliyse onun
+ * saati/dakikasi korunur, degilse 23:59 (son tarih mantigi).
+ */
+export function fromDateInput(value: string, keepTimeFrom?: string | null): string | null {
   if (!value) return null
   const [y, m, d] = value.split('-').map(Number)
-  return new Date(y, m - 1, d, 23, 59).toISOString()
+  const keep = keepTimeFrom && hasDueTime(keepTimeFrom) ? new Date(keepTimeFrom) : null
+  return new Date(y, m - 1, d, keep ? keep.getHours() : 23, keep ? keep.getMinutes() : 59).toISOString()
+}
+
+/** iso'nun yerel gunu + hhmm; bos string -> 23:59 (saatsiz). */
+export function withDueTime(iso: string, hhmm: string): string {
+  const d = new Date(iso)
+  const [h, mi] = /^\d{2}:\d{2}$/.test(hhmm) ? hhmm.split(':').map(Number) : [23, 59]
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, mi).toISOString()
 }
 
 export const ACTION_LABEL: Record<string, string> = {

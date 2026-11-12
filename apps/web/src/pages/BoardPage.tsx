@@ -23,7 +23,8 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
-import { useBoard, useBoardMutations, useDeleteBoard, useUpdateBoard } from '../api/boards'
+import { useBoard, useBoardMutations, useDeleteBoard, useUpdateBoard, type NewCardInput } from '../api/boards'
+import { useCalendarMutations } from '../api/calendar'
 import BoardForm, { COLORS } from '../components/BoardForm'
 import CardFace from '../components/CardFace'
 import CardModal from '../components/CardModal'
@@ -89,6 +90,7 @@ export default function BoardPage() {
   const m = useBoardMutations(boardId)
   const { createCard, updateList, deleteList, toggleCard } = m
   const createCardMutate = createCard.mutate
+  const createEvent = useCalendarMutations().create.mutate
   const updateListMutate = updateList.mutate
   const deleteListMutate = deleteList.mutate
   const toggleCardMutate = toggleCard.mutate
@@ -97,8 +99,22 @@ export default function BoardPage() {
     [toggleCardMutate],
   )
   const onAddCard = useCallback(
-    (list_id: number, title: string) => createCardMutate({ list_id, title }),
-    [createCardMutate],
+    (list_id: number, data: NewCardInput, schedule: boolean) =>
+      createCardMutate(
+        { list_id, ...data },
+        {
+          onSuccess: (card) => {
+            if (schedule && data.due_date && data.estimated_minutes)
+              createEvent({
+                card_id: card.id,
+                start_at: data.due_date,
+                end_at: new Date(new Date(data.due_date).getTime() + data.estimated_minutes * 60_000).toISOString(),
+                all_day: false,
+              })
+          },
+        },
+      ),
+    [createCardMutate, createEvent],
   )
   const onRename = useCallback((id: number, name: string) => updateListMutate({ id, name }), [updateListMutate])
   const onToggleDone = useCallback(

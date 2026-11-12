@@ -17,7 +17,7 @@ import { memo, type ReactNode } from 'react'
 import { describeRule } from '../lib/rrule'
 import type { CardSummary, Label } from '../lib/types'
 import { useActiveSession } from '../api/sessions'
-import { formatDuration, formatShortDate, isOverdue, PRIORITY_LABEL } from '../lib/format'
+import { formatDuration, formatDue, isOverdue, PRIORITY_LABEL } from '../lib/format'
 
 interface Props {
   card: CardSummary
@@ -107,7 +107,7 @@ function CardFaceBase({ card, labels, dragging, tracking = false, onToggle }: Pr
         {done && <Meta icon={Check} className="text-green-700">Tamamlandı</Meta>}
         {card.due_date && (
           <Meta icon={CalendarDays} className={overdue ? 'font-semibold text-red-700' : ''} title={overdue ? 'Son tarih geçti' : 'Son tarih'}>
-            {formatShortDate(card.due_date)}
+            {formatDue(card.due_date)}
           </Meta>
         )}
         {tracking ? (

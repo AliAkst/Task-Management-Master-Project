@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type MouseEvent } from 'react'
 import { Check, Circle, CornerLeftUp, ExternalLink, Hourglass, X } from 'lucide-react'
 import { useUploads } from '../api/attachments'
-import { useCard, useCardActivity, useCardMutations } from '../api/boards'
+import { useCard, useCardActivity, useCardMutations, useParseTitle } from '../api/boards'
+import { applyWhen } from '../lib/when'
+import WhenBadge from './WhenBadge'
 import {
   ACTION_LABEL,
   formatDateTime,
   fromDateInput,
   PRIORITY_LABEL,
   toDateInput,
+  toTimeInput,
+  withDueTime,
 } from '../lib/format'
 import type { BoardDetail, TaskPriority } from '../lib/types'
 import AttachmentsSection from './AttachmentsSection'
@@ -47,6 +51,36 @@ function StatusMark({ status, blocked }: { status: string; blocked?: boolean }) 
   return <Circle size={14} className="shrink-0 text-slate-400" aria-label="Açık" />
 }
 
+/**
+ * Son tarih saati: native time input segment segment degistigi icin yerel durumda tutulur,
+ * blur/Enter'da kaydedilir (bos = saatsiz 23:59).
+ */
+function DueTimeInput({ dueDate, onCommit }: { dueDate: string | null | undefined; onCommit: (hhmm: string) => void }) {
+  const server = toTimeInput(dueDate)
+  const [val, setVal] = useState(server)
+  useEffect(() => setVal(server), [server])
+  const commit = () => {
+    if (val !== server && (val === '' || /^\d{2}:\d{2}$/.test(val))) onCommit(val)
+  }
+  return (
+    <input
+      type="time"
+      aria-label="Son tarih saati"
+      className={`${input} w-28`}
+      disabled={!dueDate}
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit()
+        }
+      }}
+    />
+  )
+}
+
 export default function CardModal({ cardId, board, onClose, onOpenCard }: Props) {
   const card = useCard(cardId)
   const activity = useCardActivity(cardId)
@@ -73,6 +107,8 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   })
   const [showHistory, setShowHistory] = useState(false)
   const [subtask, setSubtask] = useState('')
+  const [subDismissed, setSubDismissed] = useState<string | null>(null)
+  const sub = useParseTitle(subtask)
   const [splitOpen, setSplitOpen] = useState(false)
   const [splitParts, setSplitParts] = useState('3')
   const [splitHours, setSplitHours] = useState('')
@@ -167,7 +203,13 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   }
   const addSubtask = (e: FormEvent) => {
     e.preventDefault()
-    if (subtask.trim()) m.addSubtask.mutate(subtask.trim(), { onSuccess: () => setSubtask('') })
+    if (subtask.trim())
+      m.addSubtask.mutate(applyWhen(subtask, sub.match, sub.ready, subDismissed), {
+        onSuccess: () => {
+          setSubtask('')
+          setSubDismissed(null)
+        },
+      })
   }
   const submitSplit = (e: FormEvent) => {
     e.preventDefault()
@@ -373,6 +415,11 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
             </ul>
             <form onSubmit={addSubtask} className="mt-2">
               <input className={input} placeholder="Alt kart ekle ve Enter'a bas" maxLength={200} value={subtask} onChange={(e) => setSubtask(e.target.value)} />
+              {sub.match && sub.match.phrase !== subDismissed && (
+                <div className="mt-1">
+                  <WhenBadge match={sub.match} onDismiss={() => setSubDismissed(sub.match!.phrase)} />
+                </div>
+              )}
             </form>
           </div>
 
@@ -470,7 +517,13 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
             </label>
             <label className="space-y-1">
               <span className={fieldLabel}>Son tarih</span>
-              <input type="date" className={input} value={toDateInput(c.due_date)} onChange={(e) => m.update.mutate({ due_date: fromDateInput(e.target.value) })} />
+              <div className="flex gap-2">
+                <input type="date" className={`${input} flex-1`} value={toDateInput(c.due_date)} onChange={(e) => m.update.mutate({ due_date: fromDateInput(e.target.value, c.due_date) })} />
+                <DueTimeInput
+                  dueDate={c.due_date}
+                  onCommit={(hhmm) => c.due_date && m.update.mutate({ due_date: withDueTime(c.due_date, hhmm) })}
+                />
+              </div>
             </label>
             <label className="space-y-1">
               <span className={fieldLabel}>Tahmini süre (dakika)</span>

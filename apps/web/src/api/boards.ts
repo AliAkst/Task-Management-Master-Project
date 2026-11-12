@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type {
   Activity,
@@ -17,6 +18,7 @@ import type {
   ChecklistItem,
   Label,
   Note,
+  TitleParse,
 } from '../lib/types'
 
 export const keys = {
@@ -28,6 +30,35 @@ export const keys = {
 }
 
 const json = (body: unknown) => ({ body: JSON.stringify(body) })
+
+/** Kart olusturma verisi (baslik + baslikta algilanan opsiyonel alanlar). */
+export type NewCardInput = { title: string; due_date?: string | null; estimated_minutes?: number | null }
+
+/**
+ * Basliktaki Turkce zaman ifadesini onizler (250 ms debounce). `ready` = sonuc tam su anki
+ * metne ait; degilse gonderimde ayristirma kullanilmaz (00-genel K13).
+ */
+export function useParseTitle(text: string) {
+  const q = text.trim()
+  const [debounced, setDebounced] = useState(q)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q), 250)
+    return () => clearTimeout(t)
+  }, [q])
+  const query = useQuery({
+    queryKey: ['parse-title', debounced],
+    queryFn: () => api<TitleParse>('/cards/parse-title', { method: 'POST', ...json({ text: debounced }) }),
+    enabled: debounced.length >= 3,
+    staleTime: Infinity,
+    gcTime: 60_000,
+    retry: false,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    match: q.length >= 3 ? (query.data?.match ?? null) : null,
+    ready: debounced === q && !query.isPlaceholderData && query.isSuccess,
+  }
+}
 
 // ---------------- iyimser tasima yardimcilari (Faz 8e) ----------------
 /** Listeyi `index` sirasina tasir (sunucudaki move_list ile ayni anlam). */
@@ -346,8 +377,8 @@ export function useCardMutations(cardId: number, boardId: number) {
       onSuccess: refresh,
     }),
     addSubtask: useMutation({
-      mutationFn: (title: string) =>
-        api<CardDetail>('/cards', { method: 'POST', ...json({ parent_id: cardId, title }) }),
+      mutationFn: (data: NewCardInput) =>
+        api<CardDetail>('/cards', { method: 'POST', ...json({ parent_id: cardId, ...data }) }),
       onSuccess: refresh,
     }),
     split: useMutation({

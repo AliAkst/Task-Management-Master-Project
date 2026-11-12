@@ -320,6 +320,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cards/parse-title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse Card Title
+         * @description Basliktaki Turkce tarih/saat/sure ifadesini ayiklar (yalniz okur, yazmaz).
+         */
+        post: operations["parse_card_title_api_v1_cards_parse_title_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cards/{card_id}": {
         parameters: {
             query?: never;
@@ -1701,6 +1721,18 @@ export interface components {
             /** Success */
             success: boolean;
             data?: components["schemas"]["TaskResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[TitleParseResponse] */
+        ApiResponse_TitleParseResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["TitleParseResponse"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -3375,6 +3407,17 @@ export interface components {
             /** Due Date */
             due_date?: string | null;
         };
+        /** TitleParseRequest */
+        TitleParseRequest: {
+            /** Text */
+            text: string;
+            /** Now */
+            now?: string | null;
+        };
+        /** TitleParseResponse */
+        TitleParseResponse: {
+            match?: components["schemas"]["WhenMatchOut"] | null;
+        };
         /** TodoListInfo */
         TodoListInfo: {
             /** Id */
@@ -3617,6 +3660,23 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WhenMatchOut */
+        WhenMatchOut: {
+            /** Spans */
+            spans: number[][];
+            /** Phrase */
+            phrase: string;
+            /** Due Date */
+            due_date?: string | null;
+            /** Has Time */
+            has_time: boolean;
+            /** Estimated Minutes */
+            estimated_minutes?: number | null;
+            /** Label */
+            label: string;
+            /** Clean Title */
+            clean_title: string;
         };
     };
     responses: never;
@@ -4376,6 +4436,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_CardDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_card_title_api_v1_cards_parse_title_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TitleParseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_TitleParseResponse_"];
                 };
             };
             /** @description Validation Error */
