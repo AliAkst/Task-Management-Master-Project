@@ -220,6 +220,120 @@ class TestCards:
         assert reopened["status"] == "in_progress"
         assert reopened["completed_at"] is None
 
+    async def _complete_in_plain_board(self, client, auth_headers):
+        """Tamamlandi listesi olmayan board'da A'daki karti tamamlar."""
+        detail = await create_board(client, auth_headers, lists=["A", "B"])
+        a, b = detail["lists"]
+        assert not a["is_done_list"] and not b["is_done_list"]
+        card = await create_card(client, auth_headers, a["id"], "Rapor")
+        res = await client.patch(
+            f"{API}/cards/{card['id']}",
+            json={"status": "completed"},
+            headers=auth_headers,
+        )
+        done_card = res.json()["data"]
+        assert done_card["status"] == "completed"
+        return detail, a, b, done_card
+
+    async def test_completed_card_stays_completed_when_moved_between_normal_lists(
+        self, client, auth_headers
+    ):
+        _, a, b, card = await self._complete_in_plain_board(client, auth_headers)
+        res = await client.post(
+            f"{API}/cards/{card['id']}/move",
+            json={"list_id": b["id"], "index": 0},
+            headers=auth_headers,
+        )
+        moved = res.json()["data"]
+        assert moved["list_id"] == b["id"]
+        assert moved["status"] == "completed"
+        assert moved["completed_at"] == card["completed_at"]
+
+    async def test_completed_card_reorder_in_same_list_keeps_status(
+        self, client, auth_headers
+    ):
+        _, a, _, card = await self._complete_in_plain_board(client, auth_headers)
+        await create_card(client, auth_headers, a["id"], "Diğer")
+        res = await client.post(
+            f"{API}/cards/{card['id']}/move",
+            json={"list_id": a["id"], "index": 1},
+            headers=auth_headers,
+        )
+        assert res.json()["data"]["status"] == "completed"
+
+    async def test_completed_card_moved_to_other_board_stays_completed(
+        self, client, auth_headers
+    ):
+        _, _, _, card = await self._complete_in_plain_board(client, auth_headers)
+        other = await create_board(client, auth_headers, name="Diğer", lists=["X", "Y"])
+        res = await client.post(
+            f"{API}/cards/{card['id']}/move",
+            json={"list_id": other["lists"][0]["id"], "index": 0},
+            headers=auth_headers,
+        )
+        moved = res.json()["data"]
+        assert moved["board_id"] == other["board"]["id"]
+        assert moved["status"] == "completed"
+        assert moved["completed_at"] is not None
+
+    async def test_move_between_normal_lists_logs_moved_not_reopened(
+        self, client, auth_headers
+    ):
+        _, a, b, card = await self._complete_in_plain_board(client, auth_headers)
+        await client.post(
+            f"{API}/cards/{card['id']}/move",
+            json={"list_id": b["id"], "index": 0},
+            headers=auth_headers,
+        )
+        res = await client.get(
+            f"{API}/cards/{card['id']}/activity", headers=auth_headers
+        )
+        actions = [x["action"] for x in res.json()["data"]]
+        assert actions[0] == "moved"
+        assert "reopened" not in actions
+
+    async def test_card_in_done_list_moved_to_normal_reopens(
+        self, client, auth_headers
+    ):
+        detail = await create_board(client, auth_headers)
+        todo, doing, done = detail["lists"]
+        card = await create_card(client, auth_headers, todo["id"], "Koşu")
+        await client.post(
+            f"{API}/cards/{card['id']}/move",
+            json={"list_id": done["id"], "index": 0},
+            headers=auth_headers,
+        )
+        res = await client.post(
+            f"{API}/cards/{card['id']}/move",
+            json={"list_id": doing["id"], "index": 0},
+            headers=auth_headers,
+        )
+        reopened = res.json()["data"]
+        assert reopened["status"] == "pending"
+        assert reopened["completed_at"] is None
+        acts = (
+            await client.get(f"{API}/cards/{card['id']}/activity", headers=auth_headers)
+        ).json()["data"]
+        assert acts[0]["action"] == "reopened"
+
+    async def test_open_card_moved_between_normal_lists_keeps_in_progress(
+        self, client, auth_headers
+    ):
+        detail = await create_board(client, auth_headers, lists=["A", "B"])
+        a, b = detail["lists"]
+        card = await create_card(client, auth_headers, a["id"], "Yap")
+        await client.patch(
+            f"{API}/cards/{card['id']}",
+            json={"status": "in_progress"},
+            headers=auth_headers,
+        )
+        res = await client.post(
+            f"{API}/cards/{card['id']}/move",
+            json={"list_id": b["id"], "index": 0},
+            headers=auth_headers,
+        )
+        assert res.json()["data"]["status"] == "in_progress"
+
     async def test_labels_must_belong_to_card_board(self, client, auth_headers):
         b1 = await create_board(client, auth_headers, name="Spor")
         b2 = await create_board(client, auth_headers, name="İş")

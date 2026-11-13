@@ -220,3 +220,25 @@ class ActivityResponse(BaseModel):
     changes: dict[str, Any] | None
     actor: str
     occurred_at: datetime
+
+
+# ---------------- Baslik zaman ifadesi onizlemesi (Faz 10a) ----------------
+class TitleParseRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=200)
+    # Testler ve deterministik onizleme icin; yalniz okuma oldugundan risk yok
+    now: datetime | None = None
+
+
+class WhenMatchOut(BaseModel):
+    spans: list[list[int]]
+    phrase: str
+    due_date: datetime | None = None
+    has_time: bool
+    estimated_minutes: int | None = None
+    label: str
+    clean_title: str
+    strong: bool = True
+
+
+class TitleParseResponse(BaseModel):
+    match: WhenMatchOut | None = None

@@ -83,7 +83,7 @@ async def test_planner_proposes_whole_day_in_one_card(client, fake_api):
                             "end": "18:00",
                             "card": False,
                         },
-                        {"title": "Koşu", "minutes": 45, "board": "Spor"},
+                        {"title": "Yüzme", "minutes": 45, "board": "Spor"},
                     ],
                 )
             ]
@@ -93,7 +93,7 @@ async def test_planner_proposes_whole_day_in_one_card(client, fake_api):
     events = await chat(client, PLAN)
     actions = [d for e, d in events if e == "action"]
     assert len(actions) == 1 and actions[0]["action_type"] == "schedule_day"
-    assert "18:00–18:45 Koşu (kart, Spor)" in actions[0]["summary"]
+    assert "18:00–18:45 Yüzme (YENİ kart, Spor)" in actions[0]["summary"]
     assert actions[0]["status"] == "proposed" and fake_api.writes == []
     reply = "".join(d["text"] for e, d in events if e == "token")
     assert "Onay kartından" in reply

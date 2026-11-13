@@ -158,6 +158,7 @@ function NotificationPermission() {
 
 function DayRhythm() {
   const qc = useQueryClient()
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<UserSettings>('/settings/') })
   const save = useMutation({
     mutationFn: (data: UserSettingsUpdate) => api<UserSettings>('/settings/', { method: 'PUT', body: JSON.stringify(data) }),
@@ -207,6 +208,11 @@ function DayRhythm() {
               options={[{ value: 'on', label: 'Açık' }, { value: 'off', label: 'Kapalı' }]}
             />
           </Row>
+          {browserTz && browserTz !== settings.data.timezone && (
+            <p className="text-xs text-red-600 mt-1">
+              Tarayıcının saat dilimi ({browserTz}) ayardaki dilimden ({settings.data.timezone}) farklı; saatsiz kartlar saatli görünebilir.
+            </p>
+          )}
           <NotificationPermission />
         </div>
       )}

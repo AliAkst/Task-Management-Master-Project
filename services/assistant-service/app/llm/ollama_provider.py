@@ -7,6 +7,7 @@ modelin tam baglam penceresi (orn. 262K) icin bellek ayiriyor. 8 GB VRAM'de bu,
 Native API ile num_ctx=16K -> ayni model 3.6 GB, %100 GPU.
 """
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -55,6 +56,44 @@ def _to_ollama_tools(tools: list[ToolSpec]) -> list[dict[str, Any]]:
     ]
 
 
+_unload_locks: dict[str, asyncio.Lock] = {}
+
+
+async def unload_other_models(
+    base_url: str, keep_model: str, *, transport: httpx.AsyncBaseTransport | None = None
+) -> list[str]:
+    """Bellekte yüklü diğer Ollama modellerini boşaltır (yalnız `keep_model` kalsın).
+
+    Model değişince eski model `keep_alive` süresi boyunca RAM/VRAM'de kalıp yenisiyle
+    yarışmasın diye: /api/ps ile yüklü modelleri bulur, her diğeri için keep_alive=0
+    gönderir. Best-effort: hata çıkarsa sessizce geçer (sohbet engellenmez).
+    Boşaltılan modellerin adlarını döndürür.
+    """
+    lock = _unload_locks.setdefault(base_url, asyncio.Lock())
+    unloaded: list[str] = []
+    async with lock:
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(15, connect=3), transport=transport
+            ) as c:
+                res = await c.get(f"{base_url}/api/ps")
+                if res.status_code >= 400:
+                    return unloaded
+                for m in res.json().get("models") or []:
+                    name = m.get("model") or m.get("name")
+                    if not name or name == keep_model:
+                        continue
+                    r = await c.post(
+                        f"{base_url}/api/generate",
+                        json={"model": name, "keep_alive": 0},
+                    )
+                    if r.status_code < 400:
+                        unloaded.append(name)
+        except (httpx.HTTPError, ValueError):
+            pass
+    return unloaded
+
+
 class OllamaProvider:
     def __init__(
         self,
@@ -81,6 +120,8 @@ class OllamaProvider:
         temperature: float = 0.4,
         max_tokens: int | None = None,
     ) -> AsyncIterator[ChatChunk]:
+        # Başka bir model yüklüyse önce onu boşalt; ikisi birden bellekte durmasın
+        await unload_other_models(self.base_url, self.info.model)
         options: dict[str, Any] = {"num_ctx": self.num_ctx, "temperature": temperature}
         if max_tokens:
             options["num_predict"] = max_tokens

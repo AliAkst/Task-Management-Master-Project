@@ -58,6 +58,8 @@ def fake_task_api(request: httpx.Request) -> httpx.Response:
     def ok(data: Any) -> httpx.Response:
         return httpx.Response(200, json={"success": True, "data": data})
 
+    if path == "/cards/parse-title":
+        return ok({"match": None})
     if path == "/auth/me":
         return ok({"id": 7, "email": "a@example.com", "full_name": "Ali"})
     if path == "/settings/":
@@ -191,7 +193,15 @@ class FakeTaskApi:
         self.board_labels: dict[int, list[dict[str, Any]]] = {}
         self.card_extra: dict[int, dict[str, Any]] = {}
         self.fail_paths: set[str] = set()  # bu yola yazma -> 422
+        # Faz 9d: karta bagli etkinlikler, takvim ogeleri, PATCH /events hata kodlari
+        self.card_events: dict[int, list[dict[str, Any]]] = {}
+        self.calendar_items: list[dict[str, Any]] | None = None
+        self.event_patch_status: dict[int, int] = {}
         self._next_id = 500
+        # Faz 10c: POST /cards/parse-title (yalniz okur; writes'a girmez)
+        self.parse_result: dict[str, Any] | None = None
+        self.parse_calls: list[dict[str, Any]] = []
+        self.parse_status: int | None = None
 
     def _new_id(self) -> int:
         self._next_id += 1
@@ -242,6 +252,10 @@ class FakeTaskApi:
             goals = list(self.goals.values())
             status = request.url.params.get("status")
             return ok([g for g in goals if not status or g["status"] == status])
+        if method == "GET" and path.startswith("/cards/") and path.endswith("/events"):
+            return ok(self.card_events.get(int(path.split("/")[2]), []))
+        if method == "GET" and path == "/calendar" and self.calendar_items is not None:
+            return ok({"items": self.calendar_items})
         if method == "GET":
             res = fake_task_api(request)
             parts = path.strip("/").split("/")
@@ -259,6 +273,16 @@ class FakeTaskApi:
             return res
 
         body = json.loads(request.content or b"null")
+        if method == "POST" and path == "/cards/parse-title":
+            self.parse_calls.append(
+                {"text": body["text"], "actor": request.headers.get("X-Actor")}
+            )
+            if self.parse_status:
+                return httpx.Response(
+                    self.parse_status,
+                    json={"success": False, "error": {"message": "x"}},
+                )
+            return ok({"match": self.parse_result})
         self.writes.append(
             {
                 "method": method,
@@ -316,6 +340,13 @@ class FakeTaskApi:
                 "label_ids"
             ]
             return ok(CARDS.get(11))
+        if method == "PATCH" and path.startswith("/events/"):
+            status = self.event_patch_status.get(int(path.split("/")[2]), 200)
+            if status != 200:
+                return httpx.Response(
+                    status, json={"success": False, "error": {"message": "salt okunur"}}
+                )
+            return ok({"id": int(path.split("/")[2]), **body})
         if method == "POST" and path == "/cards":
             return ok({"id": 100, "title": body["title"]})
         if method == "POST" and path == "/events":

@@ -22,6 +22,8 @@ export type Attachment = Res<S['AttachmentResponse']>
 export type ChecklistItem = Res<S['ChecklistItemResponse']>
 export type Activity = Res<S['ActivityResponse']>
 export type UserSettings = Res<S['UserSettingsResponse']>
+export type WhenMatch = S['WhenMatchOut'] // Res degil: TitleParse.match ic ice Res'lenmez, due_date/estimated_minutes opsiyonel kalir
+export type TitleParse = Res<S['TitleParseResponse']>
 
 export type CardRef = Res<S['CardRef']>
 export type CardDetail = Omit<

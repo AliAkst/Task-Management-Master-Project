@@ -27,6 +27,16 @@ from app.tools.card_content import (
     names_list,
     split_known,
 )
+from app.tools.card_lookup import (
+    CARD_TOOL_SPECS,
+    CARD_TOOL_TO_ACTION,
+    find_exact_open,
+    find_open_for_block,
+    free_slot,
+    resolve_board,
+    resolve_card,
+    visible_cards,
+)
 from app.tools.delete_tools import (
     DELETE_ACTION_TYPES,
     DELETE_SPECS,
@@ -48,6 +58,7 @@ from app.tools.schedule_day import (
     find_board,
     find_conflict,
     hhmm,
+    parse_clock,
     resolve_day,
     to_datetime,
 )
@@ -72,6 +83,10 @@ ACTION_TYPES: dict[str, str] = {
 PRIORITIES = ("low", "medium", "high")
 STATUSES = ("pending", "in_progress", "completed")
 _DAY = {"type": "string", "description": "YYYY-MM-DD"}
+_DUE = {
+    "type": "string",
+    "description": "YYYY-MM-DD ya da saatliyse YYYY-MM-DDTHH:MM",
+}
 _DT = {
     "type": "string",
     "description": "ISO 8601, kullanıcının saat dilimi ofsetiyle (örn. 2026-11-09T18:00:00+03:00)",
@@ -80,7 +95,7 @@ _DT = {
 WRITE_SPECS: list[ToolSpec] = [
     ToolSpec(
         "create_card",
-        "Yeni kart oluşturur. Board id'si gerekir (list_boards). Liste verilmezse board'un ilk listesine eklenir. parent_id verilirse alt kart olur. labels (etiket adları) ve checklist (madde metinleri, en fazla 20) ile birlikte oluşturulabilir.",
+        "Yeni kart oluşturur (yalnız kullanıcı YENİ bir iş söylediğinde; var olan kart için schedule_card / reschedule_card / move_card / update_card). Board id'si gerekir (list_boards). Liste verilmezse board'un ilk listesine eklenir. parent_id verilirse alt kart olur. labels (etiket adları) ve checklist (madde metinleri, en fazla 20) ile birlikte oluşturulabilir. Aynı adlı açık kart varsa hata verir; gerçekten yeni kart isteniyorsa force_new=true. Başlıkta 'yarın 15'te', '2 saat' gibi ifade kalırsa kod ayıklayıp son tarih/süreye çevirir.",
         {
             "type": "object",
             "properties": {
@@ -88,32 +103,36 @@ WRITE_SPECS: list[ToolSpec] = [
                 "title": {"type": "string"},
                 "description": {"type": "string"},
                 "list_name": {"type": "string"},
-                "due_date": _DAY,
+                "due_date": _DUE,
                 "estimated_minutes": {"type": "integer"},
                 "priority": {"type": "string", "enum": list(PRIORITIES)},
                 "parent_id": {"type": "integer"},
                 "labels": {"type": "array", "items": {"type": "string"}},
                 "checklist": {"type": "array", "items": {"type": "string"}},
+                "force_new": {"type": "boolean"},
             },
             "required": ["board_id", "title"],
         },
     ),
     ToolSpec(
         "update_card",
-        "Kartı günceller: başlık, açıklama, son tarih, tahmini süre, öncelik, durum (completed = tamamla) ya da başka listeye taşıma (list_name). Sadece değişecek alanları gönder. Etiket için set_card_labels, checklist için add_checklist_items / update_checklist_items kullan.",
+        "Kartı günceller: başlık, açıklama, son tarih, tahmini süre, öncelik, durum (completed = tamamla) ya da başka listeye taşıma (list_name). Sadece değişecek alanları gönder. Etiket için set_card_labels, checklist için add_checklist_items / update_checklist_items kullan. Gün/tarih değiştirmek için reschedule_card, başka board'a taşımak için move_card.",
         {
             "type": "object",
             "properties": {
-                "card_id": {"type": "integer"},
+                "card": {
+                    "type": "string",
+                    "description": 'Kartın id\'si (örn. "42") ya da başlığı',
+                },
                 "title": {"type": "string"},
                 "description": {"type": "string"},
-                "due_date": _DAY,
+                "due_date": _DUE,
                 "estimated_minutes": {"type": "integer"},
                 "priority": {"type": "string", "enum": list(PRIORITIES)},
                 "status": {"type": "string", "enum": list(STATUSES)},
                 "list_name": {"type": "string"},
             },
-            "required": ["card_id"],
+            "required": ["card"],
         },
     ),
     ToolSpec(
@@ -130,14 +149,13 @@ WRITE_SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         "create_event",
-        "Takvime etkinlik ekler. card_id verilirse o kart için ayrılmış zaman bloğu olur (başlık ve board karttan gelir).",
+        "Karta bağlı OLMAYAN etkinlik ekler (toplantı, randevu). Var olan bir kartı takvime koymak için schedule_card kullan.",
         {
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
                 "start_at": _DT,
                 "end_at": _DT,
-                "card_id": {"type": "integer"},
                 "board_id": {"type": "integer"},
                 "location": {"type": "string"},
             },
@@ -195,14 +213,22 @@ WRITE_SPECS: list[ToolSpec] = [
     ),
 ]
 
-WRITE_SPECS += [SCHEDULE_SPEC, *CONTENT_SPECS, *DELETE_SPECS, *MEMORY_SPECS]
+WRITE_SPECS += [
+    SCHEDULE_SPEC,
+    *CARD_TOOL_SPECS,
+    *CONTENT_SPECS,
+    *DELETE_SPECS,
+    *MEMORY_SPECS,
+]
 WRITE_TOOL_NAMES = {s.name for s in WRITE_SPECS}
 
 
 def action_type_of(tool_name: str) -> str:
     """Arac adi -> izin turu (orn. save_goal -> manage_goal)."""
-    return CONTENT_TOOL_TO_ACTION.get(tool_name) or TOOL_TO_ACTION.get(
-        tool_name, tool_name
+    return (
+        CONTENT_TOOL_TO_ACTION.get(tool_name)
+        or CARD_TOOL_TO_ACTION.get(tool_name)
+        or TOOL_TO_ACTION.get(tool_name, tool_name)
     )
 
 
@@ -239,9 +265,32 @@ def _parse_day(value: Any, field: str) -> date:
 
 
 def _due_iso(value: Any, tz: ZoneInfo) -> str:
-    """Son tarih: o gunun yerel 23:59'u (kanban'daki tarih secici ile ayni mantik)."""
-    d = _parse_day(value, "due_date")
-    return datetime.combine(d, time(23, 59), tzinfo=tz).isoformat()
+    """Son tarih: YYYY-MM-DD -> o gunun yerel 23:59'u (kanban'daki tarih secici ile
+    ayni mantik); YYYY-MM-DDTHH:MM -> saatli (naive ise kullanici dilimi)."""
+    if len(str(value)) <= 10:
+        try:
+            d = date.fromisoformat(str(value))
+        except ValueError as e:
+            raise ValueError(
+                f"due_date YYYY-MM-DD ya da YYYY-MM-DDTHH:MM olmalı (gelen: {value})"
+            ) from e
+        return datetime.combine(d, time(23, 59), tzinfo=tz).isoformat()
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except ValueError as e:
+        raise ValueError(
+            f"due_date YYYY-MM-DD ya da YYYY-MM-DDTHH:MM olmalı (gelen: {value})"
+        ) from e
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=tz)
+    return dt.replace(second=0, microsecond=0).isoformat()
+
+
+def _due_label(iso: str, tz: ZoneInfo) -> str:
+    d = datetime.fromisoformat(iso).astimezone(tz)
+    if (d.hour, d.minute) == (23, 59):
+        return _fmt_day(d.date())
+    return _fmt_dt(d)
 
 
 def _parse_dt(value: Any, field: str, tz: ZoneInfo) -> datetime:
@@ -300,8 +349,20 @@ class WriteTools:
         self.tz = tz
         # Hafiza islemleri (asistan DB'si); yoksa hafiza araclari kapali
         self.memory = memory
+        # Acik kart penceresi ("bu kart" ifadesi); sohbet katmani doldurur
+        self.focus_card_id: int | None = None
 
     # ---------------- yardimcilar ----------------
+    async def _resolve(self, ref: Any, *, include_completed: bool = False) -> dict[str, Any]:
+        """Kart id'si ya da basligi -> kart (board_name/list_name eklenmis)."""
+        return await resolve_card(
+            self.api,
+            self.privacy,
+            ref,
+            focus_card_id=self.focus_card_id,
+            include_completed=include_completed,
+        )
+
     async def _card(self, card_id: Any) -> dict[str, Any]:
         cid = _int(card_id, "card_id")
         if self.privacy.card_hidden(cid):
@@ -358,6 +419,17 @@ class WriteTools:
             raise ValueError(f"Bilinmeyen araç: {name}")
         return await handler(**args)
 
+    async def _parse_title(self, title: str) -> dict[str, Any] | None:
+        """task-api parse-title (yalniz okur). Hata/eski surum -> None: kart yine acilir."""
+        text = title.strip()
+        if len(text) < 3:
+            return None
+        try:
+            res = await self.api.post_read("/cards/parse-title", {"text": text[:200]})
+        except TaskApiError:
+            return None
+        return (res or {}).get("match")
+
     async def _prepare_create_card(
         self,
         board_id: Any,
@@ -370,21 +442,65 @@ class WriteTools:
         parent_id: Any = None,
         labels: list[str] | None = None,
         checklist: list[str] | None = None,
+        force_new: bool = False,
     ) -> PreparedAction:
         if not str(title).strip():
             raise ValueError("Başlık boş olamaz")
+        # Faz 10c (K12): basliktaki zaman ifadesi; model baska gun verdiyse model kazanir
+        model_due = _due_iso(due_date, self.tz) if due_date else None
+        due_final = model_due
+        due_from_title = est_from_title = False
+        orig = str(title).strip()
+        m = await self._parse_title(str(title))
+        # Faz 11c (L10): yalniz guclu eslesme uygulanir; alan yoksa (eski task-api) guclu say
+        if m and not m.get("strong", True):
+            m = None
+        title_from_parse = False
+        if m:
+            m_due = m.get("due_date")
+            same_day = (
+                not model_due
+                or not m_due
+                or datetime.fromisoformat(model_due).astimezone(self.tz).date()
+                == datetime.fromisoformat(m_due).astimezone(self.tz).date()
+            )
+            if same_day:
+                title = m.get("clean_title") or title
+                title_from_parse = bool(m.get("clean_title")) and m["clean_title"] != orig
+                model_has_time = bool(due_date) and len(str(due_date)) > 10
+                if m_due and not model_has_time:
+                    due_final, due_from_title = m_due, True
+                if estimated_minutes is None and m.get("estimated_minutes"):
+                    estimated_minutes = m["estimated_minutes"]
+                    est_from_title = True
+        # Alt kart (parent_id) ayni adi baska kartin altinda tasiyabilir: koruma yalniz ust duzey kartlar icin
+        if not force_new and parent_id is None:
+            dupe = await find_exact_open(self.api, self.privacy, str(title))
+            if dupe:
+                raise ValueError(
+                    f"«{dupe['title']}» adlı kart zaten var (#{dupe['id']}, "
+                    f"{dupe['board_name']}). Var olan kartı takvime koymak için "
+                    "schedule_card, gününü değiştirmek için reschedule_card kullan; "
+                    "gerçekten yeni kart istiyorsan force_new=true ver."
+                )
         board = await self._board(board_id)
         lst = self._find_list(board, list_name)
         body: dict[str, Any] = {"list_id": lst["id"], "title": str(title).strip()[:200]}
         extra = []
         if description:
             body["description"] = description
-        if due_date:
-            body["due_date"] = _due_iso(due_date, self.tz)
-            extra.append(f"son tarih {_fmt_day(_parse_day(due_date, 'due_date'))}")
+        if due_final:
+            body["due_date"] = due_final
+            extra.append(
+                f"son tarih {_due_label(due_final, self.tz)}"
+                + (" (başlıktan)" if due_from_title else "")
+            )
         if estimated_minutes is not None:
             body["estimated_minutes"] = _int(estimated_minutes, "estimated_minutes")
-            extra.append(f"⏱ {body['estimated_minutes']} dk")
+            extra.append(
+                f"⏱ {body['estimated_minutes']} dk"
+                + (" (başlıktan)" if est_from_title else "")
+            )
         if priority:
             if priority not in PRIORITIES:
                 raise ValueError(
@@ -395,6 +511,8 @@ class WriteTools:
             parent = await self._card(parent_id)
             body["parent_id"] = parent["id"]
             extra.append(f"'{_clip(parent['title'], 40)}' kartının alt kartı")
+        if title_from_parse:
+            extra.append(f"özgün başlık «{_clip(orig, 60)}»")
         summary = f"🗂 Yeni kart: '{_clip(body['title'])}' → {board['board']['name']} / {lst['name']}"
         if extra:
             summary += " (" + ", ".join(extra) + ")"
@@ -535,7 +653,7 @@ class WriteTools:
 
     async def _prepare_update_card(
         self,
-        card_id: Any,
+        card: Any = None,
         title: str | None = None,
         description: str | None = None,
         due_date: Any = None,
@@ -543,8 +661,12 @@ class WriteTools:
         priority: str | None = None,
         status: str | None = None,
         list_name: str | None = None,
+        card_id: Any = None,  # eski ad (geriye uyum)
     ) -> PreparedAction:
-        card = await self._card(card_id)
+        ref = card if card is not None else card_id
+        if ref is None:
+            raise ValueError("card gerekli")
+        card = await self._resolve(ref, include_completed=True)
         patch: dict[str, Any] = {}
         changes = []
         if title:
@@ -555,7 +677,7 @@ class WriteTools:
             changes.append("açıklama güncellenir")
         if due_date:
             patch["due_date"] = _due_iso(due_date, self.tz)
-            changes.append(f"son tarih → {_fmt_day(_parse_day(due_date, 'due_date'))}")
+            changes.append(f"son tarih → {_due_label(patch['due_date'], self.tz)}")
         if estimated_minutes is not None:
             patch["estimated_minutes"] = _int(estimated_minutes, "estimated_minutes")
             changes.append(f"tahmin → {patch['estimated_minutes']} dk")
@@ -654,6 +776,195 @@ class WriteTools:
         )
         return PreparedAction(
             "create_event", body, f"📅 '{_clip(label)}' — {span}{where}"
+        )
+
+    # ---------------- var olan kart: takvime koy / gun degistir / tasi (Faz 9d) ----------------
+    def _target_day(self, day: Any) -> date:
+        today = datetime.now(self.tz).date()
+        target = resolve_day(day, today)
+        if target < today:
+            raise ValueError(f"{_fmt_day(target)} geçmişte kaldı; ileri bir gün ver")
+        return target
+
+    async def _day_busy(
+        self, target: date
+    ) -> list[tuple[datetime, datetime, str | None]]:
+        """O gunun saatli etkinlikleri (baslangic, bitis, gorunur baslik | None=gizli)."""
+        start = datetime.combine(target, time(0), tzinfo=self.tz)
+        cal = await self.api.get(
+            "/calendar",
+            start=start.isoformat(),
+            end=(start + timedelta(days=1)).isoformat(),
+        )
+        out: list[tuple[datetime, datetime, str | None]] = []
+        for i in cal.get("items", []):
+            if i.get("kind") == "deadline" or i.get("all_day") or not i.get("end"):
+                continue
+            try:
+                s = datetime.fromisoformat(str(i["start"]))
+                e = datetime.fromisoformat(str(i["end"]))
+            except ValueError:
+                continue
+            s = s if s.tzinfo else s.replace(tzinfo=self.tz)
+            e = e if e.tzinfo else e.replace(tzinfo=self.tz)
+            out.append((s, e, i.get("title") if self.privacy.keep(i) else None))
+        return out
+
+    async def _prepare_schedule_card(
+        self,
+        card: Any = None,
+        day: Any = None,
+        start: Any = None,
+        minutes: Any = None,
+        card_id: Any = None,
+    ) -> PreparedAction:
+        ref = card if card is not None else card_id
+        c = await self._resolve(ref)
+        target = self._target_day(day)
+        if minutes is not None:
+            length = _int(minutes, "minutes")
+        else:
+            length = c.get("estimated_minutes") or 60
+        length = max(5, min(720, length))
+        busy = await self._day_busy(target)
+        now = datetime.now(self.tz)
+        note = ""
+        if start not in (None, ""):
+            begin = datetime.combine(target, time(0), tzinfo=self.tz) + timedelta(
+                minutes=parse_clock(start, "start")
+            )
+            if begin <= now:
+                raise ValueError(
+                    f"{_fmt_day(target)} {begin:%H:%M} geçmişte kaldı; ileri bir saat ver"
+                )
+            end = begin + timedelta(minutes=length)
+            clash = next((b for b in busy if begin < b[1] and b[0] < end), None)
+            if clash:
+                who = f"«{_clip(clash[2], 40)}»" if clash[2] else "başka bir etkinlik"
+                note = f"\n⚠ çakışıyor: {who}"
+        else:
+            begin_opt = free_slot([(s, e) for s, e, _ in busy], target, length, self.tz, now)
+            if begin_opt is None:
+                raise ValueError(
+                    f"{_fmt_day(target)} 09:00–21:00 arasında {length} dk boş yer yok; "
+                    "kullanıcıya saat sor."
+                )
+            begin = begin_opt
+            end = begin + timedelta(minutes=length)
+            note = "\n(boş aralık önerildi)"
+        summary = (
+            f"🗓 #{c['id']} «{_clip(c['title'], 50)}» ({c['board_name']}) → "
+            f"{_fmt_day(target)} {begin:%H:%M}–{end:%H:%M} takvim bloğu{note}"
+        )
+        return PreparedAction(
+            "create_event",
+            {"card_id": c["id"], "start_at": begin.isoformat(), "end_at": end.isoformat()},
+            summary,
+        )
+
+    def _local(self, value: Any) -> datetime:
+        dt = datetime.fromisoformat(str(value))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+        return dt.astimezone(self.tz)
+
+    async def _prepare_reschedule_card(
+        self,
+        card: Any = None,
+        day: Any = None,
+        start: Any = None,
+        card_id: Any = None,
+    ) -> PreparedAction:
+        ref = card if card is not None else card_id
+        c = await self._resolve(ref)
+        target = self._target_day(day)
+        old_due = self._local(c["due_date"]) if c.get("due_date") else None
+        due_time = old_due.time().replace(tzinfo=None) if old_due else time(23, 59)
+        patch = {"due_date": datetime.combine(target, due_time, tzinfo=self.tz).isoformat()}
+        due_part = (
+            f"son tarih {_fmt_day(old_due.date()) if old_due else 'yok'} → {_fmt_day(target)}"
+        )
+
+        now = datetime.now(self.tz)
+        events = await self.api.get(f"/cards/{c['id']}/events")
+        future = []
+        external = False
+        for e in events:
+            try:
+                s = self._local(e["start_at"])
+            except (KeyError, ValueError):
+                continue
+            if s <= now:
+                continue
+            if e.get("external"):
+                external = True
+                continue
+            future.append((s, e))
+        out_events: list[dict[str, Any]] = []
+        block_part = ""
+        if future:
+            s, e = min(future, key=lambda x: x[0])
+            e_end = self._local(e["end_at"]) if e.get("end_at") else s + timedelta(hours=1)
+            if start not in (None, ""):
+                new_s = datetime.combine(target, time(0), tzinfo=self.tz) + timedelta(
+                    minutes=parse_clock(start, "start")
+                )
+            else:
+                new_s = datetime.combine(target, s.time().replace(tzinfo=None), tzinfo=self.tz)
+            if new_s <= now:
+                raise ValueError(
+                    f"{_fmt_day(target)} {new_s:%H:%M} geçmişte kaldı; ileri bir saat ver"
+                )
+            new_e = new_s + (e_end - s)
+            out_events.append(
+                {"id": e["id"], "start_at": new_s.isoformat(), "end_at": new_e.isoformat()}
+            )
+            block_part = f"; blok {_fmt_dt(s)} → {_fmt_dt(new_s)}"
+        summary = f"📅 #{c['id']} «{_clip(c['title'], 50)}»: {due_part}{block_part}"
+        if external:
+            summary += " (dış takvimdeki etkinlik taşınmaz)"
+        return PreparedAction(
+            "update_card",
+            {"card_id": c["id"], "patch": patch, "move_to": None, "events": out_events},
+            summary,
+        )
+
+    async def _prepare_move_card(
+        self,
+        card: Any = None,
+        board: Any = None,
+        list_name: str | None = None,
+        card_id: Any = None,
+    ) -> PreparedAction:
+        ref = card if card is not None else card_id
+        c = await self._resolve(ref, include_completed=True)
+        target = await resolve_board(self.api, self.privacy, board)
+        detail = await self._board(target["id"])
+        if detail["board"].get("system_kind"):
+            raise ValueError("Kart Gelen Kutusu'nun kendisine taşınamaz")
+        lst = self._find_list(detail, list_name)
+        if lst["id"] == c.get("list_id"):
+            raise ValueError("Kart zaten orada")
+        summary = (
+            f"📦 #{c['id']} «{_clip(c['title'], 50)}»: "
+            f"{c['board_name']} › {c.get('list_name') or '?'} → "
+            f"{detail['board']['name']} › {lst['name']}"
+        )
+        if c.get("label_ids") and c.get("board_id") != target["id"]:
+            summary += " (etiketler board'a özel olduğu için düşer)"
+        # 9a kurali: tamamlandi listesine girmek tamamlar, oradan normal listeye cikmak yeniden acar
+        src = detail if c.get("board_id") == target["id"] else await self._board(c["board_id"])
+        src_done = any(
+            x["id"] == c.get("list_id") and x.get("is_done_list") for x in src["lists"]
+        )
+        if lst.get("is_done_list") and not src_done:
+            summary += " (kart tamamlanır)"
+        elif src_done and not lst.get("is_done_list"):
+            summary += " (kart yeniden açılır)"
+        return PreparedAction(
+            "update_card",
+            {"card_id": c["id"], "patch": {}, "move_to": lst["id"]},
+            summary,
         )
 
     async def _prepare_split_card(
@@ -817,6 +1128,7 @@ class WriteTools:
         out: list[dict[str, Any]] = []
         lines = []
         lists: dict[int, dict[str, Any]] = {}
+        open_cards: list[dict[str, Any]] | None = None
         for blk in timeline:
             item: dict[str, Any] = {
                 "title": blk.title,
@@ -831,18 +1143,32 @@ class WriteTools:
                 raise ValueError(
                     f"'{blk.title}' için board '{blk.board}' bulunamadı. Mevcut: {names}"
                 )
+            existing = None
             if blk.card:
-                board = board or default
-                if board is None:
-                    raise ValueError("Kart için önce bir board oluşturulmalı")
-                if board["id"] not in lists:
-                    lists[board["id"]] = self._find_list(
-                        await self._board(board["id"]), None
+                if open_cards is None:  # bir kez hesapla
+                    open_cards = await visible_cards(
+                        self.api, self.privacy, include_completed=False
                     )
-                item["list_id"] = lists[board["id"]]["id"]
-            if board is not None:
-                item["board_id"] = board["id"]
-            kind = f"kart, {board['name']}" if blk.card and board else "etkinlik"
+                existing = find_open_for_block(open_cards, blk.title, board)
+            if existing:
+                item["card_id"] = existing["id"]
+                item["board_id"] = existing["board_id"]
+            else:
+                if blk.card:
+                    board = board or default
+                    if board is None:
+                        raise ValueError("Kart için önce bir board oluşturulmalı")
+                    if board["id"] not in lists:
+                        lists[board["id"]] = self._find_list(
+                            await self._board(board["id"]), None
+                        )
+                    item["list_id"] = lists[board["id"]]["id"]
+                if board is not None:
+                    item["board_id"] = board["id"]
+            if existing:
+                kind = f"var olan kart #{existing['id']}, {existing['board_name']}"
+            else:
+                kind = f"YENİ kart, {board['name']}" if blk.card and board else "etkinlik"
             lines.append(f"{hhmm(blk.start)}–{hhmm(blk.end)} {blk.title} ({kind})")
             out.append(item)
         cards = sum(1 for i in out if i["card"])
@@ -935,8 +1261,23 @@ class WriteTools:
                     f"/cards/{args['card_id']}/move",
                     {"list_id": args["move_to"], "index": 100000},
                 )
+            skipped: list[int] = []
+            for ev in args.get("events", []):
+                try:
+                    await api.write(
+                        "PATCH",
+                        f"/events/{ev['id']}",
+                        {"start_at": ev["start_at"], "end_at": ev["end_at"]},
+                    )
+                except TaskApiError as err:
+                    if err.status not in (404, 409):
+                        raise
+                    skipped.append(ev["id"])
             c = await api.get(f"/cards/{args['card_id']}")
-            return {"card_id": c["id"], "title": c["title"], "status": c["status"]}
+            out = {"card_id": c["id"], "title": c["title"], "status": c["status"]}
+            if skipped:
+                out["skipped_events"] = skipped
+            return out
         if action_type == "add_note":
             n = await api.write(
                 "POST", f"/cards/{args['card_id']}/notes", {"content": args["content"]}
@@ -1068,7 +1409,10 @@ class WriteTools:
                     "start_at": b["start_at"],
                     "end_at": b["end_at"],
                 }
-                if b["card"]:
+                if b.get("card_id"):  # var olan kart: yeni kart acilmaz
+                    card_ids.append(b["card_id"])
+                    event["card_id"] = b["card_id"]
+                elif b["card"]:
                     c = await api.write(
                         "POST",
                         "/cards",

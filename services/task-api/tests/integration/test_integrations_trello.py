@@ -34,7 +34,7 @@ class FakeTrello:
             return httpx.Response(401, text="invalid key")
         path = request.url.path
         if path == "/1/members/me":
-            return httpx.Response(200, json={"fullName": "Deniz Yılmaz", "username": "ali"})
+            return httpx.Response(200, json={"fullName": "Deniz Yılmaz", "username": "deniz"})
         if path == "/1/members/me/boards":
             return httpx.Response(
                 200,

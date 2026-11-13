@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type {
   Activity,
@@ -17,6 +18,8 @@ import type {
   ChecklistItem,
   Label,
   Note,
+  TitleParse,
+  WhenMatch,
 } from '../lib/types'
 
 export const keys = {
@@ -29,6 +32,60 @@ export const keys = {
 
 const json = (body: unknown) => ({ body: JSON.stringify(body) })
 
+/** Kart olusturma verisi (baslik + baslikta algilanan opsiyonel alanlar). */
+export type NewCardInput = { title: string; due_date?: string | null; estimated_minutes?: number | null }
+
+const fetchParse = (q: string) => api<TitleParse>('/cards/parse-title', { method: 'POST', ...json({ text: q }) })
+
+/** Gonderimde tek seferlik ayristirma (11b, K13 revizyonu). null = eslesme yok, undefined = zaman asimi/hata. */
+export async function parseTitleNow(
+  qc: QueryClient,
+  text: string,
+  timeoutMs = 400,
+): Promise<WhenMatch | null | undefined> {
+  const q = text.trim()
+  if (q.length < 3) return null
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), timeoutMs)
+  })
+  const run = qc
+    .fetchQuery({ queryKey: ['parse-title', q], queryFn: () => fetchParse(q), staleTime: Infinity, retry: false })
+    .then((d): WhenMatch | null => d.match ?? null)
+    .catch((): undefined => undefined)
+  try {
+    return await Promise.race([run, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Basliktaki Turkce zaman ifadesini onizler (250 ms debounce). `ready` = sonuc tam su anki
+ * metne ait; degilse gonderimde ayristirma kullanilmaz (00-genel K13).
+ */
+export function useParseTitle(text: string) {
+  const q = text.trim()
+  const [debounced, setDebounced] = useState(q)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q), 250)
+    return () => clearTimeout(t)
+  }, [q])
+  const query = useQuery({
+    queryKey: ['parse-title', debounced],
+    queryFn: () => fetchParse(debounced),
+    enabled: debounced.length >= 3,
+    staleTime: Infinity,
+    gcTime: 60_000,
+    retry: false,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    match: q.length >= 3 ? (query.data?.match ?? null) : null,
+    ready: debounced === q && !query.isPlaceholderData && query.isSuccess,
+  }
+}
+
 // ---------------- iyimser tasima yardimcilari (Faz 8e) ----------------
 /** Listeyi `index` sirasina tasir (sunucudaki move_list ile ayni anlam). */
 export function applyListMove(data: BoardDetail, id: number, index: number): BoardDetail {
@@ -39,7 +96,10 @@ export function applyListMove(data: BoardDetail, id: number, index: number): Boa
   return { ...data, lists: rest }
 }
 
-/** Karti hedef listede `index` sirasina koyar: komsu pozisyonlarin ortasi (uclarda +-1). */
+/**
+ * Karti hedef listede `index` sirasina koyar: komsu pozisyonlarin ortasi (uclarda +-1).
+ * Tamamlanma: done listesine girmek tamamlar, done listesinden cikmak acar; normal->normal degistirmez.
+ */
 export function applyCardMove(
   data: BoardDetail,
   id: number,
@@ -59,13 +119,51 @@ export function applyCardMove(
   if (before !== undefined && after !== undefined) position = (before + after) / 2
   else if (before !== undefined) position = before + 1
   else if (after !== undefined) position = after - 1
-  const done = target.is_done_list
-  const moved: CardSummary = {
-    ...card,
-    list_id: listId,
-    position,
-    status: done ? 'completed' : card.status === 'completed' ? 'pending' : card.status,
-    completed_at: done ? (card.completed_at ?? new Date().toISOString()) : null,
+  const source = data.lists.find((l) => l.id === card.list_id)
+  const toDone = target.is_done_list
+  const fromDone = !!source?.is_done_list
+  const moved: CardSummary = { ...card, list_id: listId, position }
+  if (toDone) {
+    moved.status = 'completed'
+    moved.completed_at = card.completed_at ?? new Date().toISOString()
+  } else if (fromDone) {
+    moved.status = card.status === 'completed' ? 'pending' : card.status
+    moved.completed_at = null
+  } // normal -> normal: durum ve completed_at aynen kalir
+  return { ...data, cards: data.cards.map((c) => (c.id === id ? moved : c)) }
+}
+
+/**
+ * Kart yuzundeki tamamla/geri al dairesi icin iyimser guncelleme (sunucudaki `_apply_status` taklidi).
+ * Tamamlanir: board'da done listesi varsa kart oraya (sona) gider. Acilir: done listesindeyse ilk normal listeye (sona).
+ */
+export function applyCardToggle(data: BoardDetail, id: number, done: boolean): BoardDetail {
+  const card = data.cards.find((c) => c.id === id)
+  if (!card) return data
+  const moved: CardSummary = { ...card }
+  const endPosition = (listId: number) => {
+    const ps = data.cards.filter((c) => c.list_id === listId && c.id !== id).map((c) => c.position)
+    return ps.length ? Math.max(...ps) + 1 : 1
+  }
+  if (done) {
+    moved.status = 'completed'
+    moved.completed_at = card.completed_at ?? new Date().toISOString()
+    const doneList = data.lists.find((l) => l.is_done_list)
+    if (doneList && doneList.id !== card.list_id) {
+      moved.list_id = doneList.id
+      moved.position = endPosition(doneList.id)
+    }
+  } else {
+    moved.status = 'pending'
+    moved.completed_at = null
+    const current = data.lists.find((l) => l.id === card.list_id)
+    if (current?.is_done_list) {
+      const firstNormal = [...data.lists].sort((a, b) => a.position - b.position).find((l) => !l.is_done_list)
+      if (firstNormal) {
+        moved.list_id = firstNormal.id
+        moved.position = endPosition(firstNormal.id)
+      }
+    }
   }
   return { ...data, cards: data.cards.map((c) => (c.id === id ? moved : c)) }
 }
@@ -191,6 +289,31 @@ export function useBoardMutations(boardId: number) {
       },
       onSettled: refresh,
     }),
+    /**
+     * Kart yuzundeki daire: tamamla / yeniden ac (iyimser). BoardPage'deki sutun-yeniden-kurma
+     * effect korumasina eklenmez: surukleme yokken sutunlarin iyimser board.data'dan kurulmasi
+     * istenen davranis (kart done listesine aninda kayar).
+     */
+    toggleCard: useMutation({
+      mutationKey: ['toggleCard'],
+      mutationFn: ({ id, done }: { id: number; done: boolean }) =>
+        api<CardDetail>(`/cards/${id}`, { method: 'PATCH', ...json({ status: done ? 'completed' : 'pending' }) }),
+      onMutate: async ({ id, done }) => {
+        await qc.cancelQueries({ queryKey: keys.board(boardId), exact: true })
+        const prev = qc.getQueryData<BoardDetail>(keys.board(boardId))
+        if (prev) qc.setQueryData(keys.board(boardId), applyCardToggle(prev, id, done))
+        return { prev }
+      },
+      onError: (_e, _v, ctx) => {
+        if (ctx?.prev) qc.setQueryData(keys.board(boardId), ctx.prev)
+      },
+      onSettled: (_d, _e, { id }) => {
+        qc.invalidateQueries({ queryKey: keys.card(id) })
+        // Hizli art arda tiklamada ara refetch sonraki iyimser durumu ezip karti zipletir:
+        // yalniz bekleyen son toggle bittiginde (kendisi hala 'pending' sayilir) board'u yenile.
+        if (qc.isMutating({ mutationKey: ['toggleCard'] }) <= 1) refresh()
+      },
+    }),
     /** Grafik gorunumde dugum konumu (gecmise yazilmaz). */
     savePosition: useMutation({
       mutationFn: ({ id, x, y }: { id: number; x: number; y: number }) =>
@@ -280,8 +403,8 @@ export function useCardMutations(cardId: number, boardId: number) {
       onSuccess: refresh,
     }),
     addSubtask: useMutation({
-      mutationFn: (title: string) =>
-        api<CardDetail>('/cards', { method: 'POST', ...json({ parent_id: cardId, title }) }),
+      mutationFn: (data: NewCardInput) =>
+        api<CardDetail>('/cards', { method: 'POST', ...json({ parent_id: cardId, ...data }) }),
       onSuccess: refresh,
     }),
     split: useMutation({

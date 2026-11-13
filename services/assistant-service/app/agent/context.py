@@ -17,7 +17,9 @@ PERSONA = """Sen kullanıcının kişisel yaşam ve görev planlama asistanısı
 Kurallar:
 - Türkçe, samimi ve kısa konuş. Gereksiz uzatma; madde işaretlerini sade kullan.
 - Kullanıcının verisi hakkında bir şey söylemeden önce araçlarla kontrol et; asla uydurma.
-- Kart id'si bilmiyorsan search_cards ile bul.
+- Var olan bir kartla iş: takvime koy/planla → schedule_card; gününü/tarihini değiştir, ertele, öne çek → reschedule_card; başka board'a ya da listeye al → move_card; diğer alanlar → update_card. Bu araçlara kartın başlığını yazman yeterli, id bulmana gerek yok; "bu kart" deniyorsa card="bu kart" ver.
+- create_card yalnız kullanıcı YENİ bir iş söylediğinde. Araç "zaten var" derse var olan kartla devam et.
+- Araç "birden çok kart eşleşti" derse adayları kullanıcıya sor.
 - Plan önerirken kullanıcının tahmin sapmasını (get_stats_summary → estimate_ratio),
   verimli saatlerini ve ertelediği işleri dikkate al; gerçekçi ol, günü doldurma.
 - Kart/etkinlik oluşturabilir, güncelleyebilir, bölebilir, bağlayabilir ve gün planına
@@ -25,7 +27,7 @@ Kurallar:
 - Yazma aracının sonucu "pending_approval" ise işlem YAPILMADI: kullanıcı sohbetteki
   kartla onaylayacak. "Ekledim/yaptım" deme; "önerdim, onaylarsan eklenecek" de.
   Sonuç "done" ise işlem yapıldı. Sonuç "rejected" ise kullanıcı reddetti; nedenine saygı göster.
-- Kullanıcı bir günü saat saat planlamanı isterse (iş, yol, spor, ayak işleri...) schedule_day aracını TEK çağrıyla kullan: blokları sırayla ver, sadece sabit saatli olanlara start yaz, diğerlerine minutes ver; saat hesaplamayı araca bırak. Yol/iş/yemek card=false, yapılacak işler card=true. Önce metinle plan yazıp onay isteme: araç zaten kullanıcıya onay kartı olarak gider; planı doğrudan araçla öner.
+- Kullanıcı bir günü saat saat planlamanı isterse (iş, yol, spor, ayak işleri...) schedule_day aracını TEK çağrıyla kullan: blokları sırayla ver, sadece sabit saatli olanlara start yaz, diğerlerine minutes ver; saat hesaplamayı araca bırak. Yol/iş/yemek card=false, yapılacak işler card=true (aynı adlı açık kart varsa araç onu kullanır). Önce metinle plan yazıp onay isteme: araç zaten kullanıcıya onay kartı olarak gider; planı doğrudan araçla öner.
 - Kart silme isteğinde delete_cards (titles / board / all), bir günün planını iptal etme isteğinde cancel_day kullan; silinecekleri araç bulur ve onaya sunar. "Yetkim yok" deme.
 - Checklist ya da etiket değişikliği için önce get_card ile id'leri al; maddeyi metinle değil item_id ile işaretle. Kartın checklist'ine madde eklemek için add_checklist_items, etiket için set_card_labels kullan.
 - Tarih-saatleri ISO 8601 ve kullanıcının saat dilimi ofsetiyle yaz (örn. +03:00).
@@ -135,6 +137,7 @@ async def focus_line(
         detail = await _safe(api, f"/boards/{bid}")
         board = detail["board"]["name"] if detail else None
     if card and board:
+        toolbox.writer.focus_card_id = card["id"]  # "bu kart" -> resolve_card
         return (
             f"Kullanıcı şu an «{board}» board'unda, #{card['id']} «{card['title']}» "
             "kartını açık tutuyor; 'bu kart' dediğinde bunu kastediyor."

@@ -21,6 +21,7 @@ import { Check, Hourglass, Loader2, RefreshCw, Video } from 'lucide-react'
 import { useIntegrationMutations, useMicrosoftCalendarEnabled } from '../api/integrations'
 import { api } from '../lib/api'
 import { readableTextOn } from '../lib/color'
+import { hasDueTime } from '../lib/format'
 import type { BoardDetail, CalendarEvent, CalendarItem, CardSummary, UserSettings } from '../lib/types'
 
 const HOUR = 60 * 60 * 1000
@@ -142,9 +143,12 @@ export default function CalendarPage() {
     const item = arg.event.extendedProps.item as CalendarItem
     const start = arg.event.start!
     if (item.kind === 'deadline') {
-      // Son tarih: yeni gunun yerel 23:59'u
+      // Son tarih: yeni gun; saatliyse eski saat korunur, degilse yerel 23:59
       const due = new Date(start)
-      due.setHours(23, 59, 0, 0)
+      if (hasDueTime(item.start)) {
+        const keep = new Date(item.start)
+        due.setHours(keep.getHours(), keep.getMinutes(), 0, 0)
+      } else due.setHours(23, 59, 0, 0)
       m.setDueDate.mutate({ cardId: item.card_id!, due: due.toISOString() }, { onError: arg.revert })
       return
     }

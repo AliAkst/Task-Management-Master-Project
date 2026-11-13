@@ -13,16 +13,20 @@ import {
   Timer,
   type LucideIcon,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 import { describeRule } from '../lib/rrule'
 import type { CardSummary, Label } from '../lib/types'
 import { useActiveSession } from '../api/sessions'
-import { formatDuration, formatShortDate, isOverdue, PRIORITY_LABEL } from '../lib/format'
+import { formatDuration, formatDue, isOverdue, PRIORITY_LABEL } from '../lib/format'
 
 interface Props {
   card: CardSummary
   labels: Map<number, Label>
   dragging?: boolean
+  /** Bu kart icin kronometre calisiyor mu (ust bilesen hesaplar; 9c: kart basina sorgu yok). */
+  tracking?: boolean
+  /** Verilirse sol ustteki daire tikla-tamamla dugmesi olur; verilmezse etkisiz gorsel. */
+  onToggle?: (card: CardSummary) => void
 }
 
 function Meta({ icon: Icon, children, className = '', title }: { icon: LucideIcon; children?: ReactNode; className?: string; title?: string }) {
@@ -35,10 +39,8 @@ function Meta({ icon: Icon, children, className = '', title }: { icon: LucideIco
 }
 
 /** Kanban'daki kart yuzu (liste icinde ve suruklenirken ayni gorunum). */
-export default function CardFace({ card, labels, dragging }: Props) {
+function CardFaceBase({ card, labels, dragging, tracking = false, onToggle }: Props) {
   const done = card.status === 'completed'
-  const active = useActiveSession()
-  const tracking = active.data?.card_id === card.id
   const trackedSec = card.tracked_seconds + card.subtask_tracked_seconds
   const overdue = !done && isOverdue(card.due_date)
   const high = card.priority === 'high'
@@ -47,7 +49,7 @@ export default function CardFace({ card, labels, dragging }: Props) {
     <div
       className={`relative rounded-md border bg-surface px-3 py-2.5 text-[14px] leading-snug ${
         dragging ? 'rotate-2 scale-[1.03] cursor-grabbing border-slate-400 shadow-[0_12px_28px_-6px_rgb(23_32_56/0.45)]' : 'border-slate-200 hover:border-slate-400'
-      } ${tracking ? 'border-l-[3px] border-l-[var(--color-rec)]' : high && !done ? 'border-l-[3px] border-l-slate-900' : ''}`}
+      } ${done && !dragging ? 'opacity-70 transition-opacity hover:opacity-100' : ''} ${tracking ? 'border-l-[3px] border-l-[var(--color-rec)]' : high && !done ? 'border-l-[3px] border-l-slate-900' : ''}`}
     >
       {card.label_ids.length > 0 && (
         <div className="mb-1.5 flex flex-wrap gap-1">
@@ -63,17 +65,49 @@ export default function CardFace({ card, labels, dragging }: Props) {
         </div>
       )}
 
-      <p className={done ? 'text-slate-400 line-through decoration-slate-300' : card.blocked ? 'text-slate-500' : 'text-slate-900'}>
-        {card.parent_id != null && <CornerDownRight size={13} className="mr-1 inline align-[-2px] text-slate-400" aria-label="Alt kart" />}
-        {card.title}
-      </p>
+      <div className="flex items-start gap-2">
+        {onToggle && !dragging ? (
+          <button
+            type="button"
+            aria-pressed={done}
+            aria-label={done ? 'Yeniden aç' : 'Tamamla'}
+            title={done ? 'Yeniden aç' : 'Tamamla'}
+            className={`mt-[1px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 ${
+              done ? 'border-green-700 bg-green-700 text-on-ink' : 'border-slate-300 bg-surface hover:border-green-700'
+            }`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggle(card)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+            }}
+          >
+            {done && <Check size={12} strokeWidth={3} aria-hidden />}
+          </button>
+        ) : (
+          <span
+            aria-hidden
+            className={`mt-[1px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 ${
+              done ? 'border-green-700 bg-green-700 text-on-ink' : 'border-slate-300 bg-surface'
+            }`}
+          >
+            {done && <Check size={12} strokeWidth={3} />}
+          </span>
+        )}
+        <p className={`min-w-0 flex-1 ${done ? 'text-slate-400 line-through decoration-slate-300' : card.blocked ? 'text-slate-500' : 'text-slate-900'}`}>
+          {card.parent_id != null && <CornerDownRight size={13} className="mr-1 inline align-[-2px] text-slate-400" aria-label="Alt kart" />}
+          {card.title}
+        </p>
+      </div>
 
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-500">
         {high && !done && <span className="font-semibold text-slate-900">{PRIORITY_LABEL.high} öncelik</span>}
         {done && <Meta icon={Check} className="text-green-700">Tamamlandı</Meta>}
         {card.due_date && (
           <Meta icon={CalendarDays} className={overdue ? 'font-semibold text-red-700' : ''} title={overdue ? 'Son tarih geçti' : 'Son tarih'}>
-            {formatShortDate(card.due_date)}
+            {formatDue(card.due_date)}
           </Meta>
         )}
         {tracking ? (
@@ -115,4 +149,13 @@ export default function CardFace({ card, labels, dragging }: Props) {
       </div>
     </div>
   )
+}
+
+const CardFace = memo(CardFaceBase)
+export default CardFace
+
+/** Kronometre durumunu kendisi okuyan sarmalayici (graf gorunumu gibi tek tek kullanimlar icin). */
+export function CardFaceLive(props: Omit<Props, 'tracking'>) {
+  const active = useActiveSession()
+  return <CardFace {...props} tracking={active.data?.card_id === props.card.id} />
 }

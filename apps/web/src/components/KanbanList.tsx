@@ -1,20 +1,28 @@
-import { useState, type FormEvent } from 'react'
+import { memo, useRef, useState, type FormEvent } from 'react'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { BoardList, CardSummary, Label } from '../lib/types'
 import CardFace from './CardFace'
+import WhenBadge from './WhenBadge'
+import { useParseTitle, type NewCardInput } from '../api/boards'
+import { useQueryClient } from '@tanstack/react-query'
+import { resolveWhen } from '../lib/when'
 
 export const cardKey = (id: number) => `card-${id}`
 export const listKey = (id: number) => `list-${id}`
 
-function SortableCard({
+const SortableCard = memo(function SortableCard({
   card,
   labels,
   onOpen,
+  tracking,
+  onToggle,
 }: {
   card: CardSummary
   labels: Map<number, Label>
   onOpen: (id: number) => void
+  tracking: boolean
+  onToggle: (card: CardSummary) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: cardKey(card.id),
@@ -30,10 +38,10 @@ function SortableCard({
       {...listeners}
       onClick={() => onOpen(card.id)}
     >
-      <CardFace card={card} labels={labels} />
+      <CardFace card={card} labels={labels} tracking={tracking} onToggle={onToggle} />
     </li>
   )
-}
+})
 
 /** Liste surukleme overlay'i: baslik + ilk 3 kartin ozeti. */
 export function ListOverlay({
@@ -46,7 +54,7 @@ export function ListOverlay({
   labels: Map<number, Label>
 }) {
   return (
-    <section className="w-72 rotate-2 scale-[1.02] cursor-grabbing rounded-xl bg-slate-100/90 pb-2 backdrop-blur-sm shadow-[0_12px_32px_-8px_rgb(23_32_56/0.4)]">
+    <section className="w-72 rotate-2 scale-[1.02] cursor-grabbing rounded-xl bg-slate-100/95 pb-2 shadow-[0_12px_32px_-8px_rgb(23_32_56/0.4)]">
       <h3 className="px-3 pt-3 pb-2 text-sm font-medium">
         {list.is_done_list && <span className="mr-1 text-green-600">✓</span>}
         {list.name}
@@ -68,18 +76,39 @@ interface Props {
   list: BoardList
   cards: CardSummary[]
   labels: Map<number, Label>
+  /** Kronometresi calisan kartin id'si (BoardPage tek yerde okur; 9c). */
+  trackingCardId: number | null
   onOpenCard: (id: number) => void
-  onAddCard: (listId: number, title: string) => void
+  onToggleCard: (card: CardSummary) => void
+  onAddCard: (listId: number, data: NewCardInput, schedule: boolean) => void
   onRename: (listId: number, name: string) => void
   onToggleDone: (listId: number, isDone: boolean) => void
   onDelete: (listId: number) => void
 }
 
-export default function KanbanList({
+/** Surukleme sirasinda yalniz icerigi degisen liste yeniden cizilsin: cards dizisi sig karsilastirilir. */
+function areEqual(a: Props, b: Props) {
+  if (a.cards.length !== b.cards.length || !a.cards.every((c, i) => c === b.cards[i])) return false
+  return (
+    a.list === b.list &&
+    a.labels === b.labels &&
+    a.trackingCardId === b.trackingCardId &&
+    a.onOpenCard === b.onOpenCard &&
+    a.onToggleCard === b.onToggleCard &&
+    a.onAddCard === b.onAddCard &&
+    a.onRename === b.onRename &&
+    a.onToggleDone === b.onToggleDone &&
+    a.onDelete === b.onDelete
+  )
+}
+
+function KanbanList({
   list,
   cards,
   labels,
+  trackingCardId,
   onOpenCard,
+  onToggleCard,
   onAddCard,
   onRename,
   onToggleDone,
@@ -92,15 +121,40 @@ export default function KanbanList({
   })
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
+  const [dismissed, setDismissed] = useState<string | null>(null)
+  const [schedule, setSchedule] = useState(false)
+  const { match, ready } = useParseTitle(adding ? title : '')
+  const qc = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(list.name)
   const [menu, setMenu] = useState(false)
 
-  function submitCard(e: FormEvent) {
+  async function submitCard(e: FormEvent) {
     e.preventDefault()
-    if (!title.trim()) return
-    onAddCard(list.id, title.trim())
-    setTitle('')
+    // busyRef: ayni turda gelen ikinci Enter'da state henuz guncellenmemis olabilir
+    if (busyRef.current || !title.trim()) return
+    // Kutu yalniz rozet gorunurken (saat + sure) vardir; gizliyken kalan durum sayilmaz
+    const showBox = !!match && ready && match.phrase !== dismissed && match.has_time
+    busyRef.current = true
+    setBusy(true)
+    try {
+      const { data, synced } = await resolveWhen(title, { match, ready }, dismissed, qc)
+      onAddCard(list.id, data, !synced && schedule && showBox && 'due_date' in data && !!data.estimated_minutes)
+      setTitle('')
+      setDismissed(null)
+      setSchedule(false)
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+
+  function closeAdd() {
+    setAdding(false)
+    setDismissed(null)
+    setSchedule(false)
   }
 
   function submitName(e?: FormEvent) {
@@ -114,7 +168,7 @@ export default function KanbanList({
     <section
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100/90 backdrop-blur-sm ${isDragging ? 'opacity-40' : ''}`}
+      className={`flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100/95 ${isDragging ? 'opacity-40' : ''}`}
     >
       <header className="relative flex items-center gap-2 px-3 pt-3 pb-2" {...attributes} {...listeners}>
         {editing ? (
@@ -174,7 +228,14 @@ export default function KanbanList({
       <SortableContext items={cards.map((c) => cardKey(c.id))} strategy={verticalListSortingStrategy}>
         <ul className="flex min-h-2 flex-col gap-2 overflow-y-auto px-2 pb-2">
           {cards.map((c) => (
-            <SortableCard key={c.id} card={c} labels={labels} onOpen={onOpenCard} />
+            <SortableCard
+              key={c.id}
+              card={c}
+              labels={labels}
+              tracking={trackingCardId === c.id}
+              onOpen={onOpenCard}
+              onToggle={onToggleCard}
+            />
           ))}
         </ul>
       </SortableContext>
@@ -188,15 +249,24 @@ export default function KanbanList({
               className="w-full resize-none rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
               placeholder="Kart başlığı… (Enter: ekle, Esc: kapat)"
               value={title}
+              readOnly={busy}
+              aria-busy={busy}
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) submitCard(e)
-                if (e.key === 'Escape') setAdding(false)
+                if (e.key === 'Escape') closeAdd()
               }}
             />
+            {match && match.phrase !== dismissed && (
+              <WhenBadge
+                match={match}
+                onDismiss={() => setDismissed(match.phrase)}
+                schedule={{ checked: schedule, onChange: setSchedule }}
+              />
+            )}
             <div className="flex gap-2">
               <button className="rounded-md bg-slate-900 px-3 py-1 text-sm text-on-ink">Ekle</button>
-              <button type="button" className="text-sm text-slate-500" onClick={() => setAdding(false)}>
+              <button type="button" className="text-sm text-slate-500" onClick={closeAdd}>
                 Vazgeç
               </button>
             </div>
@@ -213,3 +283,5 @@ export default function KanbanList({
     </section>
   )
 }
+
+export default memo(KanbanList, areEqual)

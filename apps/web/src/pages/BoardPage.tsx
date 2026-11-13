@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useIsMutating } from '@tanstack/react-query'
 import {
@@ -23,7 +23,8 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
-import { useBoard, useBoardMutations, useDeleteBoard, useUpdateBoard } from '../api/boards'
+import { useBoard, useBoardMutations, useDeleteBoard, useUpdateBoard, type NewCardInput } from '../api/boards'
+import { useCalendarMutations } from '../api/calendar'
 import BoardForm, { COLORS } from '../components/BoardForm'
 import CardFace from '../components/CardFace'
 import CardModal from '../components/CardModal'
@@ -32,6 +33,7 @@ import KanbanList, { ListOverlay, listKey } from '../components/KanbanList'
 import Modal from '../components/Modal'
 import { Segmented } from '../components/Page'
 import { useModels } from '../api/assistant'
+import { useActiveSession } from '../api/sessions'
 import { Lock, Settings2, Sparkles } from 'lucide-react'
 import type { CardSummary, Label } from '../lib/types'
 import { readableTextOn } from '../lib/color'
@@ -72,13 +74,55 @@ export default function BoardPage() {
   const view = params.get('view') === 'graph' ? 'graph' : 'kanban'
   // Gorunum (kanban/grafik) URL'de kalir; kart acip kapatmak onu bozmaz
   const viewParam: Record<string, string> = view === 'graph' ? { view: 'graph' } : {}
-  const openCard = (id: number) => setParams({ ...viewParam, card: String(id) })
+  const openCard = useCallback(
+    (id: number) => setParams({ ...viewParam, card: String(id) }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setParams, view],
+  )
   const closeCard = () => setParams(viewParam)
   const setView = (v: 'kanban' | 'graph') => setParams(v === 'graph' ? { view: 'graph' } : {})
   const models = useModels()
+  // 9c: kronometre sorgusu kart basina degil tek yerde (N gozlemci yerine 1)
+  const active = useActiveSession()
+  const trackingCardId = active.data?.card_id ?? null
 
   const board = useBoard(boardId)
   const m = useBoardMutations(boardId)
+  const { createCard, updateList, deleteList, toggleCard } = m
+  const createCardMutate = createCard.mutate
+  const createEventM = useCalendarMutations().create
+  const createEvent = createEventM.mutate
+  const updateListMutate = updateList.mutate
+  const deleteListMutate = deleteList.mutate
+  const toggleCardMutate = toggleCard.mutate
+  const onToggleCard = useCallback(
+    (c: CardSummary) => toggleCardMutate({ id: c.id, done: c.status !== 'completed' }),
+    [toggleCardMutate],
+  )
+  const onAddCard = useCallback(
+    (list_id: number, data: NewCardInput, schedule: boolean) =>
+      createCardMutate(
+        { list_id, ...data },
+        {
+          onSuccess: (card) => {
+            if (schedule && data.due_date && data.estimated_minutes)
+              createEvent({
+                card_id: card.id,
+                start_at: data.due_date,
+                end_at: new Date(new Date(data.due_date).getTime() + data.estimated_minutes * 60_000).toISOString(),
+                all_day: false,
+              })
+          },
+        },
+      ),
+    [createCardMutate, createEvent],
+  )
+  const onRename = useCallback((id: number, name: string) => updateListMutate({ id, name }), [updateListMutate])
+  const onToggleDone = useCallback(
+    (id: number, is_done_list: boolean) => updateListMutate({ id, is_done_list }),
+    [updateListMutate],
+  )
+  const onDeleteList = useCallback((id: number) => deleteListMutate(id), [deleteListMutate])
   const updateBoard = useUpdateBoard(boardId)
   const deleteBoard = useDeleteBoard()
 
@@ -123,11 +167,17 @@ export default function BoardPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
+  // kart id -> liste id (her onDragOver'da O(n) tarama yerine)
+  const listOf = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const [lid, ids] of Object.entries(columns)) for (const id of ids) map.set(id, Number(lid))
+    return map
+  }, [columns])
+
   const containerOf = (key: string | number): number | null => {
     const { type, id } = parseKey(key)
     if (type === 'list') return id
-    const entry = Object.entries(columns).find(([, ids]) => ids.includes(id))
-    return entry ? Number(entry[0]) : null
+    return listOf.get(id) ?? null
   }
 
   function onDragStart(e: DragStartEvent) {
@@ -281,7 +331,8 @@ export default function BoardPage() {
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
-        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        // Always her karede tum droppable'lari olcuyordu; 9c
+        measuring={{ droppable: { strategy: MeasuringStrategy.WhileDragging } }}
         autoScroll={{ threshold: { x: 0.15, y: 0.1 }, acceleration: 8 }}
         onDragStart={onDragStart}
         onDragOver={onDragOver}
@@ -309,11 +360,13 @@ export default function BoardPage() {
                   list={list}
                   cards={cards}
                   labels={labels}
+                  trackingCardId={trackingCardId}
                   onOpenCard={openCard}
-                  onAddCard={(list_id, title) => m.createCard.mutate({ list_id, title })}
-                  onRename={(id, name) => m.updateList.mutate({ id, name })}
-                  onToggleDone={(id, is_done_list) => m.updateList.mutate({ id, is_done_list })}
-                  onDelete={(id) => m.deleteList.mutate(id)}
+                  onToggleCard={onToggleCard}
+                  onAddCard={onAddCard}
+                  onRename={onRename}
+                  onToggleDone={onToggleDone}
+                  onDelete={onDeleteList}
                 />
               )
             })}
@@ -340,7 +393,7 @@ export default function BoardPage() {
                 }
           }
         >
-          {activeCard ? <CardFace card={activeCard} labels={labels} dragging /> : null}
+          {activeCard ? <CardFace card={activeCard} labels={labels} dragging tracking={trackingCardId === activeCard.id} /> : null}
           {activeList ? (
             <ListOverlay
               list={activeList}
@@ -352,9 +405,17 @@ export default function BoardPage() {
       </DndContext>
       )}
 
-      {(m.moveCard.error || m.moveList.error || m.deleteList.error || m.createCard.error) && (
+      {(m.moveCard.error || m.moveList.error || m.deleteList.error || m.createCard.error || m.toggleCard.error) && (
         <p className="px-4 pb-2 text-sm text-red-600">
-          {(m.moveCard.error ?? m.moveList.error ?? m.deleteList.error ?? m.createCard.error)?.message}
+          {m.toggleCard.error && !(m.moveCard.error || m.moveList.error || m.deleteList.error || m.createCard.error)
+            ? `Kart güncellenemedi: ${m.toggleCard.error.message}`
+            : (m.moveCard.error ?? m.moveList.error ?? m.deleteList.error ?? m.createCard.error)?.message}
+        </p>
+      )}
+
+      {createEventM.error && (
+        <p className="px-4 pb-2 text-sm text-red-600">
+          Takvim bloğu oluşturulamadı: {createEventM.error.message}
         </p>
       )}
 

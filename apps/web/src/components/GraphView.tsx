@@ -17,7 +17,7 @@ import '@xyflow/react/dist/style.css'
 import dagre from '@dagrejs/dagre'
 import { useBoardGraph, useBoardMutations } from '../api/boards'
 import type { CardSummary, GraphEdge, Label } from '../lib/types'
-import CardFace from './CardFace'
+import { CardFaceLive } from './CardFace'
 
 // CSS degiskenleri: tema degisince ip renkleri de degisir
 const EDGE = { child: 'var(--color-slate-400)', waiting: 'var(--chart-warn)', done: 'var(--chart-ok)' } as const
@@ -45,7 +45,7 @@ function CardNodeView({ data }: NodeProps<CardNode>) {
     <div style={{ width: NODE_W }} className={data.external ? 'opacity-60' : ''}>
       {/* Sol: bu kartin on kosullari buraya baglanir. Sag: bu karti bekleyenler. */}
       <Handle type="target" position={Position.Left} className="!h-3 !w-3 !border-2 !border-surface !bg-slate-400" />
-      <CardFace card={data.card} labels={data.labels} />
+      <CardFaceLive card={data.card} labels={data.labels} />
       {data.external && <p className="mt-0.5 text-[12px] text-slate-500">Başka board'dan</p>}
       <Handle type="source" position={Position.Right} className="!h-3 !w-3 !border-2 !border-surface !bg-slate-900" />
     </div>
