@@ -1,11 +1,12 @@
-import { memo, useState, type FormEvent } from 'react'
+import { memo, useRef, useState, type FormEvent } from 'react'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { BoardList, CardSummary, Label } from '../lib/types'
 import CardFace from './CardFace'
 import WhenBadge from './WhenBadge'
 import { useParseTitle, type NewCardInput } from '../api/boards'
-import { applyWhen } from '../lib/when'
+import { useQueryClient } from '@tanstack/react-query'
+import { resolveWhen } from '../lib/when'
 
 export const cardKey = (id: number) => `card-${id}`
 export const listKey = (id: number) => `list-${id}`
@@ -123,20 +124,31 @@ function KanbanList({
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [schedule, setSchedule] = useState(false)
   const { match, ready } = useParseTitle(adding ? title : '')
+  const qc = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(list.name)
   const [menu, setMenu] = useState(false)
 
-  function submitCard(e: FormEvent) {
+  async function submitCard(e: FormEvent) {
     e.preventDefault()
-    if (!title.trim()) return
-    const data = applyWhen(title, match, ready, dismissed)
+    // busyRef: ayni turda gelen ikinci Enter'da state henuz guncellenmemis olabilir
+    if (busyRef.current || !title.trim()) return
     // Kutu yalniz rozet gorunurken (saat + sure) vardir; gizliyken kalan durum sayilmaz
     const showBox = !!match && ready && match.phrase !== dismissed && match.has_time
-    onAddCard(list.id, data, schedule && showBox && 'due_date' in data && !!data.estimated_minutes)
-    setTitle('')
-    setDismissed(null)
-    setSchedule(false)
+    busyRef.current = true
+    setBusy(true)
+    try {
+      const { data, synced } = await resolveWhen(title, { match, ready }, dismissed, qc)
+      onAddCard(list.id, data, !synced && schedule && showBox && 'due_date' in data && !!data.estimated_minutes)
+      setTitle('')
+      setDismissed(null)
+      setSchedule(false)
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
   }
 
   function closeAdd() {
@@ -237,6 +249,8 @@ function KanbanList({
               className="w-full resize-none rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
               placeholder="Kart başlığı… (Enter: ekle, Esc: kapat)"
               value={title}
+              readOnly={busy}
+              aria-busy={busy}
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) submitCard(e)

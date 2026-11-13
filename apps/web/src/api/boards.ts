@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type {
@@ -19,6 +19,7 @@ import type {
   Label,
   Note,
   TitleParse,
+  WhenMatch,
 } from '../lib/types'
 
 export const keys = {
@@ -34,6 +35,31 @@ const json = (body: unknown) => ({ body: JSON.stringify(body) })
 /** Kart olusturma verisi (baslik + baslikta algilanan opsiyonel alanlar). */
 export type NewCardInput = { title: string; due_date?: string | null; estimated_minutes?: number | null }
 
+const fetchParse = (q: string) => api<TitleParse>('/cards/parse-title', { method: 'POST', ...json({ text: q }) })
+
+/** Gonderimde tek seferlik ayristirma (11b, K13 revizyonu). null = eslesme yok, undefined = zaman asimi/hata. */
+export async function parseTitleNow(
+  qc: QueryClient,
+  text: string,
+  timeoutMs = 400,
+): Promise<WhenMatch | null | undefined> {
+  const q = text.trim()
+  if (q.length < 3) return null
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), timeoutMs)
+  })
+  const run = qc
+    .fetchQuery({ queryKey: ['parse-title', q], queryFn: () => fetchParse(q), staleTime: Infinity, retry: false })
+    .then((d): WhenMatch | null => d.match ?? null)
+    .catch((): undefined => undefined)
+  try {
+    return await Promise.race([run, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /**
  * Basliktaki Turkce zaman ifadesini onizler (250 ms debounce). `ready` = sonuc tam su anki
  * metne ait; degilse gonderimde ayristirma kullanilmaz (00-genel K13).
@@ -47,7 +73,7 @@ export function useParseTitle(text: string) {
   }, [q])
   const query = useQuery({
     queryKey: ['parse-title', debounced],
-    queryFn: () => api<TitleParse>('/cards/parse-title', { method: 'POST', ...json({ text: debounced }) }),
+    queryFn: () => fetchParse(debounced),
     enabled: debounced.length >= 3,
     staleTime: Infinity,
     gcTime: 60_000,

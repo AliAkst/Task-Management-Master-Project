@@ -3677,6 +3677,11 @@ export interface components {
             label: string;
             /** Clean Title */
             clean_title: string;
+            /**
+             * Strong
+             * @default true
+             */
+            strong: boolean;
         };
     };
     responses: never;

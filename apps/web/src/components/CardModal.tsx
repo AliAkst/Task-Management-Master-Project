@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Mouse
 import { Check, Circle, CornerLeftUp, ExternalLink, Hourglass, X } from 'lucide-react'
 import { useUploads } from '../api/attachments'
 import { useCard, useCardActivity, useCardMutations, useParseTitle } from '../api/boards'
-import { applyWhen } from '../lib/when'
+import { useQueryClient } from '@tanstack/react-query'
+import { resolveWhen } from '../lib/when'
 import WhenBadge from './WhenBadge'
 import {
   ACTION_LABEL,
@@ -109,6 +110,9 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   const [subtask, setSubtask] = useState('')
   const [subDismissed, setSubDismissed] = useState<string | null>(null)
   const sub = useParseTitle(subtask)
+  const qc = useQueryClient()
+  const [subBusy, setSubBusy] = useState(false)
+  const subBusyRef = useRef(false)
   const [splitOpen, setSplitOpen] = useState(false)
   const [splitParts, setSplitParts] = useState('3')
   const [splitHours, setSplitHours] = useState('')
@@ -201,15 +205,23 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
     if ((e.target as HTMLElement).closest('a,button')) return
     startEditNote(id, content)
   }
-  const addSubtask = (e: FormEvent) => {
+  const addSubtask = async (e: FormEvent) => {
     e.preventDefault()
-    if (subtask.trim())
-      m.addSubtask.mutate(applyWhen(subtask, sub.match, sub.ready, subDismissed), {
+    if (subBusyRef.current || !subtask.trim()) return
+    subBusyRef.current = true
+    setSubBusy(true)
+    try {
+      const { data } = await resolveWhen(subtask, sub, subDismissed, qc)
+      m.addSubtask.mutate(data, {
         onSuccess: () => {
           setSubtask('')
           setSubDismissed(null)
         },
       })
+    } finally {
+      subBusyRef.current = false
+      setSubBusy(false)
+    }
   }
   const submitSplit = (e: FormEvent) => {
     e.preventDefault()
@@ -414,7 +426,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
               ))}
             </ul>
             <form onSubmit={addSubtask} className="mt-2">
-              <input className={input} placeholder="Alt kart ekle ve Enter'a bas" maxLength={200} value={subtask} onChange={(e) => setSubtask(e.target.value)} />
+              <input className={input} placeholder="Alt kart ekle ve Enter'a bas" maxLength={200} value={subtask} readOnly={subBusy} onChange={(e) => setSubtask(e.target.value)} />
               {sub.match && sub.match.phrase !== subDismissed && (
                 <div className="mt-1">
                   <WhenBadge match={sub.match} onDismiss={() => setSubDismissed(sub.match!.phrase)} />
