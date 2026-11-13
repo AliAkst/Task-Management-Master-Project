@@ -212,3 +212,151 @@ def test_known_false_positive_oda_12de():
     assert m is not None
     assert m.due_date == L(2026, 11, 12, 12, 0)
     assert m.clean_title == "Oda toplantı"
+
+
+# ======================= Faz 11a =======================
+import time as _time  # noqa: E402
+
+NOW11 = datetime(2026, 11, 13, 10, 0, tzinfo=TZ)  # Cuma
+
+_C = L(2026, 11, 14, 15, 0)
+# (id, metin, due, has_time, dk, clean_title, strong)
+FAZ11_POSITIVE = [
+    ("F1", "yarın 15.00 da çalışacam", _C, True, None, "çalışacam", True),
+    ("F2", "yarın 15.00 çalışacam", _C, True, None, "çalışacam", True),
+    ("F3", "yarın 15:00 da çalışacam", _C, True, None, "çalışacam", True),
+    ("F4", "yarın 15 te çalışacam", _C, True, None, "çalışacam", True),
+    ("F5", "yarın 15 de çalışacam", _C, True, None, "çalışacam", True),
+    ("F6", "yarın saat 15 de çalışacam", _C, True, None, "çalışacam", True),
+    ("F7", "yarın 9.30 da dişçi", L(2026, 11, 14, 9, 30), True, None, "dişçi", True),
+    ("F8", "yarın 10.05 te ders", L(2026, 11, 14, 10, 5), True, None, "ders", True),
+    ("F9", "pazartesi 10 da toplantı", L(2026, 11, 16, 10, 0), True, None, "toplantı", True),
+    ("F10", "sabah 9 da koş", L(2026, 11, 14, 9, 0), True, None, "koş", True),
+    ("F11", "yarın 3 te gel", _C, True, None, "gel", True),
+    ("F12", "saat 3 te gel", L(2026, 11, 13, 15, 0), True, None, "gel", True),
+    ("F13", "yarın saat üçte gel", _C, True, None, "gel", True),
+    ("F14", "sabah dokuzda koş", L(2026, 11, 14, 9, 0), True, None, "koş", True),
+    ("F15", "cuma ya rapor", L(2026, 11, 13), False, None, "rapor", True),
+    ("F16", "yarin aksam 8 de annemi ara", L(2026, 11, 14, 20, 0), True, None, "annemi ara", True),
+    ("F17", "YARIN 15:00 TOPLANTI", _C, True, None, "TOPLANTI", True),
+    ("F18", "carsamba 14.30 da sunum", L(2026, 11, 18, 14, 30), True, None, "sunum", True),
+    ("F19", "yarın gidicem markete 10 da", L(2026, 11, 14, 10, 0), True, None, "gidicem markete", True),
+    ("F20", "yarın 10.05 dişçi", L(2026, 11, 14, 10, 5), True, None, "dişçi", True),
+    ("F21", "Toplantı 15'te", L(2026, 11, 13, 15, 0), True, None, "Toplantı", True),
+    ("F22", "kendime spor yapacam yarın 8 gibi", L(2026, 11, 14, 8, 0), True, None, "kendime spor yapacam", True),
+    ("F23", "cumartesi ye kadar bitir", L(2026, 11, 14), False, None, "bitir", True),
+    ("R1", "toplantı 15.00-17.00", L(2026, 11, 13, 15, 0), True, 120, "toplantı", True),
+    ("R2", "toplantı saat 3 ile 5 arası", L(2026, 11, 13, 15, 0), True, 120, "toplantı", True),
+    ("R3", "toplantı 14:00'ten 16:00'ya kadar", L(2026, 11, 13, 14, 0), True, 120, "toplantı", True),
+    ("R4", "toplantı öğleden sonra 2 ile 4 arasında", L(2026, 11, 13, 14, 0), True, 120, "toplantı", True),
+    ("R5", "toplantı sabah 9 dan 11 e", L(2026, 11, 14, 9, 0), True, 120, "toplantı", True),
+    ("R6", "toplantı sabah 9'dan 11'e", L(2026, 11, 14, 9, 0), True, 120, "toplantı", True),
+    ("R7", "toplantı 15 ile 17 arasında", L(2026, 11, 13, 15, 0), True, 120, "toplantı", False),
+    ("R8", "ders yarın 15-17", _C, True, 120, "ders", True),
+    ("R9", "toplantı 15:00 ile 17:00 arası", L(2026, 11, 13, 15, 0), True, 120, "toplantı", True),
+    ("R10", "yemek akşam 7-9 arası", L(2026, 11, 13, 19, 0), True, 120, "yemek", True),
+    ("R11", "nöbet gece 11 ile 1 arası", L(2026, 11, 13, 23, 0), True, 120, "nöbet", True),
+    ("R12", "toplantı 11-1 arası", L(2026, 11, 13, 11, 0), True, 120, "toplantı", False),
+    ("R13", "yarın 15 ten 17 ye kadar ders", _C, True, 120, "ders", True),
+    ("R14", "toplantı yarın 15-17 arası", _C, True, 120, "toplantı", True),
+    ("R15", "ders 10.30-12.30", L(2026, 11, 13, 10, 30), True, 120, "ders", True),
+    ("A1", "yarın akşam 8 gibi annemi ara", L(2026, 11, 14, 20, 0), True, None, "annemi ara", True),
+    ("A2", "akşam 8 gibi annemi ara", L(2026, 11, 13, 20, 0), True, None, "annemi ara", True),
+    ("A3", "15 civarı ara", L(2026, 11, 13, 15, 0), True, None, "ara", False),
+    ("A4", "saat 8 gibi ara", L(2026, 11, 14, 8, 0), True, None, "ara", True),
+    ("A5", "15.00 gibi ara", L(2026, 11, 13, 15, 0), True, None, "ara", True),
+    ("A6", "3 sularında uğra", L(2026, 11, 13, 15, 0), True, None, "uğra", False),
+    ("A7", "yarın 15 falan gel", _C, True, None, "gel", True),
+    ("A8", "8 civarında kalk", L(2026, 11, 14, 8, 0), True, None, "kalk", False),
+    ("G1", "öğlene doğru bitir", L(2026, 11, 13, 12, 0), True, None, "bitir", False),
+    ("G2", "akşamüstü koş", L(2026, 11, 13, 17, 0), True, None, "koş", False),
+    ("G3", "gece yarısı yedekle", L(2026, 11, 14, 0, 0), True, None, "yedekle", False),
+    ("G4", "öğle arası yemek", L(2026, 11, 13, 12, 0), True, None, "yemek", False),
+    ("G5", "akşama ara", L(2026, 11, 13, 19, 0), True, None, "ara", False),
+    ("G6", "sabaha bitir", L(2026, 11, 14, 9, 0), True, None, "bitir", False),
+    ("G7", "yarın öğlen yemek", L(2026, 11, 14, 12, 0), True, None, "yemek", True),
+    ("G8", "aksamustu kos", L(2026, 11, 13, 17, 0), True, None, "kos", False),
+    ("G9", "yarın akşamüstü spor", L(2026, 11, 14, 17, 0), True, None, "spor", True),
+    ("G10", "yarın gece yarısı yedekle", L(2026, 11, 15, 0, 0), True, None, "yedekle", True),
+    ("G11", "akşama kadar bitir", L(2026, 11, 13, 19, 0), True, None, "bitir", False),
+    # K1, K2: bilerek kabul edilen yanlis pozitifler (web'de x ile reddedilir, asistanda zayif)
+    ("K1", "Oyun 2 ile 3 arası puan", L(2026, 11, 13, 14, 0), True, 60, "Oyun puan", False),
+    ("K2", "Gece yarısı kitabını oku", L(2026, 11, 14, 0, 0), True, None, "Kitabını oku", False),
+]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "pid,text,due,has_time,minutes,clean,strong",
+    FAZ11_POSITIVE,
+    ids=[p[0] for p in FAZ11_POSITIVE],
+)
+def test_faz11_positive(pid, text, due, has_time, minutes, clean, strong):
+    m = parse_when(text, NOW11, TZ, 0)
+    assert m is not None, text
+    assert m.due_date == due, (m.due_date, due)
+    assert m.has_time is has_time
+    assert m.estimated_minutes == minutes
+    assert m.clean_title == clean
+    assert m.strong is strong
+
+
+FAZ11_NEGATIVE = [
+    "Bölüm 3 te kaldım", "10 da 1 indirim", "Kat 3 te", "3-5 kişilik masa",
+    "sayfa 15-17 oku", "2-3 elma ye", "toplantı 9-11", "toplantı 15den 17ye kadar",
+    "3'ten 5'e kadar say", "Bölüm 2'den 5'e oku", "1.5 litre su iç",
+    "Fiyat 1.50-2.50", "Sürüm 15.00 notları", "Pazar da ekmek al", "Bir de süt al",
+    "Onda kalsın", "4 gibi örnek yaz", "8 gibi annemi ara", "akşam bir film izle",
+    "sabah bir de koşu", "Akşam yemeği hazırla", "iPhone 15 kılıf",
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("text", FAZ11_NEGATIVE)
+def test_faz11_negative(text):
+    assert parse_when(text, NOW11, TZ, 0) is None
+
+
+FAZ11_STRENGTH = [
+    ("S1", "Pazartesi toplantısı notları", False),
+    ("S2", "Perşembe pazarı alışverişi", False),
+    ("S3", "Kat 2de toplantı", False),
+    ("S4", "Sınav 1 saat önce gel", False),
+    ("S5", "2 saat pil testi", False),
+    ("S6", "Rapor 2 saat", True),
+    ("S7", "Oda 12'de toplantı", False),
+    ("S8", "Pazar günü yürüyüş", True),
+    ("S9", "Ödev cumaya", True),
+    ("S10", "Fatura öde cuma", False),
+    ("S11", "3 saatlik çalışma", False),
+    ("S12", "Market perşembe 9'da", True),
+    ("S13", "yarın 15.00 da diş hekimi", True),
+    ("S14", "toplantı yarın 15-17 arası", True),
+    ("S15", "Kira 1.12", True),
+]
+
+
+@pytest.mark.parametrize("pid,text,strong", FAZ11_STRENGTH, ids=[p[0] for p in FAZ11_STRENGTH])
+def test_faz11_strength(pid, text, strong):
+    m = parse_when(text, NOW11, TZ, 0)
+    assert m is not None, text
+    assert m.strong is strong
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "15 da " * 33, "1 ile " * 40, "9 dan " * 30, "akşam " * 33, "15.00 " * 33,
+        "yarın 3 te " * 18, "gece yarısı " * 16, "cuma ya " * 25, "8 gibi " * 28,
+    ],
+)  # fmt: skip
+def test_faz11_redos(text):
+    t0 = _time.perf_counter()
+    parse_when(text, NOW11, TZ, 0)
+    assert _time.perf_counter() - t0 < 0.02
+
+
+def test_faz11_wordhour_map():
+    from app.services.nl_when import _HW
+
+    assert _HW["onbir"] == 11
+    assert _HW["oniki"] == 12
+    assert _HW["uc"] == 3

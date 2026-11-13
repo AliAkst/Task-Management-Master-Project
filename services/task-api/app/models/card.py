@@ -237,6 +237,7 @@ class WhenMatchOut(BaseModel):
     estimated_minutes: int | None = None
     label: str
     clean_title: str
+    strong: bool = True
 
 
 class TitleParseResponse(BaseModel):

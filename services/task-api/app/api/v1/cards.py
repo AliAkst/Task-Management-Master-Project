@@ -66,6 +66,7 @@ async def parse_card_title(
             estimated_minutes=m.estimated_minutes,
             label=m.label,
             clean_title=m.clean_title,
+            strong=m.strong,
         )
         if m
         else None

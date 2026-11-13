@@ -65,3 +65,19 @@ class TestParseTitle:
     async def test_too_long_rejected(self, client: AsyncClient, auth_headers):
         r = await client.post(URL, json={"text": "a" * 201}, headers=auth_headers)
         assert r.status_code == 422
+
+    async def test_strong_flag(self, client: AsyncClient, auth_headers):
+        now = "2026-11-13T07:00:00Z"
+        r = await client.post(
+            URL, json={"text": "Pazartesi toplantısı notları", "now": now}, headers=auth_headers
+        )
+        assert r.json()["data"]["match"]["strong"] is False
+        r = await client.post(
+            URL, json={"text": "yarın 15.00 da diş hekimi", "now": now}, headers=auth_headers
+        )
+        m = r.json()["data"]["match"]
+        assert m["strong"] is True
+        assert datetime.fromisoformat(m["due_date"]) == datetime.fromisoformat(
+            "2026-11-14T15:00:00+03:00"
+        )
+        assert m["clean_title"] == "diş hekimi"
