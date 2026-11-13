@@ -360,3 +360,48 @@ def test_faz11_wordhour_map():
     assert _HW["onbir"] == 11
     assert _HW["oniki"] == 12
     assert _HW["uc"] == 3
+
+
+# ---- Faz 11 denetim duzeltmeleri (D1, D2, D3, D5, D8) ----
+AUDIT11_NONE = [  # saat uretmemeli, eslesme olmamali
+    "saat on beşte gel", "saat on üçte gel", "saat yedi buçukta gel",  # D1
+    "her saat bir bardak su iç", "saat iki kere kontrol et",  # D2
+    "toplantı 15.00-17.10",  # D5
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("text", AUDIT11_NONE)
+def test_audit11_none(text):
+    assert parse_when(text, NOW11, TZ, 0) is None
+
+
+AUDIT11_DAY_ONLY = [  # yalniz gun (14 Kas), saat yok, baslik bozulmaz
+    ("yarın 15,00 da çalış", "15,00 da çalış"),  # D3
+    ("yarın 10,00 da toplantı", "10,00 da toplantı"),  # D3
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("text,rest", AUDIT11_DAY_ONLY)
+def test_audit11_day_only(text, rest):
+    m = parse_when(text, NOW11, TZ, 0)
+    assert m is not None
+    assert m.has_time is False
+    assert (m.due_date.month, m.due_date.day) == (11, 14)
+    assert rest in m.clean_title
+
+
+@pytest.mark.parametrize(
+    "text,due,clean",
+    [
+        ("yarın 3.05 de çalış", L(2026, 11, 14, 15, 5), "çalış"),  # D8
+        ("yarın 2.10 da toplantı", L(2026, 11, 14, 14, 10), "toplantı"),  # D8
+        ("yarın saat üçte gel", L(2026, 11, 14, 15, 0), "gel"),  # D2 korunur
+        ("toplantı saat üç", L(2026, 11, 13, 15, 0), "toplantı"),  # D2: baslik sonu serbest
+    ],
+)
+def test_audit11_positive(text, due, clean):
+    m = parse_when(text, NOW11, TZ, 0)
+    assert m is not None, text
+    assert m.due_date == due
+    assert m.has_time is True
+    assert m.clean_title == clean

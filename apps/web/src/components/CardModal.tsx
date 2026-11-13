@@ -210,17 +210,25 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
     if (subBusyRef.current || !subtask.trim()) return
     subBusyRef.current = true
     setSubBusy(true)
+    let started = false
     try {
       const { data } = await resolveWhen(subtask, sub, subDismissed, qc)
+      started = true
       m.addSubtask.mutate(data, {
         onSuccess: () => {
           setSubtask('')
           setSubDismissed(null)
         },
+        onSettled: () => {
+          subBusyRef.current = false
+          setSubBusy(false)
+        },
       })
     } finally {
-      subBusyRef.current = false
-      setSubBusy(false)
+      if (!started) {
+        subBusyRef.current = false
+        setSubBusy(false)
+      }
     }
   }
   const submitSplit = (e: FormEvent) => {

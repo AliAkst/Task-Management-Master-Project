@@ -174,13 +174,14 @@ _R_T_DP = _c(
 _R_T_SAAT = _c(r"saat (\d{1,2})(?:[:.](\d{2}))?(?:@SUFTSP@)?(?: (?:@APX@))?")
 _R_T_WORD = _c(
     r"(?:(?P<saat>saat)|(?P<dp>@DP@)(?:i|si)?) (?P<hw>@HW@)(?P<suf>'?(?:@SUFT@))?"
-    r"(?: (?:@APX@))?"
+    r"(?P<apx> (?:@APX@))?"
+    r"(?! (?:bir|iki|uc|dort|bes|alti|yedi|sekiz|dokuz|bucuk))"  # D1: "on beste", "yedi bucukta"
 )
 _R_T_COLON = _c(r"(\d{1,2}):(\d{2})(?:@SUFTSP@)?(?: (?:@APX@))?")
 _R_T_DOT = _c(r"(\d{1,2})\.(\d{2})(@SUFTSP@)?( (?:@APX@))?")
-_R_T_SUF = _c(r"(\d{1,2})@SUFTIME@(?: (?:@APX@))?")
-_R_T_SUF_SP = _c(r"(\d{1,2}) (?:@SUFT@)(?: (?:@APX@))?")
-_R_T_APPROX = _c(r"(\d{1,2})(?:[:.](\d{2}))? (@APX@)")
+_R_T_SUF = _c(r"(?<!\d[,.:])(\d{1,2})@SUFTIME@(?: (?:@APX@))?")
+_R_T_SUF_SP = _c(r"(?<!\d[,.:])(\d{1,2}) (?:@SUFT@)(?: (?:@APX@))?")
+_R_T_APPROX = _c(r"(?<!\d[,.:])(\d{1,2})(?:[:.](\d{2}))? (@APX@)")
 _NODIGIT = r"(?! (?:saat )?\d)"
 _R_DP_FREE = [
     (_c(r"aksam ?ustu(?:nde|ne)?" + _NODIGIT), (17, 0), False),
@@ -380,6 +381,8 @@ def _scan(f: str, today: date, ws: int) -> list[Piece]:  # noqa: C901
         )
         has_ctx = _ctx_word(f, m.start())
         if not (m.group("pre") or "arasi" in tail or colon or has_ctx or ok_min):
+            if m.group("m1") and m.group("m2"):
+                taken.append((m.start(), m.end()))  # D5: reddedilen H.MM-H.MM parcalari serbest kalmasin
             continue
         range_hit(m, bool(m.group("pre") or minutes or has_ctx))
     for m in _R_RANGE_ILE.finditer(f):
@@ -454,7 +457,7 @@ def _scan(f: str, today: date, ws: int) -> list[Piece]:  # noqa: C901
         suf = (m.group(4) or "").lstrip("' ")
         if suf and not m.group(3) and (suf.startswith("t") or dd >= 7):
             continue  # "10.05'te" saat yazimi: T-DOT alsin
-        if not suf and not m.group(3):
+        if not m.group(3):
             pw = _prev_word(f, m.start())
             if pw in _CTX_WORDS and pw not in _AY_TAM and _hm(dd, m.group(2)):
                 continue  # "yarin 10.05": baglamli saat, T-DOT alsin
@@ -568,6 +571,8 @@ def _scan(f: str, today: date, ws: int) -> list[Piece]:  # noqa: C901
             continue
         n = _HW[m.group("hw").replace(" ", "")]
         if m.group("saat"):
+            if not (m.group("suf") or m.group("apx") or not f[m.end() :].strip(" .,;:!?")):
+                continue  # D2: "her saat bir bardak su ic": ek/yaklasik/baslik sonu sart
             h: int | None = n + 12 if 1 <= n <= 6 else n
         else:
             if not m.group("suf"):
