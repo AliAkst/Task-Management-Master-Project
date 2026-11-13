@@ -140,3 +140,75 @@ async def test_execute_posts_clean_title(task_api_transport, fake_api):
     assert not [x for x in fake_api.writes if "parse-title" in x["path"]]
     assert posts[0]["body"]["title"] == "Diş hekimi"
     assert posts[0]["body"]["due_date"] == "2026-11-13T15:00:00+03:00"
+
+
+# --- Faz 11c: yalniz guclu eslesme uygulanir, ozetde ozgun baslik ---
+WEAK = {
+    "spans": [[0, 9]],
+    "phrase": "Pazartesi",
+    "due_date": "2026-11-16T23:59:00+03:00",
+    "has_time": False,
+    "estimated_minutes": None,
+    "label": "📅 Pzt 16 Kas",
+    "clean_title": "Toplantısı notları",
+    "strong": False,
+}
+
+
+async def test_weak_match_not_applied(task_api_transport, fake_api):
+    fake_api.parse_result = WEAK
+    p = await prep(task_api_transport, title="Pazartesi toplantısı notları")
+    assert p.args["title"] == "Pazartesi toplantısı notları"
+    assert "due_date" not in p.args
+    assert "(başlıktan)" not in p.summary and "özgün başlık" not in p.summary
+
+
+async def test_weak_match_keeps_model_due(task_api_transport, fake_api):
+    fake_api.parse_result = WEAK
+    p = await prep(
+        task_api_transport, title="Pazartesi toplantısı notları", due_date="2026-11-20"
+    )
+    assert p.args["title"] == "Pazartesi toplantısı notları"
+    assert p.args["due_date"] == "2026-11-20T23:59:00+03:00"
+
+
+async def test_weak_duration_not_applied(task_api_transport, fake_api):
+    fake_api.parse_result = {
+        **WEAK,
+        "due_date": None,
+        "estimated_minutes": 60,
+        "clean_title": "Sınav önce gel",
+    }
+    p = await prep(task_api_transport, title="Sınav 1 saat önce gel")
+    assert p.args["title"] == "Sınav 1 saat önce gel"
+    assert "estimated_minutes" not in p.args
+
+
+async def test_strong_match_applied(task_api_transport, fake_api):
+    fake_api.parse_result = {**MATCH_15, "strong": True}
+    p = await prep(task_api_transport, title=TITLE)
+    assert p.args["title"] == "Diş hekimi"
+    assert p.args["due_date"] == "2026-11-13T15:00:00+03:00"
+    assert "(başlıktan)" in p.summary
+    assert f"özgün başlık «{TITLE}»" in p.summary
+
+
+async def test_missing_strong_defaults_true(task_api_transport, fake_api):
+    fake_api.parse_result = MATCH_15
+    p = await prep(task_api_transport, title=TITLE)
+    assert p.args["title"] == "Diş hekimi"
+    assert f"özgün başlık «{TITLE}»" in p.summary
+
+
+async def test_original_title_not_shown_when_unchanged(task_api_transport, fake_api):
+    fake_api.parse_result = {
+        **MATCH_15,
+        "due_date": None,
+        "has_time": False,
+        "estimated_minutes": 120,
+        "clean_title": "Rapor 2 saat",
+        "strong": True,
+    }
+    p = await prep(task_api_transport, title="Rapor 2 saat")
+    assert p.args["title"] == "Rapor 2 saat"
+    assert "özgün başlık" not in p.summary

@@ -450,7 +450,12 @@ class WriteTools:
         model_due = _due_iso(due_date, self.tz) if due_date else None
         due_final = model_due
         due_from_title = est_from_title = False
+        orig = str(title).strip()
         m = await self._parse_title(str(title))
+        # Faz 11c (L10): yalniz guclu eslesme uygulanir; alan yoksa (eski task-api) guclu say
+        if m and not m.get("strong", True):
+            m = None
+        title_from_parse = False
         if m:
             m_due = m.get("due_date")
             same_day = (
@@ -461,6 +466,7 @@ class WriteTools:
             )
             if same_day:
                 title = m.get("clean_title") or title
+                title_from_parse = bool(m.get("clean_title")) and m["clean_title"] != orig
                 model_has_time = bool(due_date) and len(str(due_date)) > 10
                 if m_due and not model_has_time:
                     due_final, due_from_title = m_due, True
@@ -505,6 +511,8 @@ class WriteTools:
             parent = await self._card(parent_id)
             body["parent_id"] = parent["id"]
             extra.append(f"'{_clip(parent['title'], 40)}' kartının alt kartı")
+        if title_from_parse:
+            extra.append(f"özgün başlık «{_clip(orig, 60)}»")
         summary = f"🗂 Yeni kart: '{_clip(body['title'])}' → {board['board']['name']} / {lst['name']}"
         if extra:
             summary += " (" + ", ".join(extra) + ")"
