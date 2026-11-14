@@ -131,6 +131,9 @@ class TestPatAccess:
             ("POST", "/cards/1/attachments"),
             ("GET", "/cards/1/attachments"),
             ("GET", "/attachments/1/download"),
+            ("POST", "/day-templates"),
+            ("PATCH", "/day-templates/1"),
+            ("DELETE", "/day-templates/1"),
         ]:
             res = await client.request(
                 method, f"{API}{path}", headers=h, json={"x": 1} if method != "GET" else None
@@ -148,6 +151,8 @@ class TestPatAccess:
             headers=h,
         )
         assert res.status_code == 200, res.text
+        # T2-D4: sablon okuma serbest (yazma yasak: test_forbidden_paths_with_pat)
+        assert (await client.get(f"{API}/day-templates", headers=h)).status_code == 200
 
     async def test_revoke_then_401(self, client, auth_headers):
         data = (await make_token(client, auth_headers)).json()["data"]

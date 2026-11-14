@@ -15,6 +15,8 @@ ALLOWED_EXACT: frozenset[tuple[str, str]] = frozenset(
 READ_ONLY_POSTS: frozenset[str] = frozenset({f"{API_PREFIX}/cards/parse-title"})
 READ_METHODS = frozenset({"GET", "HEAD"})
 SETTINGS_PREFIX = f"{API_PREFIX}/settings"
+# Gun sablonlari ayar sayilir: PAT ile yalniz okunur (T2-D4, yonetici karari)
+DAY_TEMPLATES_PREFIX = f"{API_PREFIX}/day-templates"
 
 
 def _norm(path: str) -> str:
@@ -42,6 +44,8 @@ def is_forbidden(method: str, path: str) -> bool:
     ):
         return True
     if method in {"PUT", "PATCH"} and _under(path, SETTINGS_PREFIX):
+        return True
+    if method not in READ_METHODS and _under(path, DAY_TEMPLATES_PREFIX):
         return True
     return False
 

@@ -92,4 +92,9 @@ async def run_agent(
             )
             if result.action is not None:
                 yield AgentEvent("action", result.action)
+            if result.question is not None:
+                # Faz 13 denetim T2-D2: soru kaydedilsin diye yukari bildirilir
+                yield AgentEvent(
+                    "question", {"question": result.question, "state": result.state}
+                )
             yield AgentEvent("message", message=tool_msg)

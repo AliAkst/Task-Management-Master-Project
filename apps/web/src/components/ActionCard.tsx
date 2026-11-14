@@ -12,7 +12,10 @@ const DAY_ACTIONS = new Set(['schedule_day', 'plan_day', 'cancel_day'])
 const DAY_FMT = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })
 
 /** Plan islemlerinde kartin en ustundeki belirgin tarih: "Cumartesi 14 Kasım" + bugün/yarın/n gün sonra. */
-function dayHeading(action: AiAction, now: Date = new Date()): { label: string; badge: string; rolled: boolean } | null {
+function dayHeading(
+  action: AiAction,
+  now: Date = new Date(),
+): { label: string; badge: string; rolled: boolean; rollover: string | null } | null {
   const raw = action.args?.date
   if (!DAY_ACTIONS.has(action.action_type) || typeof raw !== 'string') return null
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
@@ -21,7 +24,9 @@ function dayHeading(action: AiAction, now: Date = new Date()): { label: string; 
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000)
   const badge = diff === 0 ? 'bugün' : diff === 1 ? 'yarın' : diff > 1 ? `${diff} gün sonra` : `${-diff} gün önce`
-  return { label: DAY_FMT.format(day), badge, rolled: action.args?.day_rolled === true }
+  return { label: DAY_FMT.format(day), badge, rolled: action.args?.day_rolled === true,
+    rollover: typeof action.args?.rollover === 'string' ? action.args.rollover : null,
+  }
 }
 
 /** Madde madde onaylanan islemlerde (Gelen Kutusu dagitimi) tek tek cikarilabilen satir. */
@@ -74,7 +79,9 @@ export default function ActionCard({ action, items }: { action: AiAction; items?
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{heading.badge}</span>
           </p>
           {heading.rolled && (
-            <p className="text-[11px] text-slate-500">Saat 04:00'ten önce söylenen "yarın" bu gün sayıldı.</p>
+            <p className="text-[11px] text-slate-500">
+              {heading.rollover ? `Saat ${heading.rollover}'ten önce` : 'Gün dönümünden önce'} söylenen "yarın" bu gün sayıldı.
+            </p>
           )}
         </div>
       )}

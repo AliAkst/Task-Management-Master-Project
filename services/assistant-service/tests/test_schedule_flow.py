@@ -457,3 +457,56 @@ async def test_focused_reply_has_rollover_note_only_when_rolled(
     reply = tokens(events)
     assert reply.startswith("Cumartesi 14 Kasım planını hazırladım")
     assert reply.endswith('(Saat 00:30; "yarın"ı Cumartesi 14 Kasım olarak aldım.)')
+
+
+# ------------------------------------------- T2-D2: normal sohbet yolunda soru saklanır
+async def test_normal_chat_path_stores_question_and_answer_skips_model(client, fake_api):
+    fake_api.calendar_items = [meeting(tomorrow())]
+    provider = FakeProvider([[conflict_call()], [text("Hangisini istersin?")]])
+    client.providers["fake:local"] = provider
+    # "planla" kelimesi yok -> odaklı yol değil, normal sohbet döngüsü
+    _, conv = await say(client, "Yarın 10:30'a bir iş koy")
+    (row,) = await actions(client)
+    assert row.status == "question" and row.action_type == "schedule_day"
+    assert row.args["kind"] == "place" and len(row.args["options"]) == 3
+    assert row.args["user_text"] == "Yarın 10:30'a bir iş koy"
+    calls_before = len(provider.received)
+    events, _ = await say(client, "2", conv)
+    assert len(provider.received) == calls_before  # cevapta model çağrılmadı
+    (card,) = [d for e, d in events if e == "action"]
+    assert card["status"] == "proposed" and "08:00–09:00 İş" in card["summary"]
+    assert [r.status for r in await actions(client)] == ["answered", "proposed"]
+
+
+# ------------------------------------ T2-D3: tüm bloklar başarısızsa hata şablonu da söyler
+async def test_all_blocks_failed_error_mentions_applied_template(
+    fake_api, task_api_transport
+):
+    from app.tools.task_api import TaskApiError
+
+    day = (datetime.now(TZ) + timedelta(days=3)).date()
+    fake_api.templates[day.isoformat()] = HOME_TEMPLATE
+    fake_api.fail_paths = {"/events"}
+    writer = make_writer(task_api_transport)
+    prepared = await writer.prepare(
+        "schedule_day",
+        {"day": day.isoformat(), "items": [{"title": "Okuma", "minutes": 30, "card": False}]},
+    )
+    assert prepared.args["template"]["apply"] is True
+    with pytest.raises(TaskApiError) as exc:
+        await writer.execute(prepared.action_type, prepared.args)
+    assert "reddedildi" in exc.value.message
+    assert "Şablon" in exc.value.message and "3 blok" in exc.value.message
+
+
+# ------------------------------ T2-D1: kart notu gerçek gün dönümü saatini taşır
+async def test_prepared_args_carry_configured_rollover(fake_api, task_api_transport):
+    fake_api.settings_extra = {"day_rollover": "02:00:00"}
+    sat_0130 = datetime(2026, 11, 14, 1, 30, tzinfo=TZ)
+    writer = make_writer(task_api_transport, sat_0130)
+    p = await writer.prepare(
+        "schedule_day",
+        {"day": "yarın", "items": [{"title": "Spor", "minutes": 30, "card": False}]},
+    )
+    assert p.args["day_rolled"] is True
+    assert p.args["rollover"] == "02:00"

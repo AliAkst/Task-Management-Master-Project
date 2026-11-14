@@ -529,19 +529,9 @@ async def _stream(
                 toolbox.gate.model_id = model_id  # normal sohbete donulurse
                 if question is not None:
                     q = question["question"]
-                    await _expire_questions(session, conversation_id)
-                    session.add(
-                        AiActionEntity(
-                            user_id=user["id"],
-                            conversation_id=conversation_id,
-                            action_type="schedule_day",
-                            args=question["state"],
-                            summary=q.text,
-                            status="question",
-                            model_id=planner.info.id,
-                        )
+                    await _store_question(
+                        session, user["id"], conversation_id, question, planner.info.id
                     )
-                    await session.commit()
                     for out in await _say(
                         session,
                         conversation_id,
@@ -616,6 +606,17 @@ async def _stream(
                 elif ev.type == "error":
                     yield sse("error", ev.data)
                     return
+                elif ev.type == "question":
+                    # T2-D2: normal yolda da soru saklanir (cevap model cagirmadan uygulanir)
+                    await _store_question(
+                        session,
+                        user["id"],
+                        conversation_id,
+                        question_event(
+                            ev.data["question"], ev.data.get("state") or {}, text, 0
+                        ).data,
+                        model_id,
+                    )
                 else:
                     if ev.type == "tool_start" and ev.data.get("name") in MEMORY_TOOLS:
                         used_memory_tool = True
@@ -689,6 +690,29 @@ async def _rollover_note(toolbox: ToolBox, planned: dict[str, Any]) -> str:
 
 async def _single_event(ev: AgentEvent) -> AsyncIterator[AgentEvent]:
     yield ev
+
+
+async def _store_question(
+    session: AsyncSession,
+    user_id: int,
+    conversation_id: int,
+    question: dict[str, Any],
+    model_id: str,
+) -> None:
+    """Bekleyen tek soruyu `ai_actions status='question'` olarak yazar (eskiler expired)."""
+    await _expire_questions(session, conversation_id)
+    session.add(
+        AiActionEntity(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            action_type="schedule_day",
+            args=question["state"],
+            summary=question["question"].text,
+            status="question",
+            model_id=model_id,
+        )
+    )
+    await session.commit()
 
 
 async def _expire_questions(session: AsyncSession, conversation_id: int) -> None:

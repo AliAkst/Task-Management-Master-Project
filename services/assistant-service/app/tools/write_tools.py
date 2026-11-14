@@ -1418,6 +1418,7 @@ class WriteTools:
             "template": tmeta,
             "day_raw": _day_raw if _day_raw is not None else day,
             "day_rolled": rolled,
+            "rollover": f"{rollover:%H:%M}",
         }
         tail: list[str] = []
         if result.carry:
@@ -1758,9 +1759,13 @@ class WriteTools:
                     await self.execute("plan_day", {"date": day, "items": entries})
                 except TaskApiError:
                     pass
-            raise TaskApiError(
-                422, failed[0]["error"] if failed else "Hiçbir blok yazılamadı"
-            )
+            msg = failed[0]["error"] if failed else "Hiçbir blok yazılamadı"
+            if "template_added" in extra:  # T2-D3: sablon yine de plana eklendi
+                msg += (
+                    f" (Şablon günün planına eklendi: {extra['template_added'] or 0} blok;"
+                    " tekrar denersen yeniden eklenmez.)"
+                )
+            raise TaskApiError(422, msg)
         planned = False
         try:
             await self.execute(
