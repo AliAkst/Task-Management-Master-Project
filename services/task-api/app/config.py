@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,7 +19,10 @@ class Settings(BaseSettings):
     )
 
     # JWT Settings
-    jwt_secret_key: str = "super-secret-key-change-in-production"
+    # Bos: services/task-api/.jwt_secret (yoksa uretilir) - bkz. app/core/jwt_key.py
+    jwt_secret_key: str | None = None
+    # Kayit politikasi: open (herkes) / first_user (yalniz ilk kullanici) / closed
+    registration: Literal["open", "first_user", "closed"] = "first_user"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7

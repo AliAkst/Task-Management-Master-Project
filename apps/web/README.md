@@ -32,4 +32,6 @@ Yerel SQLite veritabanında (`services/task-api/task_management.db`) geliştirme
 - E-posta: `dev@example.com`
 - Şifre: `devpassword123`
 
+Yeni hesap açmak için task-api'yi `REGISTRATION=open` ile başlat (varsayılan `first_user`: ilk kullanıcıdan sonra kayıt kapalı).
+
 Sadece yerel geliştirme içindir. `.test` / `.local` gibi özel alan adları e-posta doğrulamasından geçmez; test hesaplarında `example.com` kullan.

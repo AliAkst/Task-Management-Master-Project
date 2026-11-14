@@ -4,6 +4,7 @@ import bcrypt
 import jwt
 
 from app.config import settings
+from app.core.jwt_key import get_jwt_secret
 
 # ---  SIFRE ISLEMLERI (BCRYPT) ---
 
@@ -30,7 +31,7 @@ def create_access_token(user_id: int) -> str:
     )
     payload = {"sub": str(user_id), "exp": expire, "type": "access"}
     return jwt.encode(
-        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+        payload, get_jwt_secret(), algorithm=settings.jwt_algorithm
     )
 
 
@@ -39,7 +40,7 @@ def create_refresh_token(user_id: int) -> str:
     expire = datetime.now(UTC) + timedelta(days=settings.jwt_refresh_token_expire_days)
     payload = {"sub": str(user_id), "exp": expire, "type": "refresh"}
     return jwt.encode(
-        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+        payload, get_jwt_secret(), algorithm=settings.jwt_algorithm
     )
 
 
@@ -47,7 +48,7 @@ def decode_token(token: str) -> dict | None:
     """Token'i dogrular ve icindeki veriyi (payload) cozer"""
     try:
         decoded_payload = jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+            token, get_jwt_secret(), algorithms=[settings.jwt_algorithm]
         )
         return decoded_payload
     except (jwt.PyJWTError, Exception):

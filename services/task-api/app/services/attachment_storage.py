@@ -18,6 +18,7 @@ from pathlib import Path
 import jwt
 
 from app.config import settings
+from app.core.jwt_key import get_jwt_secret
 from app.core.exceptions import AppException, AuthenticationException
 from app.core.logging import get_logger
 
@@ -143,7 +144,7 @@ def make_attachment_token(user_id: int, attachment_id: int) -> str:
             "purpose": TOKEN_PURPOSE,
             "exp": datetime.now(UTC) + TOKEN_TTL,
         },
-        settings.jwt_secret_key,
+        get_jwt_secret(),
         algorithm=settings.jwt_algorithm,
     )
 
@@ -152,7 +153,7 @@ def read_attachment_token(token: str) -> tuple[int, int]:
     """Token'i dogrular -> (user_id, attachment_id). Gecersiz/suresi dolmus -> 401."""
     try:
         payload = jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+            token, get_jwt_secret(), algorithms=[settings.jwt_algorithm]
         )
         if payload.get("purpose") != TOKEN_PURPOSE:
             raise ValueError("purpose uyumsuz")

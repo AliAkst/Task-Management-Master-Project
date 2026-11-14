@@ -165,3 +165,60 @@ class TestRefreshToken:
         )
 
         assert response.status_code == 401
+
+
+class TestRegistrationPolicy:
+    """Faz 13a: REGISTRATION = open | first_user | closed."""
+
+    @staticmethod
+    def _user(n: int) -> dict:
+        return {"email": f"kisi{n}@example.com", "password": "securepassword123"}
+
+    async def test_registration_first_user_blocks_second(
+        self, client: AsyncClient, monkeypatch
+    ):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "registration", "first_user")
+        first = await client.post("/api/v1/auth/register", json=self._user(1))
+        assert first.status_code == 201
+        second = await client.post("/api/v1/auth/register", json=self._user(2))
+        assert second.status_code == 403
+        assert second.json()["error"]["code"] == "REGISTRATION_CLOSED"
+
+    async def test_registration_closed_blocks_first(
+        self, client: AsyncClient, monkeypatch
+    ):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "registration", "closed")
+        res = await client.post("/api/v1/auth/register", json=self._user(1))
+        assert res.status_code == 403
+        assert res.json()["error"]["code"] == "REGISTRATION_CLOSED"
+
+    async def test_registration_open_allows_many(
+        self, client: AsyncClient, monkeypatch
+    ):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "registration", "open")
+        for n in (1, 2, 3):
+            res = await client.post("/api/v1/auth/register", json=self._user(n))
+            assert res.status_code == 201
+
+    async def test_registration_status_endpoint(
+        self, client: AsyncClient, monkeypatch
+    ):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "registration", "first_user")
+        # kimliksiz cagrilir
+        res = await client.get("/api/v1/auth/registration")
+        assert res.status_code == 200
+        assert res.json()["data"]["open"] is True
+        await client.post("/api/v1/auth/register", json=self._user(1))
+        res = await client.get("/api/v1/auth/registration")
+        assert res.json()["data"]["open"] is False
+        monkeypatch.setattr(settings, "registration", "closed")
+        res = await client.get("/api/v1/auth/registration")
+        assert res.json()["data"]["open"] is False

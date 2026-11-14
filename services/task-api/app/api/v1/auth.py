@@ -32,6 +32,12 @@ async def register(user_in: UserCreate, service: AuthServiceDep):
     return ApiResponse(success=True, data=user)
 
 
+@auth_router.get("/registration", response_model=ApiResponse[dict])
+async def registration_status(service: AuthServiceDep):
+    """Kayit acik mi? Kimlik istemez (giris sayfasi buna bakar)."""
+    return ApiResponse(success=True, data={"open": await service.registration_open()})
+
+
 @auth_router.post("/login", response_model=ApiResponse[TokenResponse])
 async def login(user_in: UserLogin, service: AuthServiceDep):
     """

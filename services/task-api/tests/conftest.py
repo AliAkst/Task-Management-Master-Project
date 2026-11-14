@@ -1,3 +1,9 @@
+import os
+
+# Uygulama import edilmeden once: testler sabit JWT anahtari ve acik kayit kullanir
+os.environ.setdefault("JWT_SECRET_KEY", "test-only-jwt-secret")
+os.environ.setdefault("REGISTRATION", "open")
+
 from collections.abc import AsyncGenerator
 from typing import Any
 

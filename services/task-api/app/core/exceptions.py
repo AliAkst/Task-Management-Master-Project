@@ -80,6 +80,15 @@ class UserAlreadyExistException(AppException):
         )
 
 
+class RegistrationClosedException(AppException):
+    """Kayit politikasi yeni kullaniciya izin vermiyor (Faz 13a)."""
+
+    def __init__(self):
+        super().__init__(
+            status_code=403, error_code="REGISTRATION_CLOSED", message="Kayıt kapalı"
+        )
+
+
 class ForbiddenException(AppException):
     """Kullanici yetkisi yok."""
 

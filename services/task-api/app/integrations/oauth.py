@@ -29,6 +29,7 @@ import jwt
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.core.jwt_key import get_jwt_secret
 from app.core import crypto
 from app.core.exceptions import ValidationException
 from app.core.logging import get_logger
@@ -264,7 +265,7 @@ def make_state(user_id: int, provider: str) -> str:
             "purpose": "oauth_state",
             "exp": now + STATE_TTL,
         },
-        settings.jwt_secret_key,
+        get_jwt_secret(),
         algorithm=settings.jwt_algorithm,
     )
 
@@ -273,7 +274,7 @@ def read_state(state: str, provider: str) -> int:
     """State'i dogrular, user_id dondurur. Gecersiz/suresi dolmus/yanlis saglayici -> hata."""
     try:
         payload = jwt.decode(
-            state, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+            state, get_jwt_secret(), algorithms=[settings.jwt_algorithm]
         )
         if payload.get("purpose") != "oauth_state" or payload.get("provider") != provider:
             raise ValueError("state uyumsuz")

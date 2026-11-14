@@ -27,21 +27,7 @@ trap {
     exit 1
 }
 
-function Find-Uv {
-    $cmd = Get-Command uv -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-    # Kisayoldan acilinca ortam degiskenleri (APPDATA, PATH) eksik gelebiliyor:
-    # klasorleri Windows API'sinden bul
-    $roaming = [Environment]::GetFolderPath("ApplicationData")
-    $home_ = [Environment]::GetFolderPath("UserProfile")
-    $candidates = @(
-        (Get-ChildItem "$roaming\Python\Python3*\Scripts\uv.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName),
-        "$home_\.local\bin\uv.exe",
-        "$home_\.cargo\bin\uv.exe"
-    ) | Where-Object { $_ }
-    foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
-    return $null
-}
+. (Join-Path $PSScriptRoot "common.ps1")
 
 function Find-Exe($name, [string[]]$candidates) {
     $cmd = Get-Command $name -ErrorAction SilentlyContinue
@@ -117,6 +103,14 @@ function Sync-Env($name, $dir) {
     }
 }
 # task-api ve asistan varsayilan olarak kendi SQLite dosyalarini kullanir
+
+# --- Gunluk yedek (migration'lardan once; hata baslatmayi durdurmaz) ---
+if ($uv -and ((-not (Test-Port 8000)) -or (-not (Test-Port 8100)))) {
+    try {
+        $bk = Invoke-Logged "backup" $uv @("run", "--no-project", "python", (Join-Path $PSScriptRoot "backup.py"), "--if-missing-today") $root
+        if ($bk -ne 0) { Write-Warning "Yedek alinamadi (cikis $bk): scripts/logs/backup.err.log" }
+    } catch { Write-Warning "Yedek calistirilamadi: $($_.Exception.Message)" }
+}
 
 # Ollama (local modeller)
 if (-not (Test-Port 11434)) {

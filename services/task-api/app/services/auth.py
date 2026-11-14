@@ -6,9 +6,11 @@ ve repository ile güvenlik araçları arasında köprü kurar.
 """
 
 
+from app.config import settings
 from app.core.exceptions import (
     InvalidCredentialsException,
     InvalidTokenException,
+    RegistrationClosedException,
     UserAlreadyExistException,
 )
 from app.core.logging import get_logger
@@ -37,6 +39,15 @@ class AuthService:
         """
         self.uow = uow
 
+    async def registration_open(self) -> bool:
+        """Kayit politikasi (REGISTRATION): open / first_user / closed."""
+        mode = settings.registration
+        if mode == "open":
+            return True
+        if mode == "closed":
+            return False
+        return await self.uow.users.count() == 0
+
     async def register(self, user_in: UserCreate) -> UserResponse:
         """
         Yeni bir kullanici kaydi olusturur
@@ -48,6 +59,8 @@ class AuthService:
         Raises:
             UserAlreadyExistsException: E-posta adresi zaten sistemde kayitliysa.
         """
+        if not await self.registration_open():
+            raise RegistrationClosedException()
         logger.info(f"Registering user:{user_in.email}")
 
         # e-mail kontrolu

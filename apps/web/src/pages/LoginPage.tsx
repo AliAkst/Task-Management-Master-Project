@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { useAuthStore } from '../stores/auth'
@@ -15,8 +15,19 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [registrationOpen, setRegistrationOpen] = useState(false)
   const setTokens = useAuthStore((s) => s.setTokens)
   const navigate = useNavigate()
+
+  // Kayıt politikası sunucuda (REGISTRATION): kapalıyken kayıt geçişi gösterilmez
+  useEffect(() => {
+    api<{ open: boolean }>('/auth/registration')
+      .then((r) => {
+        setRegistrationOpen(r.open)
+        if (!r.open) setMode('login')
+      })
+      .catch(() => setRegistrationOpen(false))
+  }, [])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -87,13 +98,15 @@ export default function LoginPage() {
           {busy ? 'Bekleyin…' : mode === 'login' ? 'Giriş yap' : 'Kaydol'}
         </button>
 
-        <button
-          type="button"
-          className="w-full text-sm text-slate-600 hover:underline"
-          onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-        >
-          {mode === 'login' ? 'Hesabın yok mu? Kaydol' : 'Zaten hesabın var mı? Giriş yap'}
-        </button>
+        {registrationOpen && (
+          <button
+            type="button"
+            className="w-full text-sm text-slate-600 hover:underline"
+            onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+          >
+            {mode === 'login' ? 'Hesabın yok mu? Kaydol' : 'Zaten hesabın var mı? Giriş yap'}
+          </button>
+        )}
       </form>
     </div>
   )
