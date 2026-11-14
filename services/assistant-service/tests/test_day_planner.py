@@ -110,7 +110,7 @@ async def test_planner_retries_with_error_feedback(client):
                 call(
                     "schedule_day",
                     day="yarın",
-                    blocks=[{"title": "İş", "start": "09:00"}],
+                    blocks=[{"title": "İş", "minutes": 60}],
                 )
             ],
             [
@@ -126,7 +126,7 @@ async def test_planner_retries_with_error_feedback(client):
     events = await chat(client, PLAN)
     assert [d["action_type"] for e, d in events if e == "action"] == ["schedule_day"]
     # Ikinci denemede model ilk hatayi gordu
-    assert "süre (minutes)" in provider.all_text_sent()
+    assert "başlangıç saati (start)" in provider.all_text_sent()
 
 
 async def test_planner_failure_falls_back_to_chat(client):

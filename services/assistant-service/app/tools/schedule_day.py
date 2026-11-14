@@ -18,15 +18,17 @@ from zoneinfo import ZoneInfo
 from app.llm.types import ToolSpec
 
 MAX_BLOCKS = 24
+DEFAULT_MINUTES = 30  # yalniz start verilen blok icin varsayilan sure (Faz 12b)
 
 SCHEDULE_SPEC = ToolSpec(
     "schedule_day",
-    "Bir günü saat saat planlar: TEK çağrıyla bütün blokları sırasıyla ver. "
-    "Yapılacak işler (card=true) kart + takvim bloğu olur ve gün planına eklenir; "
-    "yol, iş, yemek gibi sabit şeyler (card=false) sadece takvim etkinliği olur. "
-    "Saat hesabı yapma: başlangıcı verilmeyen blok bir öncekinin bitişinde başlar; "
-    "bitiş yerine 'minutes' (süre) verebilirsin. Gün: 'bugün', 'yarın', haftanın günü "
-    "('salı') ya da YYYY-MM-DD.",
+    "Bir günü planlar: TEK çağrıyla bütün maddeleri sırasıyla ver. Her madde gün "
+    "planına eklenir. Yapılacak işler (card=true) kart olur; yol, iş, yemek gibi "
+    "sabit şeyler (card=false) kart olmaz. Saati ya da süresi olan madde takvime de "
+    "konur; kullanıcı saat/süre söylemediyse start, minutes, end YAZMA: madde saatsiz "
+    "plan maddesi olur. Saat hesabı yapma: başlangıcı verilmeyen saatli madde bir "
+    "öncekinin bitişinde başlar; bitiş yerine 'minutes' verebilirsin. Gün: 'bugün', "
+    "'yarın', haftanın günü ('salı') ya da YYYY-MM-DD.",
     {
         "type": "object",
         "properties": {
@@ -39,13 +41,13 @@ SCHEDULE_SPEC = ToolSpec(
                         "title": {"type": "string"},
                         "start": {
                             "type": "string",
-                            "description": "HH:MM (sadece sabit saatli bloklarda)",
+                            "description": "HH:MM (yalnız kullanıcı saat söylediyse)",
                         },
                         "minutes": {"type": "integer", "description": "süre (dakika)"},
                         "end": {"type": "string", "description": "HH:MM"},
                         "card": {
                             "type": "boolean",
-                            "description": "true: yapılacak iş; false: sabit etkinlik",
+                            "description": "true: yapılacak iş (kart); false: kartsız madde/sabit etkinlik",
                         },
                         "board": {
                             "type": "string",
@@ -119,18 +121,27 @@ def hhmm(minutes: int) -> str:
 @dataclass
 class Block:
     title: str
-    start: int  # gun basindan dakika (ertesi gune tasabilir)
-    end: int
+    start: int | None  # gun basindan dakika (ertesi gune tasabilir); None = saatsiz
+    end: int | None
     card: bool
     board: Any
+    defaulted: bool = False  # sure verilmedi, DEFAULT_MINUTES uygulandi
 
 
-def _lead_in_start(blocks: list[dict[str, Any]]) -> int | None:
+def _is_untimed(b: Any) -> bool:
+    """start, minutes, end ucu de bos -> saatsiz plan maddesi."""
+    return isinstance(b, dict) and all(
+        b.get(k) in (None, "") for k in ("start", "minutes", "end")
+    )
+
+
+def _lead_in_start(all_blocks: list[dict[str, Any]]) -> int | None:
     """
     Ilk bloklarin saati yoksa ama sonraki bir blok sabit saatliyse ("ofise yol
     2 saat", "is 09:00") o bloklar sabit saate BITECEK sekilde geriye hesaplanir:
     yol 07:00-09:00. Kucuk modeller ilk bloga saat vermeyi sik unutuyor.
     """
+    blocks = [b for b in all_blocks if not _is_untimed(b)]  # saatsizler atlanir
     if not blocks or not isinstance(blocks[0], dict) or blocks[0].get("start"):
         return None
     lead = 0
@@ -159,13 +170,23 @@ def build_timeline(blocks: list[dict[str, Any]]) -> list[Block]:
         if not isinstance(b, dict) or not str(b.get("title") or "").strip():
             raise ValueError(f"{i}. bloğun başlığı (title) yok")
         title = str(b["title"]).strip()[:200]
+        if _is_untimed(b):  # saatsiz: imleci ilerletmez, etkinlik olmaz
+            card = b.get("card")
+            out.append(
+                Block(
+                    title, None, None, card if isinstance(card, bool) else True,
+                    b.get("board"),
+                )
+            )
+            continue
+        defaulted = False
         if b.get("start") not in (None, ""):
             start = parse_clock(b["start"], f"'{title}' start")
             # Gece yarisini gecmis bir zaman cizelgesinde "01:00" ertesi gundur
             while cursor is not None and start + 12 * 60 <= cursor:
                 start += 24 * 60
             if cursor is not None and start < cursor:
-                prev = out[-1]
+                prev = next(x for x in reversed(out) if x.start is not None)
                 raise ValueError(
                     f"'{title}' {hhmm(start)}'de başlıyor ama önceki blok "
                     f"'{prev.title}' {hhmm(prev.end)}'de bitiyor. Saati düzelt ya da "
@@ -190,7 +211,8 @@ def build_timeline(blocks: list[dict[str, Any]]) -> list[Block]:
                 raise ValueError(f"'{title}' süresi 1–1440 dakika olmalı")
             end = start + minutes
         else:
-            raise ValueError(f"'{title}' için süre (minutes) ya da bitiş (end) gerekli")
+            end = start + DEFAULT_MINUTES  # yalniz start verildi (M4)
+            defaulted = True
         if end - start > 24 * 60:
             raise ValueError(f"'{title}' 24 saatten uzun olamaz")
         card = b.get("card")
@@ -201,6 +223,7 @@ def build_timeline(blocks: list[dict[str, Any]]) -> list[Block]:
                 end,
                 card if isinstance(card, bool) else True,
                 b.get("board"),
+                defaulted,
             )
         )
         cursor = end
@@ -237,6 +260,8 @@ def find_conflict(
     verilirse) cakisma sayilmaz; ayrilamayan zamanlar atlanir.
     """
     for blk in blocks:
+        if blk.start is None or blk.end is None:
+            continue  # saatsiz madde takvime yazilmaz
         b_start, b_end = to_datetime(day, blk.start, tz), to_datetime(day, blk.end, tz)
         for ev in events:
             if ev.get("kind") != "event" or ev.get("all_day"):

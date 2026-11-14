@@ -55,13 +55,11 @@ Bugün: {today}. Board'lar: {boards}.
 
 Nasıl:
 1. Günün olaylarını GERÇEKLEŞME SIRASIYLA yaz (sabahtan geceye).
-2. Saati kesin olan bloğa start ve end yaz (örn. iş 09:00–18:00).
-3. Diğer bloklara SADECE minutes yaz; araç onları bir öncekinin bitişine ekler.
-   Saati belli bloktan önceki bloklar (örn. işe yol) araç tarafından ona göre
-   yerleştirilir.
-4. Her blokta ya minutes ya end OLMALI.
+2. Kullanıcının saat verdiği maddeye start yaz; bitişini ya da süresini söylediyse end ya da minutes ekle.
+3. Süresi söylenen ama saati söylenmeyen maddelere SADECE minutes yaz; araç onları bir öncekinin bitişine ekler. Saati belli maddeden önceki maddeler (örn. işe yol) araç tarafından ona göre yerleştirilir.
+4. Kullanıcı saat de süre de söylemediyse start, minutes, end YAZMA (saat uydurma); madde saatsiz olarak gün planına girer.
 5. Yol, iş, yemek: card=false. Yapılacak işler (spor, alışveriş, oyun, temizlik):
-   card=true ve uygun board.
+   card=true ve uygun board. Kartlı ya da kartsız, her madde gün planına eklenir.
 6. Kullanıcının verdiği süreleri aynen kullan; birlikte söylediği şeyleri tek blok yap.
 7. Boş kalan zamana kullanıcının söylemediği iş ekleme.
 8. Kullanıcı var olan bir kartı adıyla anıyorsa ("eğitim board'ındaki P2 kartı") title'a SADECE kartın adını yaz ("P2"), board'a board adını ver; araç var olan açık kartı bulup kullanır, yeni kart açmaz.
@@ -74,6 +72,12 @@ schedule_day({{"day": "yarın", "blocks": [
  {{"title": "Market", "minutes": 20, "card": true, "board": "Günlük işler"}},
  {{"title": "Eve yol", "minutes": 60, "card": false}},
  {{"title": "Koşu", "minutes": 45, "card": true, "board": "Spor"}}]}})
+
+Örnek: "Yarın market, kuru temizleme ve kitap iade, planla."
+schedule_day({{"day": "yarın", "blocks": [
+ {{"title": "Market", "card": true, "board": "Günlük işler"}},
+ {{"title": "Kuru temizleme", "card": false}},
+ {{"title": "Kitap iade", "card": false}}]}})
 
 Metin yazma; sadece aracı çağır."""
 

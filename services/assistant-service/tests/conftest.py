@@ -198,6 +198,7 @@ class FakeTaskApi:
         self.calendar_items: list[dict[str, Any]] | None = None
         self.event_patch_status: dict[int, int] = {}
         self._next_id = 500
+        self._event_seq = 0
         # Faz 10c: POST /cards/parse-title (yalniz okur; writes'a girmez)
         self.parse_result: dict[str, Any] | None = None
         self.parse_calls: list[dict[str, Any]] = []
@@ -350,8 +351,13 @@ class FakeTaskApi:
         if method == "POST" and path == "/cards":
             return ok({"id": 100, "title": body["title"]})
         if method == "POST" and path == "/events":
+            self._event_seq += 1  # Faz 12b: her etkinlik ayri id (ilki 7)
             return ok(
-                {"id": 7, "title": body.get("title", "x"), "start_at": body["start_at"]}
+                {
+                    "id": 6 + self._event_seq,
+                    "title": body.get("title", "x"),
+                    "start_at": body["start_at"],
+                }
             )
         if method == "POST" and path.endswith("/split"):
             return ok(

@@ -75,8 +75,7 @@ def test_timeline_errors_are_actionable():
                 {"title": "B", "start": "09:30", "minutes": 30},
             ]
         )
-    with pytest.raises(ValueError, match="süre"):
-        build_timeline([{"title": "A", "start": "08:00"}])
+    assert build_timeline([{"title": "A", "start": "08:00"}])[0].end == 8 * 60 + 30
     # gece yarisindan sonra acik saat: ertesi gun
     late = build_timeline(
         [
@@ -129,6 +128,11 @@ async def test_prepare_and_execute(fake_api, task_api_transport):
     assert fake_api.writes[2]["body"]["card_id"] == 100  # kartin zaman blogu
     assert all(w["actor"] == "ai" for w in fake_api.writes)
     assert result["added_to_plan"] is True and len(result["created"]) == 2
+    e1, e2 = (c["event_id"] for c in result["created"])
+    assert fake_api.writes[3]["body"]["items"] == [
+        {"event_id": e1},
+        {"event_id": e2, "card_id": 100},
+    ]
 
 
 async def test_cloud_cannot_schedule_into_private_board(task_api_transport):

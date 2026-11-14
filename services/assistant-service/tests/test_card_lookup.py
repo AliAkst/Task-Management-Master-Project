@@ -465,7 +465,9 @@ async def test_schedule_day_reuses_existing_card(cards, fake_api, task_api_trans
     assert event_post["body"]["card_id"] == 31
     assert r["created"][0]["card_id"] == 31 and r["added_to_plan"] is True
     plan = next(x for x in fake_api.writes if x["method"] == "PUT")
-    assert plan["body"]["items"] == [{"card_id": 31}]
+    assert plan["body"]["items"] == [
+        {"event_id": r["created"][0]["event_id"], "card_id": 31}
+    ]
 
 
 # ---------------- search_cards / get_calendar ----------------

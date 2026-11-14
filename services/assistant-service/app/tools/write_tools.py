@@ -1036,7 +1036,33 @@ class WriteTools:
                 titles.append(event["title"])
             elif it.get("title"):
                 entry["title"] = str(it["title"])[:200]
-                titles.append(entry["title"])
+                label = entry["title"]
+                m = await self._parse_title(entry["title"])
+                # Faz 12b (M8): yalniz guclu eslesme; baska gune ait ifade uygulanmaz
+                if m and m.get("strong", True):
+                    due_dt = None
+                    if m.get("due_date"):
+                        try:
+                            due_dt = datetime.fromisoformat(str(m["due_date"]))
+                        except ValueError:
+                            due_dt = None
+                    if due_dt is None or (
+                        (due_dt if due_dt.tzinfo else due_dt.replace(tzinfo=self.tz))
+                        .astimezone(self.tz)
+                        .date()
+                        == day
+                    ):
+                        entry["title"] = (m.get("clean_title") or entry["title"])[:200]
+                        label = entry["title"]
+                        if due_dt is not None and m.get("has_time"):
+                            entry["planned_start"] = str(m["due_date"])
+                            local = (
+                                due_dt if due_dt.tzinfo else due_dt.replace(tzinfo=self.tz)
+                            ).astimezone(self.tz)
+                            label += f" {local:%H:%M}"
+                        if m.get("estimated_minutes") and it.get("planned_minutes") is None:
+                            entry["planned_minutes"] = int(m["estimated_minutes"])
+                titles.append(label)
             else:
                 raise ValueError("Her madde card_id, event_id ya da title içermeli")
             if it.get("planned_minutes") is not None:
@@ -1130,13 +1156,12 @@ class WriteTools:
         lists: dict[int, dict[str, Any]] = {}
         open_cards: list[dict[str, Any]] | None = None
         for blk in timeline:
-            item: dict[str, Any] = {
-                "title": blk.title,
-                "start_at": to_datetime(target, blk.start, self.tz).isoformat(),
-                "end_at": to_datetime(target, blk.end, self.tz).isoformat(),
-                "minutes": blk.end - blk.start,
-                "card": blk.card,
-            }
+            timed = blk.start is not None and blk.end is not None
+            item: dict[str, Any] = {"title": blk.title, "card": blk.card, "timed": timed}
+            if timed:
+                item["start_at"] = to_datetime(target, blk.start, self.tz).isoformat()
+                item["end_at"] = to_datetime(target, blk.end, self.tz).isoformat()
+                item["minutes"] = blk.end - blk.start
             board = find_board(boards, blk.board)
             if blk.board not in (None, "") and board is None:
                 names = ", ".join(b["name"] for b in boards)
@@ -1168,13 +1193,25 @@ class WriteTools:
             if existing:
                 kind = f"var olan kart #{existing['id']}, {existing['board_name']}"
             else:
-                kind = f"YENİ kart, {board['name']}" if blk.card and board else "etkinlik"
-            lines.append(f"{hhmm(blk.start)}–{hhmm(blk.end)} {blk.title} ({kind})")
+                kind = (
+                    f"YENİ kart, {board['name']}"
+                    if blk.card and board
+                    else ("etkinlik" if timed else "plan maddesi")
+                )
+            if timed:
+                line = f"{hhmm(blk.start)}–{hhmm(blk.end)} {blk.title} ({kind})"
+                if blk.defaulted:
+                    line += " (süre 30 dk varsayıldı)"
+            else:
+                line = f"saatsiz · {blk.title} ({kind})"
+            lines.append(line)
             out.append(item)
-        cards = sum(1 for i in out if i["card"])
+        cards = sum(1 for i in out if i["card"] or i.get("card_id"))
+        n_timed = sum(1 for i in out if i["timed"])
         summary = (
-            f"🗓 {_fmt_day(target)} planı: {cards} kart, "
-            f"{len(out) - cards} sabit etkinlik, hepsi takvime\n" + "\n".join(lines)
+            f"🗓 {_fmt_day(target)} planı: {cards} kart, {len(out) - cards} kartsız "
+            f"madde; takvime {n_timed} blok, gün planına {len(out)} madde\n"
+            + "\n".join(lines)
         )
         return PreparedAction(
             "schedule_day", {"date": target.isoformat(), "blocks": out}, summary
@@ -1310,12 +1347,10 @@ class WriteTools:
         if action_type == "plan_day":
             # Onay aninda mevcut planla yeniden birlestir (arada elle degismis olabilir)
             plan = await api.get(f"/day-plans/{args['date']}")
+            # Faz 12b: var olan satirlar id'siyle gider (task-api outcome/sure/saati korur)
             existing = [
-                {
-                    k: i[k]
-                    for k in ("card_id", "event_id", "planned_minutes")
-                    if i.get(k) is not None
-                }
+                {"id": i["id"]}
+                | {k: i[k] for k in ("card_id", "event_id") if i.get(k) is not None}
                 | (
                     {}
                     if i.get("card_id") or i.get("event_id")
@@ -1324,14 +1359,26 @@ class WriteTools:
                 for i in plan.get("items", [])
                 if i["was_planned"]
             ]
-            have = {i.get("card_id") for i in existing if i.get("card_id")}
-            have_ev = {i.get("event_id") for i in existing if i.get("event_id")}
-            merged = existing + [
-                i
-                for i in args["items"]
-                if not (i.get("card_id") and i["card_id"] in have)
-                and not (i.get("event_id") and i["event_id"] in have_ev)
-            ]
+            have = {i["card_id"] for i in existing if i.get("card_id")}
+            have_ev = {i["event_id"] for i in existing if i.get("event_id")}
+            have_title = {
+                str(i["title"]).strip().casefold() for i in existing if i.get("title")
+            }
+            fresh: list[dict[str, Any]] = []
+            for i in args["items"]:
+                if i.get("event_id"):
+                    if i["event_id"] in have_ev:
+                        continue
+                elif i.get("card_id"):
+                    if i["card_id"] in have:
+                        continue
+                elif i.get("title"):
+                    key = str(i["title"]).strip().casefold()
+                    if key in have_title:
+                        continue
+                    have_title.add(key)
+                fresh.append(i)
+            merged = existing + fresh
             p = await api.write("PUT", f"/day-plans/{args['date']}", {"items": merged})
             return {"date": p["date"], "items": len(p["items"])}
         raise ValueError(f"Bilinmeyen işlem: {action_type}")
@@ -1402,40 +1449,46 @@ class WriteTools:
         due = _due_iso(day, self.tz)
         done: list[dict[str, Any]] = []
         failed: list[dict[str, Any]] = []
-        card_ids: list[int] = []
+        entries: list[dict[str, Any]] = []  # gun plani girdileri, blok sirasiyla
         for b in args["blocks"]:
             try:
-                event: dict[str, Any] = {
-                    "start_at": b["start_at"],
-                    "end_at": b["end_at"],
-                }
+                timed = b.get("timed", True)
+                card_id: int | None = None
+                event_id: int | None = None
+                event: dict[str, Any] = {}
+                if timed:
+                    event = {"start_at": b["start_at"], "end_at": b["end_at"]}
                 if b.get("card_id"):  # var olan kart: yeni kart acilmaz
-                    card_ids.append(b["card_id"])
-                    event["card_id"] = b["card_id"]
+                    card_id = b["card_id"]
                 elif b["card"]:
-                    c = await api.write(
-                        "POST",
-                        "/cards",
-                        {
-                            "list_id": b["list_id"],
-                            "title": b["title"],
-                            "due_date": due,
-                            "estimated_minutes": b["minutes"],
-                        },
-                    )
-                    card_ids.append(c["id"])
-                    event["card_id"] = c["id"]
-                else:
-                    event["title"] = b["title"]
-                    if b.get("board_id"):
-                        event["board_id"] = b["board_id"]
-                e = await api.write("POST", "/events", event)
+                    body = {"list_id": b["list_id"], "title": b["title"], "due_date": due}
+                    if timed:
+                        body["estimated_minutes"] = b["minutes"]
+                    c = await api.write("POST", "/cards", body)
+                    card_id = c["id"]
+                if timed:
+                    if card_id:
+                        event["card_id"] = card_id
+                    else:
+                        event["title"] = b["title"]
+                        if b.get("board_id"):
+                            event["board_id"] = b["board_id"]
+                    try:
+                        event_id = (await api.write("POST", "/events", event))["id"]
+                    except TaskApiError:
+                        if card_id:  # kart olustu: etkinliksiz de olsa plana girsin
+                            entries.append({"card_id": card_id})
+                        raise
+                entry: dict[str, Any] = {}
+                if event_id:
+                    entry["event_id"] = event_id
+                if card_id:
+                    entry["card_id"] = card_id
+                if not entry:
+                    entry["title"] = b["title"]
+                entries.append(entry)
                 done.append(
-                    {
-                        "title": b["title"],
-                        "event_id": e["id"],
-                        "card_id": event.get("card_id"),
-                    }
+                    {"title": b["title"], "event_id": event_id, "card_id": card_id}
                 )
             except TaskApiError as err:
                 failed.append({"title": b["title"], "error": err.message})
@@ -1444,15 +1497,11 @@ class WriteTools:
                 422, failed[0]["error"] if failed else "Hiçbir blok yazılamadı"
             )
         planned = False
-        if card_ids:
-            try:
-                await self.execute(
-                    "plan_day",
-                    {"date": day, "items": [{"card_id": c} for c in card_ids]},
-                )
-                planned = True
-            except TaskApiError:
-                planned = False  # gun degerlendirilmis olabilir; takvim yine de yazildi
+        try:
+            await self.execute("plan_day", {"date": day, "items": entries})
+            planned = True
+        except TaskApiError:
+            planned = False  # gun degerlendirilmis olabilir; takvim yine de yazildi
         return {
             "date": day,
             "created": done,
