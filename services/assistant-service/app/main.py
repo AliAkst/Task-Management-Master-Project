@@ -12,6 +12,7 @@ from app.api.facts import router as facts_router
 from app.api.insights import router as insights_router
 from app.api.jobs import recover_stale_jobs
 from app.api.jobs import router as jobs_router
+from app.api.mcp import router as mcp_router
 from app.api.notify import router as notify_router
 from app.api.providers import router as providers_router
 from app.config import settings
@@ -66,6 +67,7 @@ app.include_router(providers_router, prefix="/api/v1/assistant")
 app.include_router(jobs_router, prefix="/api/v1/assistant")
 app.include_router(insights_router, prefix="/api/v1/assistant")
 app.include_router(notify_router, prefix="/api/v1/assistant")
+app.include_router(mcp_router, prefix="/api/v1/assistant")
 
 
 @app.get("/health")

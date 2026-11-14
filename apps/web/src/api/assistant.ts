@@ -25,6 +25,9 @@ export interface AiAction {
   args?: Record<string, unknown> | null
   result: Record<string, unknown> | null
   user_feedback: string | null
+  /** Sohbet disi oneriler (Claude baglantisi / MCP) null; model_id "mcp:claude" */
+  conversation_id?: number | null
+  model_id?: string | null
 }
 
 export interface Permission {
@@ -190,24 +193,46 @@ function useRefreshAfterAction() {
   }
 }
 
+/** Bekleyen islemler (Faz 13i): sohbete bagli olmayan (Claude) oneriler; 30 sn'de bir + pencere odaginda tazelenir. */
+export const pendingActionsKey = ['assistant', 'actions', 'pending-mcp'] as const
+export const PENDING_REFETCH_MS = 30_000
+
+export function usePendingMcpActions() {
+  return useQuery({
+    queryKey: pendingActionsKey,
+    queryFn: async () => {
+      const all = await api<AiAction[]>(`${BASE}/actions?status=proposed`)
+      return all.filter((a) => a.conversation_id == null)
+    },
+    refetchInterval: PENDING_REFETCH_MS,
+    refetchOnWindowFocus: true,
+    retry: false,
+  })
+}
+
+export const DECISION_KEY = ['assistant', 'action-decision'] as const
+
 export function useActionDecision() {
   const refresh = useRefreshAfterAction()
   return {
     approve: useMutation({
+      mutationKey: DECISION_KEY,
       mutationFn: ({ id, rememberAuto, excludeCardIds }: { id: number; rememberAuto: boolean; excludeCardIds?: number[] }) =>
         api<AiAction>(`${BASE}/actions/${id}/approve`, {
           method: 'POST',
           body: JSON.stringify({ remember_auto: rememberAuto, exclude_card_ids: excludeCardIds ?? [] }),
         }),
-      onSuccess: refresh,
+      // Hata da (ör. 409 "zaten sonuçlandı") listeyi tazeler: kart Bekleyen işlemler'den düşer
+      onSettled: refresh,
     }),
     reject: useMutation({
+      mutationKey: DECISION_KEY,
       mutationFn: ({ id, reason }: { id: number; reason: string | null }) =>
         api<AiAction>(`${BASE}/actions/${id}/reject`, {
           method: 'POST',
           body: JSON.stringify({ reason }),
         }),
-      onSuccess: refresh,
+      onSettled: refresh,
     }),
   }
 }

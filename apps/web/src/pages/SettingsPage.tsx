@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import type { UserSettings, UserSettingsUpdate } from '../lib/types'
 import { usePermissions, useSetPermission, type Permission } from '../api/assistant'
 import ApiTokensSettings from '../components/ApiTokensSettings'
+import ClaudeConnectSettings from '../components/ClaudeConnectSettings'
 import DayTemplatesSettings from '../components/DayTemplatesSettings'
 import IntegrationsSettings from '../components/IntegrationsSettings'
 import NotificationSettings from '../components/NotificationSettings'
@@ -29,6 +30,7 @@ const SECTIONS = [
   { id: 'bildirimler', label: 'Bildirimler' },
   { id: 'ses', label: 'Ses' },
   { id: 'baglantilar', label: 'Bağlantılar' },
+  { id: 'claude', label: 'Claude bağlantısı' },
   { id: 'anahtarlar', label: 'Erişim anahtarları' },
 ]
 
@@ -264,6 +266,7 @@ export default function SettingsPage() {
           <NotificationSettings />
           <VoiceSettings />
           <IntegrationsSettings />
+          <ClaudeConnectSettings />
           <ApiTokensSettings />
         </div>
       </div>

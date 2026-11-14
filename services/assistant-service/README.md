@@ -55,3 +55,18 @@ Model karşılaştırması: `uv run python -m scripts.benchmark_models` → `ben
 | `OLLAMA_THINK` | `false` |
 | `DEFAULT_MODEL` | `ollama:qwen3.5:4b` |
 | `OPENAI_API_KEY`, `OPENAI_MODELS` | boş (ör. `OPENAI_MODELS=["gpt-..."]`) |
+
+## Claude bağlantısı (MCP)
+
+Claude Desktop ya da Claude Code, Ajanda'yı bir MCP sunucusu olarak kullanabilir (abonelik yeter, API ücreti yok). Sunucu stdio üzerinden çalışır ve Claude tarafından başlatılır:
+
+```
+uv run --directory <assistant-service klasörü> python -m app.mcp_server
+```
+
+- **Anahtar:** Ajanda → Ayarlar → *Claude bağlantısı* → "Anahtar üret". Ekranda Claude Desktop (`claude_desktop_config.json` → `mcpServers`) ve Claude Code (`claude mcp add …`) için hazır yapılandırma çıkar; anahtar yalnızca bir kez gösterilir. Ortam değişkenleri: `AJANDA_TOKEN` (zorunlu), `AJANDA_TASK_API_URL` (isteğe bağlı, varsayılan `TASK_API_URL`).
+- **Araçlar:** okuma (board, kart, takvim, gün planı, istatistik, hedefler, kurslar, iş özeti, `get_action_status`) ve yazma (`create_card`, `update_card`, `move_card`, `schedule_card`, `reschedule_card`, `plan_day`, `schedule_day`, `create_event`). Silme ve hafıza araçları yoktur.
+- **Onay:** yazmalar *Asistan izinleri* ayarına uyar. `Sor` olanlar Ajanda'da *Asistan → Bekleyen işlemler*'e düşer ve siz onaylayana kadar yapılmaz; `Asla` olan araçlar Claude'a hiç gösterilmez.
+- **Gizlilik:** `local_only` board'lar ve kartları Claude'a hiçbir yanıtta gitmez (Claude bulut modeldir).
+- **İptal:** Ayarlar → Erişim anahtarları'ndan "Claude" anahtarını iptal edin (anında geçersiz olur); Claude Desktop yapılandırmasından `ajanda` girdisini silin ya da `claude mcp remove ajanda`.
+- Sunucu `stdout`'u yalnız MCP protokolü için kullanır; günlükler `stderr`'e yazılır.

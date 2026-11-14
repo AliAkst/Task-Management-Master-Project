@@ -54,6 +54,9 @@ def action_payload(a: AiActionEntity) -> dict[str, Any]:
         "args": a.args,
         "result": a.result,
         "user_feedback": a.user_feedback,
+        # Faz 13i: Bekleyen islemler (MCP onerileri conversation_id=None, model_id="mcp:...")
+        "conversation_id": a.conversation_id,
+        "model_id": a.model_id,
     }
 
 

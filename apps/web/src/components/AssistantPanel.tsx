@@ -17,6 +17,7 @@ import {
 } from '../api/assistant'
 import { AlertTriangle, ChevronDown, Loader2, Lock, Search, Sparkles, X } from 'lucide-react'
 import ActionCard from './ActionCard'
+import PendingActions from './PendingActions'
 import { DictationStatus, useMic } from './MicButton'
 import { insertDictated } from '../lib/dictation'
 import { tryRefresh } from '../lib/api'
@@ -329,6 +330,8 @@ export default function AssistantPanel() {
           ))}
         </ul>
       )}
+
+      <PendingActions />
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {empty && (
