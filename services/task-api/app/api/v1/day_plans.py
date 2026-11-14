@@ -9,10 +9,13 @@ from app.models.analytics import AnalyticsSummary
 from app.models.common import ApiResponse
 from app.models.day_plan import (
     AiSummaryInput,
+    DayPlanItemPatch,
     DayPlanResponse,
     DayPlanSave,
     DayReview,
     DaySuggestions,
+    ItemMove,
+    ItemToCard,
 )
 
 day_plans_router = APIRouter(tags=["Day planning"])
@@ -70,6 +73,45 @@ async def delete_plan_item(
 ):
     await service.delete_item(item_id, user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@day_plans_router.patch(
+    "/day-plan-items/{item_id}", response_model=ApiResponse[DayPlanResponse]
+)
+async def patch_plan_item(
+    item_id: int,
+    data: DayPlanItemPatch,
+    service: DayPlanServiceDep,
+    user: CurrentUserDep,
+):
+    """Tek maddeyi gunceller: tamamla, baslik, sure, saat."""
+    return ApiResponse(
+        success=True, data=await service.patch_item(item_id, user.id, data)
+    )
+
+
+@day_plans_router.post(
+    "/day-plan-items/{item_id}/to-card", response_model=ApiResponse[DayPlanResponse]
+)
+async def plan_item_to_card(
+    item_id: int, data: ItemToCard, service: DayPlanServiceDep, user: CurrentUserDep
+):
+    """Kartsiz plan maddesini karta donusturur."""
+    return ApiResponse(
+        success=True, data=await service.item_to_card(item_id, user.id, data)
+    )
+
+
+@day_plans_router.post(
+    "/day-plan-items/{item_id}/move", response_model=ApiResponse[DayPlanResponse]
+)
+async def move_plan_item(
+    item_id: int, data: ItemMove, service: DayPlanServiceDep, user: CurrentUserDep
+):
+    """Plan maddesini baska bir gune tasir (bos ise ertesi gun)."""
+    return ApiResponse(
+        success=True, data=await service.move_item(item_id, user.id, data)
+    )
 
 
 @day_plans_router.get(

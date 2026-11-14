@@ -1270,6 +1270,50 @@ export interface paths {
         delete: operations["delete_plan_item_api_v1_day_plan_items__item_id__delete"];
         options?: never;
         head?: never;
+        /**
+         * Patch Plan Item
+         * @description Tek maddeyi gunceller: tamamla, baslik, sure, saat.
+         */
+        patch: operations["patch_plan_item_api_v1_day_plan_items__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/day-plan-items/{item_id}/to-card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plan Item To Card
+         * @description Kartsiz plan maddesini karta donusturur.
+         */
+        post: operations["plan_item_to_card_api_v1_day_plan_items__item_id__to_card_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/day-plan-items/{item_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Plan Item
+         * @description Plan maddesini baska bir gune tasir (bos ise ertesi gun).
+         */
+        post: operations["move_plan_item_api_v1_day_plan_items__item_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -2592,6 +2636,20 @@ export interface components {
             /** Authorize Url */
             authorize_url: string;
         };
+        /**
+         * DayPlanItemPatch
+         * @description Tek plan maddesini gunceller; verilmeyen alan degismez.
+         */
+        DayPlanItemPatch: {
+            /** Done */
+            done?: boolean | null;
+            /** Title */
+            title?: string | null;
+            /** Planned Minutes */
+            planned_minutes?: number | null;
+            /** Planned Start */
+            planned_start?: string | null;
+        };
         /** DayPlanItemResponse */
         DayPlanItemResponse: {
             /** Id */
@@ -3020,6 +3078,14 @@ export interface components {
             calendar_consent?: boolean | null;
         };
         /**
+         * ItemMove
+         * @description Plan maddesini baska bir gune tasir (bos ise ertesi gun).
+         */
+        ItemMove: {
+            /** Date */
+            date?: string | null;
+        };
+        /**
          * ItemOutcome
          * @enum {string}
          */
@@ -3033,6 +3099,16 @@ export interface components {
             reason?: string | null;
             /** Postponed To */
             postponed_to?: string | null;
+        };
+        /**
+         * ItemToCard
+         * @description Plan maddesini karta donusturur (list_id ya da board_id).
+         */
+        ItemToCard: {
+            /** Board Id */
+            board_id?: number | null;
+            /** List Id */
+            list_id?: number | null;
         };
         /** LabelCreate */
         LabelCreate: {
@@ -3196,6 +3272,8 @@ export interface components {
          * @description Karta, takvim etkinligine ya da sadece basliga dayali plan maddesi.
          */
         PlanItemInput: {
+            /** Id */
+            id?: number | null;
             /** Card Id */
             card_id?: number | null;
             /** Event Id */
@@ -3204,6 +3282,8 @@ export interface components {
             title?: string | null;
             /** Planned Minutes */
             planned_minutes?: number | null;
+            /** Planned Start */
+            planned_start?: string | null;
         };
         /** PlanSuggestion */
         PlanSuggestion: {
@@ -6395,6 +6475,117 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_plan_item_api_v1_day_plan_items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayPlanItemPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plan_item_to_card_api_v1_day_plan_items__item_id__to_card_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemToCard"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_plan_item_api_v1_day_plan_items__item_id__move_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemMove"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayPlanResponse_"];
+                };
             };
             /** @description Validation Error */
             422: {

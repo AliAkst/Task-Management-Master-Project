@@ -12,10 +12,14 @@ Akis:
 Bu veri, istatistiklerin ve AI'in "planladigin vs yaptigin" analizinin temelidir.
 """
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from app.core.events import domain_event_publisher
-from app.core.exceptions import ConflictException, NotFoundException
+from app.core.exceptions import (
+    ConflictException,
+    NotFoundException,
+    ValidationException,
+)
 from app.db.entities import EventEntity, TaskEntity
 from app.db.entities.day_plan import (
     DayPlanEntity,
@@ -24,13 +28,17 @@ from app.db.entities.day_plan import (
     ItemOutcome,
 )
 from app.db.unit_of_work import TaskUnitOfWork
+from app.models.card import CardCreate, CardUpdate
 from app.models.day_plan import (
     AiSummaryInput,
+    DayPlanItemPatch,
     DayPlanItemResponse,
     DayPlanResponse,
     DayPlanSave,
     DayReview,
     DaySuggestions,
+    ItemMove,
+    ItemToCard,
     PlanSuggestion,
 )
 from app.models.task import TaskStatus
@@ -165,6 +173,11 @@ class DayPlanService:
         )
         planned_cards = {i.card_id for i in planned_items if i.card_id is not None}
         planned_events = {i.event_id for i in planned_items if i.event_id is not None}
+        planned_titles = {
+            i.title.strip().casefold()
+            for i in planned_items
+            if i.was_planned and i.card_id is None and i.event_id is None
+        }
 
         result: list[PlanSuggestion] = []
         seen_cards: set[int] = set()
@@ -174,8 +187,14 @@ class DayPlanService:
                 if s.card_id in seen_cards:
                     return
                 seen_cards.add(s.card_id)
-            s.already_planned = (s.card_id in planned_cards) or (
-                s.event_id is not None and s.event_id in planned_events
+            s.already_planned = (
+                (s.card_id in planned_cards)
+                or (s.event_id is not None and s.event_id in planned_events)
+                or (
+                    s.card_id is None
+                    and s.event_id is None
+                    and s.title.strip().casefold() in planned_titles
+                )
             )
             result.append(s)
 
@@ -332,19 +351,103 @@ class DayPlanService:
         }
 
     # ---------------- planlama ----------------
+    @staticmethod
+    def _event_start(event, bounds, tz) -> datetime | None:
+        """Etkinligin plandaki saati (tekrarlayanda o gunku tekrar)."""
+        if event is None or event.all_day:
+            return None
+        planned_start = event.start_at
+        if event.recurrence_rule:
+            occ = occurrences(
+                event.recurrence_rule,
+                event.start_at,
+                event.end_at - event.start_at,
+                bounds,
+                tz,
+            )
+            planned_start = occ[0][0] if occ else None
+        return planned_start
+
+    @staticmethod
+    def _event_minutes(event) -> int | None:
+        if event is None or event.all_day:
+            return None
+        return int((event.end_at - event.start_at).total_seconds() // 60)
+
+    @staticmethod
+    def _check_start(value: datetime | None, bounds, tz) -> datetime | None:
+        """planned_start planin gunu icinde olmali (naive -> kullanici dilimi)."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=tz)
+        if not (bounds[0] <= value < bounds[1]):
+            raise ValidationException("planned_start planın günü içinde olmalı")
+        return value
+
+    def _fill_item(
+        self, item: DayPlanItemEntity, it, card, event, bounds, tz, start
+    ) -> None:
+        """Yeni plan maddesinin baslik/board/dakika/saat alanlari (tek yer)."""
+        minutes = it.planned_minutes
+        if minutes is None:
+            minutes = self._event_minutes(event)
+        if minutes is None and card is not None:
+            minutes = card.estimated_minutes
+        title = it.title or (card.title if card else None)
+        if title is None and event is not None:
+            title = event.title
+        item.card_id = card.id if card else None
+        item.event_id = event.id if event else None
+        item.title = (title or "")[:200]
+        item.board_id = card.board_id if card else (event.board_id if event else None)
+        item.was_planned = True
+        item.planned_minutes = minutes
+        item.planned_start = (
+            self._event_start(event, bounds, tz) if event is not None else start
+        )
+
     async def save_plan(
         self, user_id: int, day: date, data: DayPlanSave
     ) -> DayPlanResponse:
-        # Once dogrula (sahiplik), sonra yaz: gecersiz istek yan etki birakmasin
-        resolved: list[tuple[TaskEntity | None, EventEntity | None]] = []
-        for it in data.items:
+        tz = await user_tz(self.uow, user_id)
+        bounds = day_bounds(day, tz)
+        plan = await self.uow.day_plans.for_date(user_id, day)
+        existing = await self.uow.day_plan_items.for_plans([plan.id]) if plan else []
+        planned_rows = [i for i in existing if i.was_planned]
+        by_id = {i.id: i for i in planned_rows}
+
+        async def resolve(it):
             card = await self._owned_card(it.card_id, user_id) if it.card_id else None
             event = (
                 await self._owned_event(it.event_id, user_id) if it.event_id else None
             )
             if card is None and event is not None and event.card_id is not None:
                 card = await self.uow.tasks.get_by_id(event.card_id)
-            resolved.append((card, event))
+            start = (
+                self._check_start(it.planned_start, bounds, tz)
+                if event is None
+                else None
+            )
+            return card, event, start
+
+        # 1) Once tumunu dogrula (sahiplik, 404, planned_start); sonra yaz
+        resolved: list[tuple] = []  # (id ile bulunan satir | None, kart, etkinlik, saat)
+        for it in data.items:
+            row = by_id.get(it.id) if it.id is not None else None
+            if row is not None:
+                start = (
+                    self._check_start(it.planned_start, bounds, tz)
+                    if row.event_id is None and "planned_start" in it.model_fields_set
+                    else None
+                )
+                resolved.append((row, None, None, start))
+                continue
+            if it.id is not None and (
+                it.card_id is None and it.event_id is None and not it.title
+            ):
+                raise NotFoundException("DayPlanItem", it.id)
+            resolved.append((None, *await resolve(it)))
 
         plan = await self._get_or_create(user_id, day)
         if plan.status == DayPlanStatus.REVIEWED:
@@ -352,55 +455,108 @@ class DayPlanService:
                 "PLAN_ALREADY_REVIEWED",
                 "Bu gün değerlendirildi; planı değil değerlendirmeyi güncelle",
             )
-        existing = await self.uow.day_plan_items.for_plans([plan.id])
         previously_planned = {i.card_id for i in existing if i.card_id is not None}
-        for item in existing:
-            if item.was_planned:
-                await self.uow.day_plan_items.delete(item)
 
-        tz = await user_tz(self.uow, user_id)
-        bounds = day_bounds(day, tz)
+        # 2) Esle / guncelle / olustur
+        used: set[int] = set()
+        row_by_card: dict[int, DayPlanItemEntity] = {}
+        row_by_event: dict[int, DayPlanItemEntity] = {}
         newly_planned: list[TaskEntity] = []
-        for idx, (it, (card, event)) in enumerate(
-            zip(data.items, resolved, strict=True), start=1
-        ):
-            minutes = it.planned_minutes
-            if minutes is None and event is not None and not event.all_day:
-                minutes = int((event.end_at - event.start_at).total_seconds() // 60)
-            if minutes is None and card is not None:
-                minutes = card.estimated_minutes
+        position_idx = 0
 
-            planned_start = event.start_at if event and not event.all_day else None
-            if event is not None and event.recurrence_rule and planned_start:
-                # Tekrarlayan etkinlik: o gunku tekrarin saati
-                occ = occurrences(
-                    event.recurrence_rule,
-                    event.start_at,
-                    event.end_at - event.start_at,
-                    bounds,
-                    tz,
+        def register(row: DayPlanItemEntity) -> None:
+            if row.card_id is not None:
+                row_by_card[row.card_id] = row
+            if row.event_id is not None:
+                row_by_event[row.event_id] = row
+
+        def find_unused(pred) -> DayPlanItemEntity | None:
+            return next((r for r in planned_rows if r.id not in used and pred(r)), None)
+
+        for it, (id_row, card, event, start) in zip(data.items, resolved, strict=True):
+            row = id_row if id_row is not None and id_row.id not in used else None
+            if row is None and id_row is not None:
+                # ayni id ikinci kez: id'siz girdi gibi (referans yoksa yok sayilir)
+                if it.card_id is None and it.event_id is None and not it.title:
+                    continue
+                card, event, start = await resolve(it)
+
+            attach_event = None
+            if row is None:
+                # K-S6: bu istekte islenmis kart/etkinlik tekrar gelirse yeni satir yok
+                dup = (event and row_by_event.get(event.id)) or (
+                    card and row_by_card.get(card.id)
                 )
-                planned_start = occ[0][0] if occ else None
-            await self.uow.day_plan_items.create(
-                DayPlanItemEntity(
+                if dup:
+                    if event is not None and dup.event_id is None:
+                        dup.event_id = event.id
+                        dup.planned_start = self._event_start(event, bounds, tz)
+                        if dup.planned_minutes is None:
+                            dup.planned_minutes = self._event_minutes(event)
+                        row_by_event[event.id] = dup
+                    continue
+                if event is not None:
+                    row = find_unused(lambda r: r.event_id == event.id)
+                    if row is None and card is not None:
+                        row = find_unused(
+                            lambda r: r.card_id == card.id and r.event_id is None
+                        )
+                        attach_event = event if row is not None else None
+                elif card is not None:
+                    row = find_unused(lambda r: r.card_id == card.id)
+                else:
+                    key = (it.title or "").strip().casefold()
+                    row = find_unused(
+                        lambda r: r.card_id is None
+                        and r.event_id is None
+                        and r.title.strip().casefold() == key
+                    )
+
+            position_idx += 1
+            if row is None:
+                row = DayPlanItemEntity(
                     user_id=user_id,
                     day_plan_id=plan.id,
-                    card_id=card.id if card else None,
-                    event_id=event.id if event else None,
-                    title=(it.title or (card.title if card else None) or event.title)[
-                        :200
-                    ],  # type: ignore[union-attr]
-                    board_id=card.board_id
-                    if card
-                    else (event.board_id if event else None),
-                    was_planned=True,
-                    planned_start=planned_start,
-                    planned_minutes=minutes,
-                    position=idx * STEP,
+                    position=position_idx * STEP,
                 )
-            )
-            if card is not None and card.id not in previously_planned:
-                newly_planned.append(card)
+                self._fill_item(row, it, card, event, bounds, tz, start)
+                await self.uow.day_plan_items.create(row)
+                if card is not None and card.id not in previously_planned:
+                    newly_planned.append(card)
+                    previously_planned.add(card.id)
+                register(row)
+                continue
+
+            used.add(row.id)
+            row.position = position_idx * STEP
+            if attach_event is not None:
+                row.event_id = attach_event.id
+                row.planned_start = self._event_start(attach_event, bounds, tz)
+                if row.planned_minutes is None:
+                    row.planned_minutes = self._event_minutes(attach_event)
+            if "planned_minutes" in it.model_fields_set:
+                minutes = it.planned_minutes
+                if minutes is None:
+                    ev = (
+                        await self.uow.events.get_by_id(row.event_id)
+                        if row.event_id
+                        else None
+                    )
+                    minutes = self._event_minutes(ev)
+                    if minutes is None and row.card_id is not None:
+                        c = await self.uow.tasks.get_by_id(row.card_id)
+                        minutes = c.estimated_minutes if c else None
+                row.planned_minutes = minutes
+            if row.card_id is None and row.event_id is None and it.title:
+                row.title = it.title[:200]
+            if row.event_id is None and "planned_start" in it.model_fields_set:
+                row.planned_start = start
+            register(row)
+
+        # 3) Hicbir girdiyle eslesmeyen planli satirlari sil
+        for r in planned_rows:
+            if r.id not in used:
+                await self.uow.day_plan_items.delete(r)
 
         for card in newly_planned:
             await self.activity.log(
@@ -419,6 +575,216 @@ class DayPlanService:
             {"user_id": user_id, "date": day.isoformat(), "items": len(data.items)},
         )
         return await self.get(user_id, day)
+
+    async def patch_item(
+        self, item_id: int, user_id: int, data: DayPlanItemPatch
+    ) -> DayPlanResponse:
+        from app.services.card import CardService
+
+        item = await self.uow.day_plan_items.get_owned(item_id, user_id)
+        if item is None:
+            raise NotFoundException("DayPlanItem", item_id)
+        plan = await self.uow.day_plans.get_by_id(item.day_plan_id)
+        fields = data.model_fields_set
+        if plan.status == DayPlanStatus.REVIEWED and fields - {"done"}:
+            raise ConflictException(
+                "PLAN_ALREADY_REVIEWED",
+                "Bu gün değerlendirildi; yalnız tamamlandı işareti değiştirilebilir",
+            )
+        tz = await user_tz(self.uow, user_id)
+        bounds = day_bounds(plan.date, tz)
+        new_title = data.title if "title" in fields else None
+        if new_title is not None and item.card_id is not None:
+            raise ValidationException("Kartlı maddenin başlığı karttan gelir")
+        if "planned_start" in fields and item.event_id is not None:
+            raise ValidationException("Saat takvim etkinliğinden gelir")
+        start = self._check_start(data.planned_start, bounds, tz)
+
+        if new_title is not None:
+            item.title = new_title.strip()[:200]
+        if "planned_minutes" in fields:
+            item.planned_minutes = data.planned_minutes
+        if "planned_start" in fields:
+            item.planned_start = start
+
+        card = (
+            await self.uow.tasks.get_by_id(item.card_id)
+            if item.card_id is not None
+            else None
+        )
+        new_status = None
+        if data.done is True:
+            item.outcome = ItemOutcome.DONE
+            item.postponed_to = None
+            if card is not None and card.status != TaskStatus.COMPLETED:
+                new_status = TaskStatus.COMPLETED
+        elif data.done is False:
+            item.outcome = None
+            item.reason = None
+            item.postponed_to = None
+            if card is not None and card.status == TaskStatus.COMPLETED:
+                new_status = TaskStatus.PENDING
+        if new_status is not None:
+            # CardService.update durum degisimini gecmise yazmiyor; istatistik icin
+            # burada yazilir (ayni transaction'da, update commit eder)
+            await self.activity.log(
+                user_id,
+                "card",
+                card.id,
+                "completed" if new_status == TaskStatus.COMPLETED else "reopened",
+                board_id=card.board_id,
+                card_id=card.id,
+                changes={"date": plan.date.isoformat(), "via": "day_plan"},
+            )
+            await CardService(self.uow, self.actor).update(
+                card.id, user_id, CardUpdate(status=new_status)
+            )
+        else:
+            await self.uow.commit()
+        return await self.get(user_id, plan.date)
+
+    async def item_to_card(
+        self, item_id: int, user_id: int, data: ItemToCard
+    ) -> DayPlanResponse:
+        from app.services.board import BoardService
+        from app.services.card import CardService
+        from app.services.event import EventService
+
+        item = await self.uow.day_plan_items.get_owned(item_id, user_id)
+        if item is None:
+            raise NotFoundException("DayPlanItem", item_id)
+        if item.card_id is not None:
+            raise ConflictException("ITEM_HAS_CARD", "Bu madde zaten bir karta bağlı")
+        plan = await self.uow.day_plans.get_by_id(item.day_plan_id)
+
+        list_id = data.list_id
+        if list_id is None:
+            board_id = data.board_id if data.board_id is not None else item.board_id
+            if board_id is None:
+                raise ValidationException("board_id ya da list_id gerekli")
+            await BoardService(self.uow).get_owned_board(board_id, user_id)
+            lists = await self.uow.lists.list_for_board(board_id)
+            open_lists = [lst for lst in lists if not lst.is_done_list]
+            if not open_lists:
+                raise ValidationException("Board'da açık liste yok")
+            list_id = open_lists[0].id
+
+        tz = await user_tz(self.uow, user_id)
+        card = await CardService(self.uow, self.actor).create(
+            user_id,
+            CardCreate(
+                list_id=list_id,
+                title=item.title,
+                due_date=datetime.combine(plan.date, time(23, 59), tzinfo=tz),
+                estimated_minutes=item.planned_minutes,
+            ),
+        )
+        item.card_id = card.id
+        item.board_id = card.board_id
+
+        if item.event_id is not None:
+            event = await self.uow.events.get_by_id(item.event_id)
+            if event is not None:
+                try:
+                    await EventService(self.uow, self.actor)._assert_editable(event)
+                except ConflictException:
+                    pass  # dis takvim etkinligi baglanmaz
+                else:
+                    event.card_id = card.id
+                    event.board_id = card.board_id
+        await self.activity.log(
+            user_id,
+            "card",
+            card.id,
+            "planned",
+            board_id=card.board_id,
+            card_id=card.id,
+            changes={"date": plan.date.isoformat(), "via": "to_card"},
+        )
+        if item.outcome == ItemOutcome.DONE:
+            await CardService(self.uow, self.actor).update(
+                card.id, user_id, CardUpdate(status=TaskStatus.COMPLETED)
+            )
+        else:
+            await self.uow.commit()
+        return await self.get(user_id, plan.date)
+
+    async def move_item(
+        self, item_id: int, user_id: int, data: ItemMove
+    ) -> DayPlanResponse:
+        item = await self.uow.day_plan_items.get_owned(item_id, user_id)
+        if item is None:
+            raise NotFoundException("DayPlanItem", item_id)
+        if not item.was_planned:
+            raise ValidationException("Yalnız planlanmış madde taşınabilir")
+        source = await self.uow.day_plans.get_by_id(item.day_plan_id)
+        if source.status == DayPlanStatus.REVIEWED:
+            raise ConflictException(
+                "PLAN_ALREADY_REVIEWED",
+                "Bu gün değerlendirildi; değerlendirmede ertele seçeneğini kullan",
+            )
+        tz = await user_tz(self.uow, user_id)
+        target = data.date or source.date + timedelta(days=1)
+        if target == source.date:
+            raise ValidationException("Hedef gün aynı")
+        if target < local_today(tz):
+            raise ValidationException("Geçmiş bir güne taşınamaz")
+        target_plan = await self.uow.day_plans.for_date(user_id, target)
+        if target_plan is not None and target_plan.status == DayPlanStatus.REVIEWED:
+            raise ConflictException(
+                "PLAN_ALREADY_REVIEWED", "Hedef gün değerlendirilmiş"
+            )
+        target_plan = await self._get_or_create(user_id, target)
+        rows = [
+            i
+            for i in await self.uow.day_plan_items.for_plans([target_plan.id])
+            if i.was_planned
+        ]
+        key = item.title.strip().casefold()
+        duplicate = any(
+            (item.card_id is not None and r.card_id == item.card_id)
+            or (
+                item.card_id is None
+                and r.card_id is None
+                and r.event_id is None
+                and r.title.strip().casefold() == key
+            )
+            for r in rows
+        )
+        if not duplicate:
+            await self.uow.day_plan_items.create(
+                DayPlanItemEntity(
+                    user_id=user_id,
+                    day_plan_id=target_plan.id,
+                    card_id=item.card_id,
+                    event_id=None,
+                    title=item.title,
+                    board_id=item.board_id,
+                    was_planned=True,
+                    planned_start=None,
+                    planned_minutes=item.planned_minutes,
+                    position=max((r.position for r in rows), default=0.0) + STEP,
+                )
+            )
+        if item.card_id is not None:
+            card = await self.uow.tasks.get_by_id(item.card_id)
+            if card is not None:
+                await self.activity.log(
+                    user_id,
+                    "card",
+                    card.id,
+                    "planned",
+                    board_id=card.board_id,
+                    card_id=card.id,
+                    changes={
+                        "date": target.isoformat(),
+                        "moved_from": source.date.isoformat(),
+                    },
+                )
+        source_day = source.date
+        await self.uow.day_plan_items.delete(item)
+        await self.uow.commit()
+        return await self.get(user_id, source_day)
 
     async def delete_item(self, item_id: int, user_id: int) -> None:
         item = await self.uow.day_plan_items.get_owned(item_id, user_id)

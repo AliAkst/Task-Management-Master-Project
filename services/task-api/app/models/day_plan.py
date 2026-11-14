@@ -6,21 +6,58 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.db.entities.day_plan import DayPlanStatus, ItemOutcome
 from app.models.task import TaskStatus
 
+Day = date  # ItemMove.date alani tip adini golgeler
+
 
 # ---------------- planlama ----------------
 class PlanItemInput(BaseModel):
     """Karta, takvim etkinligine ya da sadece basliga dayali plan maddesi."""
 
+    id: int | None = None  # var olan plan maddesi (yerinde guncellenir)
     card_id: int | None = None
     event_id: int | None = None
     title: str | None = Field(None, min_length=1, max_length=200)
     planned_minutes: int | None = Field(None, ge=0, le=1440)
+    planned_start: datetime | None = None  # yalniz etkinliksiz maddede
 
     @model_validator(mode="after")
     def check(self) -> Self:
-        if self.card_id is None and self.event_id is None and not self.title:
-            raise ValueError("card_id, event_id ya da title gerekli")
+        if (
+            self.id is None
+            and self.card_id is None
+            and self.event_id is None
+            and not self.title
+        ):
+            raise ValueError("id, card_id, event_id ya da title gerekli")
         return self
+
+
+class DayPlanItemPatch(BaseModel):
+    """Tek plan maddesini gunceller; verilmeyen alan degismez."""
+
+    done: bool | None = None
+    title: str | None = Field(None, min_length=1, max_length=200)
+    planned_minutes: int | None = Field(None, ge=0, le=1440)
+    planned_start: datetime | None = None
+
+    @model_validator(mode="after")
+    def check(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("En az bir alan gerekli")
+        return self
+
+
+class ItemToCard(BaseModel):
+    """Plan maddesini karta donusturur (list_id ya da board_id)."""
+
+    board_id: int | None = None
+    list_id: int | None = None
+
+
+class ItemMove(BaseModel):
+    """Plan maddesini baska bir gune tasir (bos ise ertesi gun)."""
+
+    date: Day | None = None
 
 
 class DayPlanSave(BaseModel):
