@@ -80,11 +80,20 @@ async def get_board_service(
     return BoardService(uow)
 
 
+def _is_pat(request: Request) -> bool:
+    """Istek bir PAT ile mi geliyor (kimlik cozulmeden once de dogru: baslik onekine bakar)."""
+    parts = request.headers.get("authorization", "").split(" ", 1)
+    return len(parts) == 2 and parts[1].strip().startswith(PAT_PREFIX)
+
+
 async def get_card_service(
+    request: Request,
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
     actor: str = Depends(get_actor),
 ) -> CardService:
-    return CardService(uow, actor)
+    return CardService(
+        uow, actor, expose_urls=not _is_pat(request)
+    )
 
 
 async def get_attachment_service(

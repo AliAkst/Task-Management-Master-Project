@@ -56,9 +56,10 @@ logger = get_logger(__name__)
 
 
 class CardService:
-    def __init__(self, uow: TaskUnitOfWork, actor: str = "user"):
+    def __init__(self, uow: TaskUnitOfWork, actor: str = "user", expose_urls: bool = True):
         self.uow = uow
         self.actor = actor
+        self.expose_urls = expose_urls  # PAT isteginde imzali ek URL yok (13b D1)
         self.activity = ActivityLogger(uow, actor)
         self.boards = BoardService(uow)
         self._push_user_id: int | None = None  # Microsoft To Do geri yazma bekliyor
@@ -316,7 +317,7 @@ class CardService:
             created_at=card.created_at,
             updated_at=card.updated_at,
             notes=[NoteResponse.model_validate(n) for n in notes],
-            attachments=[to_response(a) for a in attachments],
+            attachments=[to_response(a, expose_url=self.expose_urls) for a in attachments],
             checklist=[ChecklistItemResponse.model_validate(i) for i in checklist],
             parent=CardRef.model_validate(parent) if parent else None,
             subtasks=await self.summaries(subtasks),

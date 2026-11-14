@@ -212,3 +212,34 @@ class TestPatAccess:
 
     async def test_jwt_still_works_for_token_endpoints(self, client, auth_headers):
         assert (await make_token(client, auth_headers)).status_code == 201
+
+
+class TestAttachmentUrlSideDoor:
+    """Denetim D1: PAT kart detayından imzalı ek URL'si alamaz."""
+
+    async def test_pat_card_detail_has_no_attachment_url(
+        self, client, auth_headers, read_pat, tmp_path, monkeypatch
+    ):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "attachments_dir", str(tmp_path / "att"))
+        board = await create_board(client, auth_headers)
+        card = await create_card(client, auth_headers, board["lists"][0]["id"], "Ekli")
+        up = await client.post(
+            f"{API}/cards/{card['id']}/attachments",
+            files={"file": ("a.txt", b"gizli", "text/plain")},
+            headers=auth_headers,
+        )
+        assert up.status_code == 201, up.text
+
+        jwt_detail = (
+            await client.get(f"{API}/cards/{card['id']}", headers=auth_headers)
+        ).json()["data"]
+        assert "token=" in jwt_detail["attachments"][0]["url"]
+
+        pat_res = await client.get(f"{API}/cards/{card['id']}", headers=bearer(read_pat))
+        assert pat_res.status_code == 200
+        att = pat_res.json()["data"]["attachments"][0]
+        assert att["url"] is None
+        assert att["filename"] == "a.txt"
+        assert "token=" not in str(pat_res.json())

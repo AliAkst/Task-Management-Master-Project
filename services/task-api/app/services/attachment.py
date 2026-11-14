@@ -68,8 +68,11 @@ async def iter_chunks(file: Readable) -> AsyncIterator[bytes]:
         yield chunk
 
 
-def to_response(a: CardAttachmentEntity) -> AttachmentResponse:
-    token = make_attachment_token(a.user_id, a.id)
+def to_response(a: CardAttachmentEntity, *, expose_url: bool = True) -> AttachmentResponse:
+    url = None
+    if expose_url:
+        token = make_attachment_token(a.user_id, a.id)
+        url = f"{settings.api_v1_prefix}/attachments/{a.id}/download?token={token}"
     return AttachmentResponse(
         id=a.id,
         card_id=a.card_id,
@@ -79,7 +82,7 @@ def to_response(a: CardAttachmentEntity) -> AttachmentResponse:
         size_bytes=a.size_bytes,
         is_image=a.mime_type in IMAGE_MIME_TYPES,
         created_at=a.created_at,
-        url=f"{settings.api_v1_prefix}/attachments/{a.id}/download?token={token}",
+        url=url,
     )
 
 

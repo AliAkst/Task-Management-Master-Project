@@ -2151,7 +2151,7 @@ export interface components {
              */
             created_at: string;
             /** Url */
-            url: string;
+            url: string | null;
         };
         /** BoardCreate */
         BoardCreate: {

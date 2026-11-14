@@ -69,6 +69,18 @@ try {
             Move-Item -LiteralPath $target -Destination $saved -Force
             $moved += [pscustomobject]@{ Saved = $saved; Target = $target }
         }
+        # SQLite yan dosyalari (cokme artigi): yeni DB'ye eski gunluk uygulanmasin.
+        # pre-restore'a tasinir, geri kopyalanmaz (Undo'da eski yerine doner).
+        if ($name -like "*.db") {
+            foreach ($suffix in "-journal", "-wal", "-shm") {
+                $side = $target + $suffix
+                if (Test-Path -LiteralPath $side) {
+                    $sideSaved = Join-Path $pre ($name + $suffix)
+                    Move-Item -LiteralPath $side -Destination $sideSaved -Force
+                    $moved += [pscustomobject]@{ Saved = $sideSaved; Target = $side }
+                }
+            }
+        }
     }
     $attDir = Join-Path $root "services\task-api\data\attachments"
     $attSaved = $null

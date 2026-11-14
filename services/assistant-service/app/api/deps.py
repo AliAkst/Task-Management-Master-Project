@@ -12,12 +12,11 @@ from app.config import settings
 
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 CACHE_SECONDS = 60
+PAT_PREFIX = "pat_"
 
 
 def _cache_ttl(token: str) -> float:
     """JWT'nin kendi `exp`'ini asmayan onbellek suresi (imza dogrulanmaz; yalniz sure)."""
-    if token.startswith("pat_"):
-        return CACHE_SECONDS
     try:
         payload = token.split(".")[1]
         payload += "=" * (-len(payload) % 4)
@@ -31,6 +30,10 @@ async def current_user(authorization: str | None = Header(None)) -> dict[str, An
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "Kimlik doğrulama gerekli")
     token = authorization.split(" ", 1)[1].strip()
+    if token.startswith(PAT_PREFIX):
+        # Erisim anahtari (PAT) bu serviste kullanilamaz: izin/onay/hafiza/saglayici
+        # uclari yalniz kullanici oturumuyla (Faz 13b denetim D2)
+        raise HTTPException(403, "Erişim anahtarı bu serviste kullanılamaz")
     hit = _CACHE.get(token)
     if hit and hit[0] > time.monotonic():
         return hit[1]

@@ -187,7 +187,7 @@ class AttachmentResponse(BaseModel):
     size_bytes: int
     is_image: bool
     created_at: datetime
-    url: str  # imzali, 60 dk gecerli indirme adresi
+    url: str | None  # imzali, 60 dk gecerli indirme adresi; PAT isteginde None (D1)
 
 
 # ---------------- Detail / Activity ----------------

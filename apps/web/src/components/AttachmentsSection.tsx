@@ -45,7 +45,7 @@ export default function AttachmentsSection({ cardId, boardId, attachments, pendi
         {attachments.map((a) => (
           <li key={a.id} className="flex items-center gap-3 py-1.5">
             {a.is_image ? (
-              <img src={a.url} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded border border-slate-200 object-cover" />
+              <img src={a.url ?? undefined} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded border border-slate-200 object-cover" />
             ) : (
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-500">
                 <FileText size={20} aria-hidden />
@@ -57,7 +57,7 @@ export default function AttachmentsSection({ cardId, boardId, attachments, pendi
                 {formatBytes(a.size_bytes)} · {formatDateTime(a.created_at)}
               </p>
             </div>
-            <a href={a.url} target="_blank" rel="noopener noreferrer" className={act} aria-label={`${a.filename} dosyasını aç`}>
+            <a href={a.url ?? undefined} target="_blank" rel="noopener noreferrer" className={act} aria-label={`${a.filename} dosyasını aç`}>
               <ExternalLink size={13} aria-hidden /> Aç
             </a>
             <a href={`${a.url}&download=1`} download={a.filename} className={act} aria-label={`${a.filename} dosyasını indir`}>

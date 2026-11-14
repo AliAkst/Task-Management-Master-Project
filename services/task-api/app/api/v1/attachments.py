@@ -19,6 +19,7 @@ from app.core.exceptions import (
 from app.core.security import decode_token
 from app.models.card import AttachmentResponse
 from app.models.common import ApiResponse
+from app.services.api_token import PAT_PREFIX
 from app.services.attachment import INLINE_MIME_TYPES
 from app.services.attachment_storage import (
     AttachmentTooLargeException,
@@ -105,7 +106,7 @@ async def download_attachment(
     Authorization basligi. Baskasinin eki 404.
     """
     if credentials is not None:
-        if credentials.credentials.startswith("pat_"):
+        if credentials.credentials.startswith(PAT_PREFIX):
             # Erisim anahtari (PAT) dosya indiremez (Faz 13b)
             raise PatForbiddenException()
         payload = decode_token(credentials.credentials)
