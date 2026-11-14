@@ -119,6 +119,7 @@ class DayPlanItemResponse(BaseModel):
     reason: str | None
     tracked_sec: int
     postponed_to: date | None
+    source: str | None = None  # 'template' | None (Faz 13c)
     # canli bilgiler (snapshot degil)
     card_status: TaskStatus | None = None
     tracked_today_sec: int = 0

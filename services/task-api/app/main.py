@@ -11,6 +11,7 @@ from app.api.v1.tasks import tasks_router as tasks_router
 from app.api.v1.boards import boards_router
 from app.api.v1.cards import cards_router
 from app.api.v1.day_plans import day_plans_router
+from app.api.v1.day_templates import day_templates_router
 from app.api.v1.events import events_router
 from app.api.v1.goals import goals_router
 from app.api.v1.integrations import integrations_router
@@ -106,6 +107,7 @@ app.include_router(goals_router, prefix=settings.api_v1_prefix)
 app.include_router(integrations_router, prefix=settings.api_v1_prefix)
 app.include_router(sessions_router, prefix=settings.api_v1_prefix)
 app.include_router(day_plans_router, prefix=settings.api_v1_prefix)
+app.include_router(day_templates_router, prefix=settings.api_v1_prefix)
 app.include_router(health_router)
 
 

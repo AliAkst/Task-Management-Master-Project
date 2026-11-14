@@ -22,6 +22,7 @@ from app.db.repositories.day_plan import (
     DayPlanItemRepository,
     DayPlanRepository,
 )
+from app.db.repositories.day_template import DayTemplateRepository
 from app.db.repositories.event import EventRepository
 from app.db.repositories.integration import (
     ExternalLinkRepository,
@@ -91,6 +92,7 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.time_sessions = TimeSessionRepository(session)
         self.day_plans = DayPlanRepository(session)
         self.day_plan_items = DayPlanItemRepository(session)
+        self.day_templates = DayTemplateRepository(session)
         self.analytics = AnalyticsRepository(session)
         self.dependencies = DependencyRepository(session)
         self.series = SeriesRepository(session)

@@ -1277,6 +1277,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/day-plans/{day}/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Day Template
+         * @description Gunun cozumlenen sablonu (off > gun bazli secim > hafta gunu).
+         */
+        get: operations["get_day_template_api_v1_day_plans__day__template_get"];
+        /**
+         * Set Day Template
+         * @description Gunun sablon modu: auto | off | template. Degerlendirilmis gunde 409.
+         */
+        put: operations["set_day_template_api_v1_day_plans__day__template_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/day-plans/{day}/apply-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Day Template
+         * @description Cozumlenen sablonun bloklarini plana ekler (bir kez; force ile tekrar).
+         */
+        post: operations["apply_day_template_api_v1_day_plans__day__apply_template_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/day-plans/{day}/review": {
         parameters: {
             query?: never;
@@ -1396,6 +1440,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/day-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["list_templates_api_v1_day_templates_get"];
+        put?: never;
+        /** Create Template */
+        post: operations["create_template_api_v1_day_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/day-templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Template */
+        delete: operations["delete_template_api_v1_day_templates__template_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Template */
+        patch: operations["update_template_api_v1_day_templates__template_id__patch"];
         trace?: never;
     };
     "/health/live": {
@@ -1581,6 +1661,18 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[ApplyTemplateResult] */
+        ApiResponse_ApplyTemplateResult_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["ApplyTemplateResult"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[AttachmentResponse] */
         ApiResponse_AttachmentResponse_: {
             /** Success */
@@ -1694,6 +1786,30 @@ export interface components {
             /** Success */
             success: boolean;
             data?: components["schemas"]["DaySuggestions"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[DayTemplateForDay] */
+        ApiResponse_DayTemplateForDay_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["DayTemplateForDay"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[DayTemplateResponse] */
+        ApiResponse_DayTemplateResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["DayTemplateResponse"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -1960,6 +2076,19 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[list[DayTemplateResponse]] */
+        ApiResponse_list_DayTemplateResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["DayTemplateResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[list[EventResponse]] */
         ApiResponse_list_EventResponse__: {
             /** Success */
@@ -2128,6 +2257,24 @@ export interface components {
             last_used_at?: string | null;
             /** Expires At */
             expires_at?: string | null;
+        };
+        /** ApplyTemplateInput */
+        ApplyTemplateInput: {
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
+        /** ApplyTemplateResult */
+        ApplyTemplateResult: {
+            /** Added */
+            added: number;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "applied" | "no_template" | "already_applied";
         };
         /** AttachmentResponse */
         AttachmentResponse: {
@@ -2813,6 +2960,8 @@ export interface components {
             tracked_sec: number;
             /** Postponed To */
             postponed_to: string | null;
+            /** Source */
+            source?: string | null;
             card_status?: components["schemas"]["TaskStatus"] | null;
             /**
              * Tracked Today Sec
@@ -2937,6 +3086,92 @@ export interface components {
             date: string;
             /** Items */
             items: components["schemas"]["PlanSuggestion"][];
+        };
+        /** DayTemplateCreate */
+        DayTemplateCreate: {
+            /** Name */
+            name: string;
+            /** Weekdays */
+            weekdays?: number[];
+            /** Blocks */
+            blocks: components["schemas"]["TemplateBlock"][];
+            /**
+             * Day Start
+             * Format: time
+             * @default 08:00:00
+             */
+            day_start: string;
+            /**
+             * Day End
+             * Format: time
+             * @default 23:00:00
+             */
+            day_end: string;
+            /**
+             * Buffer Min
+             * @default 0
+             * @enum {integer}
+             */
+            buffer_min: 0 | 5 | 10 | 15;
+        };
+        /** DayTemplateForDay */
+        DayTemplateForDay: {
+            template?: components["schemas"]["DayTemplateResponse"] | null;
+            /** Source */
+            source?: ("off" | "override" | "weekday") | null;
+            /** Applied At */
+            applied_at?: string | null;
+        };
+        /** DayTemplateResponse */
+        DayTemplateResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Weekdays */
+            weekdays: number[];
+            /** Blocks */
+            blocks: components["schemas"]["TemplateBlock"][];
+            /**
+             * Day Start
+             * Format: time
+             */
+            day_start: string;
+            /**
+             * Day End
+             * Format: time
+             */
+            day_end: string;
+            /** Buffer Min */
+            buffer_min: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * DayTemplateUpdate
+         * @description Kismi guncelleme; birlesik sonuc servis tarafinda DayTemplateCreate ile dogrulanir.
+         */
+        DayTemplateUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Weekdays */
+            weekdays?: number[] | null;
+            /** Blocks */
+            blocks?: components["schemas"]["TemplateBlock"][] | null;
+            /** Day Start */
+            day_start?: string | null;
+            /** Day End */
+            day_end?: string | null;
+            /** Buffer Min */
+            buffer_min?: (0 | 5 | 10 | 15) | null;
         };
         /** DependencyCreate */
         DependencyCreate: {
@@ -3630,6 +3865,31 @@ export interface components {
             /** Due Date */
             due_date?: string | null;
         };
+        /** TemplateBlock */
+        TemplateBlock: {
+            /** Title */
+            title: string;
+            /** Start */
+            start: string;
+            /** End */
+            end: string;
+            /**
+             * Kind
+             * @default diger
+             * @enum {string}
+             */
+            kind: "yol" | "mesai" | "yemek" | "rutin" | "diger";
+        };
+        /** TemplateModeInput */
+        TemplateModeInput: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto" | "off" | "template";
+            /** Template Id */
+            template_id?: number | null;
+        };
         /** TitleParseRequest */
         TitleParseRequest: {
             /** Text */
@@ -3850,6 +4110,13 @@ export interface components {
             /** Background */
             background: string;
             /**
+             * Day Rollover
+             * Format: time
+             */
+            day_rollover: string;
+            /** Morning Time */
+            morning_time: string | null;
+            /**
              * Updated At
              * Format: date-time
              */
@@ -3874,6 +4141,10 @@ export interface components {
             theme?: ("system" | "light" | "dark") | null;
             /** Background */
             background?: ("kagit" | "krem" | "adacayi" | "lavanta" | "gri") | null;
+            /** Day Rollover */
+            day_rollover?: string | null;
+            /** Morning Time */
+            morning_time?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -6627,6 +6898,113 @@ export interface operations {
             };
         };
     };
+    get_day_template_api_v1_day_plans__day__template_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayTemplateForDay_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_day_template_api_v1_day_plans__day__template_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateModeInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayTemplateForDay_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_day_template_api_v1_day_plans__day__apply_template_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyTemplateInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ApplyTemplateResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     review_day_api_v1_day_plans__day__review_post: {
         parameters: {
             query?: never;
@@ -6862,6 +7240,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_AnalyticsSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_api_v1_day_templates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_DayTemplateResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_template_api_v1_day_templates_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayTemplateResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_template_api_v1_day_templates__template_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template_api_v1_day_templates__template_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayTemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DayTemplateResponse_"];
                 };
             };
             /** @description Validation Error */

@@ -14,6 +14,7 @@ import { Check, GripVertical, Hourglass, MoreHorizontal, Play, Plus, Square, X }
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { parseTitleNow } from '../api/boards'
 import { localDay, shiftDay, useDayPlanMutations } from '../api/dayPlans'
+import { useDayTemplate, useDayTemplateDayMutations, useDayTemplates } from '../api/dayTemplates'
 import { useActiveSession, useSessionMutations } from '../api/sessions'
 import { formatDuration } from '../lib/format'
 import type { BoardWithCounts, DayPlan, DayPlanItem, PlanSuggestion } from '../lib/types'
@@ -235,6 +236,64 @@ function PlanRow({ d, color, dirty, menuOpen, boards, busy, error, onToggleDone,
       </div>
       {error && <p className="mt-1 pl-8 text-[13px] text-red-700">{error}</p>}
     </li>
+  )
+}
+
+/**
+ * Gun sablonu secici + "Plana ekle" bandi (Faz 13c). Duzenleyici kirliyken ekleme kapali:
+ * sunucu satir ekleyince kaydedilmemis taslak ezilmesin (Faz 12 D1 sinifi).
+ * Durum: bosta -> gonderiliyor (disabled) -> onSettled'da kilit kalkar.
+ */
+function TemplateBar({ day, dirty }: { day: string; dirty: boolean }) {
+  const forDay = useDayTemplate(day)
+  const all = useDayTemplates()
+  const m = useDayTemplateDayMutations(day)
+  const inFlight = useRef(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const templates = all.data ?? []
+  const cur = forDay.data
+  if (!cur || (templates.length === 0 && !cur.template)) return null
+
+  const value = cur.source === 'off' ? 'off' : cur.source === 'override' && cur.template ? `t:${cur.template.id}` : 'auto'
+  const busy = m.setMode.isPending || m.apply.isPending
+  const pick = (v: string) => {
+    setNotice(null)
+    m.setMode.mutate(v === 'auto' ? { mode: 'auto' } : v === 'off' ? { mode: 'off' } : { mode: 'template', template_id: Number(v.slice(2)) })
+  }
+  const add = () => {
+    if (inFlight.current || dirty) return
+    inFlight.current = true
+    setNotice(null)
+    m.apply.mutate(undefined, {
+      onSuccess: (r) => { if (r.added === 0) setNotice('Zaten eklenmiş') },
+      onSettled: () => { inFlight.current = false },
+    })
+  }
+  const showBand = !!cur.template && !cur.applied_at
+  const err = m.setMode.error ?? m.apply.error
+
+  return (
+    <div className="mb-3 space-y-2">
+      <label className="flex items-center gap-2 text-[14px] text-slate-600">
+        <span>Şablon:</span>
+        <select value={value} disabled={busy} onChange={(e) => pick(e.target.value)} aria-label="Günün şablonu" className="rounded-md border border-slate-300 bg-surface px-2 py-1 text-sm">
+          <option value="auto">{`Otomatik${cur.source === 'weekday' && cur.template ? ` (${cur.template.name})` : ''}`}</option>
+          {templates.map((t) => <option key={t.id} value={`t:${t.id}`}>{t.name}</option>)}
+          <option value="off">Şablonsuz</option>
+        </select>
+      </label>
+      {showBand && cur.template && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md bg-blue-50 px-3 py-2 text-[14px] text-blue-900">
+          <span>{cur.template.name} şablonu: {cur.template.blocks.length} blok</span>
+          <button type="button" onClick={add} disabled={busy || dirty} title={dirty ? 'Önce planı kaydet' : undefined} className="rounded bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-on-ink hover:bg-blue-700 disabled:opacity-50">
+            {m.apply.isPending ? 'Ekleniyor…' : 'Plana ekle'}
+          </button>
+          {dirty && <span className="text-[13px]">Önce planı kaydet</span>}
+        </div>
+      )}
+      {notice && <p className="text-[13px] text-slate-600" role="status">{notice}</p>}
+      {err && <p className="text-[13px] text-red-700">{err.message}</p>}
+    </div>
   )
 }
 
@@ -473,6 +532,7 @@ export default function PlanEditor({
           <h2 className="text-[22px]">Planın</h2>
           <span className="text-[14px] text-slate-600 tabular-nums">{draft.length} madde, {formatDuration(total * 60)}</span>
         </div>
+        <TemplateBar day={day} dirty={dirty} />
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={draft.map((d) => d.key)} strategy={verticalListSortingStrategy}>
             <ul className="divide-y divide-slate-200 border-y border-slate-200">

@@ -1,6 +1,6 @@
 """Kart, not ve checklist endpoint'leri."""
 
-from datetime import UTC, datetime
+from datetime import time
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Response, status
@@ -27,6 +27,7 @@ from app.models.card import (
     WhenMatchOut,
 )
 from app.models.common import ApiResponse
+from app.services import planning_day
 from app.services.nl_when import parse_when
 from app.services.timeutil import DEFAULT_TZ
 
@@ -56,7 +57,14 @@ async def parse_card_title(
     s = await uow.user_settings.get_by_user_id(user.id)
     tz = ZoneInfo(s.timezone if s else DEFAULT_TZ)
     ws = s.week_start if s else 0
-    m = parse_when(data.text, data.now or datetime.now(UTC), tz, ws)
+    if data.now is not None:
+        m = parse_when(data.text, data.now, tz, ws)
+    else:
+        # gun donumu (Faz 13c): rollover saatinden once "yarin" uyandigin gundur
+        rollover = s.day_rollover if s else time(4, 0)
+        m = planning_day.parse_with_rollover(
+            data.text, planning_day.utc_now(), tz, ws, rollover
+        )
     out = (
         WhenMatchOut(
             spans=[[a, b] for a, b in m.spans],

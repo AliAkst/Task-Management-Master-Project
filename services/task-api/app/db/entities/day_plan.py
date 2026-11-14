@@ -53,6 +53,16 @@ class DayPlanEntity(Base, TimestampMixin):
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)  # Faz 6
     planned_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # Gun sablonu (Faz 13c)
+    template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("day_templates.id", ondelete="SET NULL"), nullable=True
+    )
+    template_off: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
+    template_applied_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
 
 
 class DayPlanItemEntity(Base, TimestampMixin):
@@ -90,3 +100,5 @@ class DayPlanItemEntity(Base, TimestampMixin):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     tracked_sec: Mapped[int] = mapped_column(Integer, default=0)
     postponed_to: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    # 'template' (gun sablonundan geldi) ya da NULL (Faz 13c)
+    source: Mapped[str | None] = mapped_column(String(20), nullable=True)

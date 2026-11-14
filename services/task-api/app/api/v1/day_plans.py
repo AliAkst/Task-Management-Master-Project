@@ -4,7 +4,12 @@ from datetime import date
 
 from fastapi import APIRouter, Response, status
 
-from app.api.dependencies import AnalyticsServiceDep, CurrentUserDep, DayPlanServiceDep
+from app.api.dependencies import (
+    AnalyticsServiceDep,
+    CurrentUserDep,
+    DayPlanServiceDep,
+    DayTemplateServiceDep,
+)
 from app.models.analytics import AnalyticsSummary
 from app.models.common import ApiResponse
 from app.models.day_plan import (
@@ -16,6 +21,12 @@ from app.models.day_plan import (
     DaySuggestions,
     ItemMove,
     ItemToCard,
+)
+from app.models.day_template import (
+    ApplyTemplateInput,
+    ApplyTemplateResult,
+    DayTemplateForDay,
+    TemplateModeInput,
 )
 
 day_plans_router = APIRouter(tags=["Day planning"])
@@ -33,6 +44,44 @@ async def get_day_plan(day: date, service: DayPlanServiceDep, user: CurrentUserD
 async def get_suggestions(day: date, service: DayPlanServiceDep, user: CurrentUserDep):
     """Plan onerileri: takvim, ertelenen, son tarih, devam eden, calisilan."""
     return ApiResponse(success=True, data=await service.suggestions(user.id, day))
+
+
+@day_plans_router.get(
+    "/day-plans/{day}/template", response_model=ApiResponse[DayTemplateForDay]
+)
+async def get_day_template(
+    day: date, service: DayTemplateServiceDep, user: CurrentUserDep
+):
+    """Gunun cozumlenen sablonu (off > gun bazli secim > hafta gunu)."""
+    return ApiResponse(success=True, data=await service.for_day(user.id, day))
+
+
+@day_plans_router.put(
+    "/day-plans/{day}/template", response_model=ApiResponse[DayTemplateForDay]
+)
+async def set_day_template(
+    day: date,
+    data: TemplateModeInput,
+    service: DayTemplateServiceDep,
+    user: CurrentUserDep,
+):
+    """Gunun sablon modu: auto | off | template. Degerlendirilmis gunde 409."""
+    return ApiResponse(success=True, data=await service.set_mode(user.id, day, data))
+
+
+@day_plans_router.post(
+    "/day-plans/{day}/apply-template", response_model=ApiResponse[ApplyTemplateResult]
+)
+async def apply_day_template(
+    day: date,
+    data: ApplyTemplateInput,
+    service: DayTemplateServiceDep,
+    user: CurrentUserDep,
+):
+    """Cozumlenen sablonun bloklarini plana ekler (bir kez; force ile tekrar)."""
+    return ApiResponse(
+        success=True, data=await service.apply(user.id, day, data.force)
+    )
 
 
 @day_plans_router.put("/day-plans/{day}", response_model=ApiResponse[DayPlanResponse])

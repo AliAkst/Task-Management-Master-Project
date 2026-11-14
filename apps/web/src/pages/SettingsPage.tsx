@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import type { UserSettings, UserSettingsUpdate } from '../lib/types'
 import { usePermissions, useSetPermission, type Permission } from '../api/assistant'
 import ApiTokensSettings from '../components/ApiTokensSettings'
+import DayTemplatesSettings from '../components/DayTemplatesSettings'
 import IntegrationsSettings from '../components/IntegrationsSettings'
 import ModelSettings from '../components/ModelSettings'
 import { PageHeader, Row, Segmented } from '../components/Page'
@@ -20,6 +21,7 @@ const MODE_LABEL: Record<Permission['mode'], string> = {
 
 const SECTIONS = [
   { id: 'ritim', label: 'Günün ritmi' },
+  { id: 'sablonlar', label: 'Gün şablonları' },
   { id: 'gorunum', label: 'Görünüm' },
   { id: 'model', label: 'Asistan modeli' },
   { id: 'izinler', label: 'Asistan izinleri' },
@@ -168,17 +170,24 @@ function DayRhythm() {
   })
   const [planning, setPlanning] = useState('')
   const [review, setReview] = useState('')
+  const [rollover, setRollover] = useState('')
+  const [morning, setMorning] = useState('')
 
   useEffect(() => {
     if (!settings.data) return
     setPlanning(toInput(settings.data.planning_time))
     setReview(toInput(settings.data.review_time))
+    setRollover(toInput(settings.data.day_rollover))
+    setMorning(toInput(settings.data.morning_time))
   }, [settings.data])
 
   // Saat alani: yazarken degil, alandan cikinca kaydedilir
-  const saveTime = (key: 'planning_time' | 'review_time', v: string) => {
+  const saveTime = (key: 'planning_time' | 'review_time' | 'day_rollover' | 'morning_time', v: string) => {
     const current = toInput(settings.data?.[key])
-    if (v !== current) save.mutate({ [key]: v ? `${v}:00` : null })
+    if (v === current) return
+    // gun donumu bos birakilamaz: bos birakilirsa eski degere don
+    if (key === 'day_rollover' && !v) return setRollover(current)
+    save.mutate({ [key]: v ? `${v}:00` : null })
   }
 
   return (
@@ -201,6 +210,12 @@ function DayRhythm() {
           </Row>
           <Row title="Gün sonu değerlendirme saati" hint="Bu saatten sonra “Bugün” sayfası değerlendirmeyle açılır.">
             <input type="time" className="rounded-md border border-slate-300 bg-surface px-2 py-1" value={review} onChange={(e) => setReview(e.target.value)} onBlur={(e) => saveTime('review_time', e.target.value)} aria-label="Gün sonu değerlendirme saati" />
+          </Row>
+          <Row title="Gün dönümü saati" hint="Bu saatten önce söylediğin “yarın”, uyandığın gün sayılır. Varsayılan 04:00 (00:00–06:00 arası).">
+            <input type="time" min="00:00" max="06:00" className="rounded-md border border-slate-300 bg-surface px-2 py-1" value={rollover} onChange={(e) => setRollover(e.target.value)} onBlur={(e) => saveTime('day_rollover', e.target.value)} aria-label="Gün dönümü saati" />
+          </Row>
+          <Row title="Sabah özeti saati" hint="Sabah özeti bu saatte hazırlanır (ilerideki özellikler kullanır).">
+            <input type="time" className="rounded-md border border-slate-300 bg-surface px-2 py-1" value={morning} onChange={(e) => setMorning(e.target.value)} onBlur={(e) => saveTime('morning_time', e.target.value)} aria-label="Sabah özeti saati" />
           </Row>
           <Row title="Hatırlatmalar" hint={`Saat dilimi: ${settings.data.timezone}`}>
             <Segmented
@@ -240,6 +255,7 @@ export default function SettingsPage() {
         </nav>
         <div className="max-w-3xl space-y-12">
           <DayRhythm />
+          <DayTemplatesSettings />
           <Appearance />
           <div id="model" className="scroll-mt-6"><ModelSettings /></div>
           <AssistantPermissions />

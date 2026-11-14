@@ -32,3 +32,8 @@ class UserSettingsEntity(Base, TimestampMixin):
     # (kagit | krem | adacayi | lavanta | gri)
     theme: Mapped[str] = mapped_column(String(10), default="system")
     background: Mapped[str] = mapped_column(String(20), default="kagit")
+    # Gun donumu (Faz 13c): bu saatten once soylenen "yarin" uyandigin gunu sayar
+    day_rollover: Mapped[time] = mapped_column(
+        Time, default=time(4, 0), server_default="04:00:00"
+    )
+    morning_time: Mapped[time | None] = mapped_column(Time, nullable=True)

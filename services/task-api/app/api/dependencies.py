@@ -28,6 +28,7 @@ from app.services.attachment import AttachmentService
 from app.services.card import CardService
 from app.services.analytics import AnalyticsService
 from app.services.day_plan import DayPlanService
+from app.services.day_template import DayTemplateService
 from app.services.event import EventService
 from app.services.goal import GoalService
 from app.services.time_session import TimeSessionService
@@ -121,6 +122,13 @@ async def get_day_plan_service(
     actor: str = Depends(get_actor),
 ) -> DayPlanService:
     return DayPlanService(uow, actor)
+
+
+async def get_day_template_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+    actor: str = Depends(get_actor),
+) -> DayTemplateService:
+    return DayTemplateService(uow, actor)
 
 
 async def get_analytics_service(
@@ -226,5 +234,8 @@ TimeSessionServiceDep = Annotated[
     TimeSessionService, Depends(get_time_session_service)
 ]
 DayPlanServiceDep = Annotated[DayPlanService, Depends(get_day_plan_service)]
+DayTemplateServiceDep = Annotated[
+    DayTemplateService, Depends(get_day_template_service)
+]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 GoalServiceDep = Annotated[GoalService, Depends(get_goal_service)]

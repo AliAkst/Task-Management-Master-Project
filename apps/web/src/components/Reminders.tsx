@@ -23,6 +23,14 @@ function minutesOf(t: string | null): number | null {
   return h * 60 + m
 }
 
+/** Planlama hedefi: gun donumunden once "bugun"; aksam planlamasi "yarin"; digerleri "bugun". */
+export function planningTarget(now: Date, rolloverHHMM: string | null, planTimeMin: number | null): 'today' | 'tomorrow' {
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  const rollover = minutesOf(rolloverHHMM) ?? 4 * 60
+  if (nowMin < rollover) return 'today'
+  return planTimeMin != null && planTimeMin >= EVENING_PLANNING_HOUR * 60 ? 'tomorrow' : 'today'
+}
+
 function storageGet(key: string): string | null {
   try {
     return localStorage.getItem(key)
@@ -67,7 +75,7 @@ export default function Reminders() {
 
   const today = localDay(now)
   const planTime = minutesOf(settings.data?.planning_time ?? null)
-  const planTarget = planTime != null && planTime >= EVENING_PLANNING_HOUR * 60 ? shiftDay(today, 1) : today
+  const planTarget = planningTarget(now, settings.data?.day_rollover ?? null, planTime) === 'tomorrow' ? shiftDay(today, 1) : today
   const todayPlan = useDayPlan(today)
   const targetPlan = useDayPlan(planTarget)
   // Bugunun cevrimici toplantilari (takvim; dakikada bir tazelenir)

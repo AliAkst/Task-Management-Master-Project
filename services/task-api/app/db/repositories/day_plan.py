@@ -30,6 +30,16 @@ class DayPlanRepository(BaseRepository[DayPlanEntity]):
         return result.scalar_one_or_none()
 
     @with_db_retry
+    async def with_template(self, user_id: int, template_id: int) -> list[DayPlanEntity]:
+        result = await self.session.execute(
+            select(DayPlanEntity).where(
+                DayPlanEntity.user_id == user_id,
+                DayPlanEntity.template_id == template_id,
+            )
+        )
+        return list(result.scalars().all())
+
+    @with_db_retry
     async def in_range(
         self, user_id: int, start: date, end: date
     ) -> list[DayPlanEntity]:

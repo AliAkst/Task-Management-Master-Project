@@ -15,6 +15,17 @@ class UserSettingsUpdate(BaseModel):
     week_start: int | None = Field(None, ge=0, le=6)
     theme: Literal["system", "light", "dark"] | None = None
     background: Literal["kagit", "krem", "adacayi", "lavanta", "gri"] | None = None
+    day_rollover: time | None = None  # 00:00-06:00 (Faz 13c)
+    morning_time: time | None = None
+
+    @field_validator("day_rollover")
+    @classmethod
+    def check_rollover(cls, v: time | None) -> time | None:
+        if v is None:
+            raise ValueError("day_rollover bos olamaz")
+        if not (time(0, 0) <= v <= time(6, 0)):
+            raise ValueError("day_rollover 00:00-06:00 arasinda olmali")
+        return v
 
     @field_validator("timezone")
     @classmethod
@@ -38,4 +49,6 @@ class UserSettingsResponse(BaseModel):
     week_start: int
     theme: str
     background: str
+    day_rollover: time
+    morning_time: time | None
     updated_at: datetime

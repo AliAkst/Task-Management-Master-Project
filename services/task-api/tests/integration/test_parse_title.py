@@ -81,3 +81,44 @@ class TestParseTitle:
             "2026-11-14T15:00:00+03:00"
         )
         assert m["clean_title"] == "diş hekimi"
+
+
+class TestParseTitleRollover:
+    """Faz 13c: `now` verilmediginde gun donumu (04:00) uygulanir."""
+
+    @staticmethod
+    def _freeze(monkeypatch, iso: str):
+        from app.services import planning_day
+
+        monkeypatch.setattr(planning_day, "utc_now", lambda: datetime.fromisoformat(iso))
+
+    async def test_after_midnight_tomorrow_means_same_calendar_day(
+        self, client: AsyncClient, auth_headers, monkeypatch
+    ):
+        self._freeze(monkeypatch, "2026-11-14T00:30:00+03:00")
+        r = await client.post(URL, json={"text": "Rapor yarın"}, headers=auth_headers)
+        assert r.json()["data"]["match"]["due_date"].startswith("2026-11-14")
+
+    async def test_this_evening_stays_today(
+        self, client: AsyncClient, auth_headers, monkeypatch
+    ):
+        self._freeze(monkeypatch, "2026-11-14T00:30:00+03:00")
+        r = await client.post(URL, json={"text": "Film bu akşam"}, headers=auth_headers)
+        assert r.json()["data"]["match"]["due_date"].startswith("2026-11-14T19:00")
+
+    async def test_afternoon_unchanged(
+        self, client: AsyncClient, auth_headers, monkeypatch
+    ):
+        self._freeze(monkeypatch, "2026-11-14T14:00:00+03:00")
+        r = await client.post(URL, json={"text": "Rapor yarın"}, headers=auth_headers)
+        assert r.json()["data"]["match"]["due_date"].startswith("2026-11-15")
+
+    async def test_custom_rollover_setting(
+        self, client: AsyncClient, auth_headers, monkeypatch
+    ):
+        await client.put(
+            "/api/v1/settings/", json={"day_rollover": "00:00"}, headers=auth_headers
+        )
+        self._freeze(monkeypatch, "2026-11-14T00:30:00+03:00")
+        r = await client.post(URL, json={"text": "Rapor yarın"}, headers=auth_headers)
+        assert r.json()["data"]["match"]["due_date"].startswith("2026-11-15")

@@ -15,6 +15,7 @@ from .card_content import (
     ChecklistItemEntity,
 )
 from .day_plan import DayPlanEntity, DayPlanItemEntity
+from .day_template import DayTemplateEntity
 from .event import EventEntity
 from .goal import GoalEntity
 from .integration import ExternalLinkEntity, IntegrationAccountEntity, OAuthClientEntity
@@ -39,6 +40,7 @@ __all__ = [
     "ChecklistItemEntity",
     "DayPlanEntity",
     "DayPlanItemEntity",
+    "DayTemplateEntity",
     "EventEntity",
     "ExternalLinkEntity",
     "GoalEntity",
