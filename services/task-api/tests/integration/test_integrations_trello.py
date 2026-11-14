@@ -436,3 +436,29 @@ class TestInbox:
         await connect(client, auth_headers)
         boards = (await client.get(f"{API}/boards", headers=auth_headers)).json()["data"]
         assert len([b for b in boards if b["system_kind"] == "inbox"]) == 1
+
+
+class TestSweepArchive:
+    async def test_archived_card_stays_archived_after_reimport(
+        self, client, auth_headers, trello
+    ):
+        """Faz 13h1: toplu arşivlenen kart Trello yeniden içe aktarmada arşivde kalır."""
+        await connect(client, auth_headers)
+        [first] = await do_import(client, auth_headers)
+        detail = (
+            await client.get(f"{API}/boards/{first['board_id']}", headers=auth_headers)
+        ).json()["data"]
+        card = next(c for c in detail["cards"] if c["title"] == "Program hazırla")
+        res = await client.post(
+            f"{API}/cards/bulk",
+            json={"ids": [card["id"]], "op": "archive"},
+            headers=auth_headers,
+        )
+        assert res.status_code == 200, res.text
+        trello.boards["board1"]["cards"][1]["name"] = "Trello'da değişti"
+        await do_import(client, auth_headers)
+        after = (
+            await client.get(f"{API}/cards/{card['id']}", headers=auth_headers)
+        ).json()["data"]
+        assert after["is_archived"] is True
+        assert after["title"] == "Program hazırla"

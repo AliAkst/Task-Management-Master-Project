@@ -34,7 +34,8 @@ import Modal from '../components/Modal'
 import { Segmented } from '../components/Page'
 import { useModels } from '../api/assistant'
 import { useActiveSession } from '../api/sessions'
-import { Lock, Settings2, Sparkles } from 'lucide-react'
+import { Brush, Lock, Settings2, Sparkles } from 'lucide-react'
+import SweepDialog from '../components/SweepDialog'
 import type { CardSummary, Label } from '../lib/types'
 import { readableTextOn } from '../lib/color'
 
@@ -252,6 +253,7 @@ export default function BoardPage() {
 
   // --- board ayarlari ---
   const [editing, setEditing] = useState(false)
+  const [sweeping, setSweeping] = useState(false)
   const [newList, setNewList] = useState('')
   const [labelName, setLabelName] = useState('')
   const [labelColor, setLabelColor] = useState(COLORS[1])
@@ -313,6 +315,9 @@ export default function BoardPage() {
               { value: 'graph' as const, label: 'İlişkiler' },
             ]}
           />
+          <button onClick={() => setSweeping(true)} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:border-slate-900">
+            <Brush size={15} aria-hidden /> Süpür
+          </button>
           <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:border-slate-900">
             <Settings2 size={15} aria-hidden /> Board ayarları
           </button>
@@ -427,6 +432,8 @@ export default function BoardPage() {
           onOpenCard={openCard}
         />
       )}
+
+      {sweeping && <SweepDialog boardId={boardId} onClose={() => setSweeping(false)} />}
 
       {editing && (
         <Modal title="Board'u düzenle" onClose={() => setEditing(false)}>

@@ -97,6 +97,7 @@ class ToolBox:
             "get_stats_summary": self.get_stats_summary,
             "list_goals": self.list_goals,
             "get_courses": self.get_courses,
+            "get_work_summary": self.get_work_summary,
         }
 
     # ---------------- kurulum ----------------
@@ -202,6 +203,12 @@ class ToolBox:
             ToolSpec(
                 "get_courses",
                 "Öğrenme kursları (Power BI, Fabric vb.): ilerleme (biten/toplam parça), sıradaki parça, haftalık hız, tahmini bitiş.",
+            ),
+            ToolSpec(
+                "get_work_summary",
+                "Bir günün iş özeti (varsayılan bugün): tamamlananlar, üzerinde çalışılanlar, yapılamayanlar, yarın. "
+                "Dönen `text` hazır Markdown'dır: özetlemeye çalışma, metni kullanıcıya aynen göster.",
+                {"type": "object", "properties": {"date": _DATE}},
             ),
         ]
 
@@ -496,6 +503,24 @@ class ToolBox:
                 bits.append("tamamlandı")
             lines.append(f"{c['title']}: " + " · ".join(bits))
         return lines or {"result": "Takip edilen kurs yok"}
+
+    async def get_work_summary(self, date: str | None = None) -> Any:  # noqa: A002
+        day = date or datetime.now(self.tz).date().isoformat()
+        board_ids: str | None = None
+        if self.privacy.active:  # bulut: gizli board'lar ozete girmez
+            everything = await self.api.get("/boards", include_archived=True)
+            visible = [
+                str(b["id"])
+                for b in everything
+                if not self.privacy.board_hidden(b["id"])
+            ]
+            if not visible:
+                return {"result": "Görünür board yok"}
+            board_ids = ",".join(visible)
+        data = await self.api.get(
+            "/reports/work-summary", date=day, board_ids=board_ids
+        )
+        return {"text": data["text"]}
 
     async def list_goals(self) -> Any:
         goals = await self.api.get("/goals")

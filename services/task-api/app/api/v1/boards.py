@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Response, status
 
-from app.api.dependencies import BoardServiceDep, CurrentUserDep
+from app.api.dependencies import BoardServiceDep, CurrentUserDep, UnitOfWorkDep
 from app.models.board import (
     BoardCreate,
     BoardDetail,
@@ -18,6 +18,8 @@ from app.models.board import (
     ListUpdate,
 )
 from app.models.common import ApiResponse
+from app.models.sweep import SweepCandidates
+from app.services.sweep import SweepService
 
 boards_router = APIRouter(tags=["Boards"])
 
@@ -65,6 +67,17 @@ async def delete_board(board_id: int, service: BoardServiceDep, user: CurrentUse
     """Board'u tum liste ve kartlariyla siler (gecmis activity_log'da kalir)."""
     await service.delete_board(board_id, user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@boards_router.get(
+    "/boards/{board_id}/sweep-candidates",
+    response_model=ApiResponse[SweepCandidates],
+)
+async def sweep_candidates(board_id: int, uow: UnitOfWorkDep, user: CurrentUserDep):
+    """Eski kart süpürme adayları (Faz 13h1); yalnız okur."""
+    return ApiResponse(
+        success=True, data=await SweepService(uow).candidates(board_id, user.id)
+    )
 
 
 # ---------------- liste ----------------

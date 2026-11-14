@@ -43,6 +43,7 @@ from app.models.card import (
     NoteResponse,
     NoteUpdate,
 )
+from app.models.sweep import BulkCards
 from app.models.task import TaskStatus
 from app.services.activity import ActivityLogger, diff
 from app.services.attachment import to_response
@@ -386,6 +387,107 @@ class CardService:
         )
         await self._after_change(user_id, event, card)
         return await self.get_detail(card.id, user_id)
+
+    # ---------------- toplu islem (Faz 13h1) ----------------
+    async def bulk(self, user_id: int, data: BulkCards) -> int:
+        """
+        Kartlar uzerinde tek unit-of-work'te toplu islem. Once TUM kartlarin
+        sahipligi dogrulanir (biri bile yabanciysa 404, hicbiri degismez); hata
+        olursa geri alinir. Her kart icin tekil servisin activity/durum kurallari.
+        """
+        found = {c.id: c for c in await self.uow.tasks.get_many(data.ids)}
+        for card_id in data.ids:
+            card = found.get(card_id)
+            if card is None or card.user_id != user_id:
+                raise NotFoundException("Card", card_id)
+        target = None
+        if data.op == "move":
+            target = await self.boards.get_owned_list(data.target_list_id, user_id)  # type: ignore[arg-type]
+        events: list[tuple[str, TaskEntity]] = []
+        try:
+            for card_id in data.ids:
+                card = found[card_id]
+                event = await self._bulk_one(card, data.op, target, user_id)
+                if event:
+                    events.append((event, card))
+            await self.uow.commit()
+        except Exception:
+            await self.uow.rollback()
+            raise
+        for event, card in events:
+            await self._after_change(user_id, event, card)
+        return len(data.ids)
+
+    async def _bulk_one(
+        self, card: TaskEntity, op: str, target: BoardListEntity | None, user_id: int
+    ) -> str | None:
+        """Tek kart; commit etmez. Donus: commit sonrasi yayinlanacak event (ya da None)."""
+        if op in ("archive", "unarchive"):
+            archived = op == "archive"
+            if card.is_archived == archived:
+                return None
+            card.is_archived = archived
+            await self.activity.log(
+                user_id,
+                "card",
+                card.id,
+                "archived" if archived else "unarchived",
+                board_id=card.board_id,
+                card_id=card.id,
+                changes={"is_archived": [not archived, archived]},
+            )
+            return "card.updated"
+        if op == "complete":
+            if card.status == TaskStatus.COMPLETED:
+                return None
+            old = card.status.value
+            await self._apply_status(card, TaskStatus.COMPLETED)
+            await self.activity.log(
+                user_id,
+                "card",
+                card.id,
+                "completed",
+                board_id=card.board_id,
+                card_id=card.id,
+                changes={"status": [old, TaskStatus.COMPLETED.value]},
+            )
+            return "card.completed"
+        # move
+        assert target is not None
+        before = {
+            "list_id": card.list_id,
+            "board_id": card.board_id,
+            "status": card.status.value,
+        }
+        if target.board_id != card.board_id:
+            await self.uow.card_labels.set_for_card(card.id, [])
+        source_is_done = False
+        if card.board_id and card.list_id:
+            src_lists = await self.uow.lists.list_for_board(card.board_id)
+            src = next((lst for lst in src_lists if lst.id == card.list_id), None)
+            source_is_done = bool(src and src.is_done_list)
+        await self._move_into(card, target, None, source_is_done=source_is_done)
+        after = {
+            "list_id": card.list_id,
+            "board_id": card.board_id,
+            "status": card.status.value,
+        }
+        changes = {k: [before[k], after[k]] for k in before if before[k] != after[k]}
+        if not changes:
+            return None
+        if "status" in changes:
+            await self._flag_external_push(card)
+        action = self._action_for(changes) if "status" in changes else "moved"
+        await self.activity.log(
+            user_id,
+            "card",
+            card.id,
+            action,
+            board_id=card.board_id,
+            card_id=card.id,
+            changes=changes,
+        )
+        return "card.completed" if action == "completed" else "card.moved"
 
     # ---------------- tekrar (Faz 6c) ----------------
     async def set_recurrence(

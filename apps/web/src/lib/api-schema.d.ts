@@ -271,6 +271,26 @@ export interface paths {
         patch: operations["update_board_api_v1_boards__board_id__patch"];
         trace?: never;
     };
+    "/api/v1/boards/{board_id}/sweep-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sweep Candidates
+         * @description Eski kart süpürme adayları (Faz 13h1); yalnız okur.
+         */
+        get: operations["sweep_candidates_api_v1_boards__board_id__sweep_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/boards/{board_id}/lists": {
         parameters: {
             query?: never;
@@ -375,6 +395,27 @@ export interface paths {
          * @description Karti verilen listenin sonuna ekler.
          */
         post: operations["create_card_api_v1_cards_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cards/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Cards
+         * @description Toplu arşivle/geri al/tamamla/taşı (Faz 13h1). Biri bile kullanıcının değilse
+         *     404 ve hiçbir kart değişmez. PAT: yazma kapsamı gerekir (varsayılan kural).
+         */
+        post: operations["bulk_cards_api_v1_cards_bulk_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1502,6 +1543,27 @@ export interface paths {
         patch: operations["update_template_api_v1_day_templates__template_id__patch"];
         trace?: never;
     };
+    "/api/v1/reports/work-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Work Summary
+         * @description Bir günün Markdown iş özeti. `board_ids` (virgüllü) yoksa tüm board'lar;
+         *     başkasının/olmayan board 404.
+         */
+        get: operations["work_summary_api_v1_reports_work_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -1745,6 +1807,18 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[BulkResult] */
+        ApiResponse_BulkResult_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["BulkResult"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[CalendarResponse] */
         ApiResponse_CalendarResponse_: {
             /** Success */
@@ -1973,6 +2047,18 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[SweepCandidates] */
+        ApiResponse_SweepCandidates_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["SweepCandidates"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[SyncSummary] */
         ApiResponse_SyncSummary_: {
             /** Success */
@@ -2038,6 +2124,18 @@ export interface components {
             /** Success */
             success: boolean;
             data?: components["schemas"]["UserSettingsResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[WorkSummary] */
+        ApiResponse_WorkSummary_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["WorkSummary"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -2543,6 +2641,23 @@ export interface components {
             file: string;
             /** Note Id */
             note_id?: number | null;
+        };
+        /** BulkCards */
+        BulkCards: {
+            /** Ids */
+            ids: number[];
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "archive" | "unarchive" | "complete" | "move";
+            /** Target List Id */
+            target_list_id?: number | null;
+        };
+        /** BulkResult */
+        BulkResult: {
+            /** Updated */
+            updated: number;
         };
         /**
          * CalendarItem
@@ -3287,6 +3402,13 @@ export interface components {
             /** Depends On Id */
             depends_on_id: number;
         };
+        /** DoneListHint */
+        DoneListHint: {
+            /** List Id */
+            list_id: number;
+            /** Name */
+            name: string;
+        };
         /** ErrorDetail */
         ErrorDetail: {
             /** Code */
@@ -3694,6 +3816,15 @@ export interface components {
             /** Failed Push */
             failed_push: number;
         };
+        /** NotDoneLine */
+        NotDoneLine: {
+            /** Title */
+            title: string;
+            /** Reason */
+            reason?: string | null;
+            /** Postponed To */
+            postponed_to?: string | null;
+        };
         /** NoteCreate */
         NoteCreate: {
             /** Content */
@@ -3917,6 +4048,35 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** SweepCandidates */
+        SweepCandidates: {
+            /** Groups */
+            groups: components["schemas"]["SweepGroup"][];
+            /** Done List Hints */
+            done_list_hints: components["schemas"]["DoneListHint"][];
+        };
+        /** SweepCard */
+        SweepCard: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** List Name */
+            list_name: string;
+            /** Due Date */
+            due_date?: string | null;
+            /** Reason */
+            reason: string;
+        };
+        /** SweepGroup */
+        SweepGroup: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Cards */
+            cards: components["schemas"]["SweepCard"][];
+        };
         /** SyncSummary */
         SyncSummary: {
             /** Created */
@@ -4049,6 +4209,11 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+        };
+        /** TomorrowLine */
+        TomorrowLine: {
+            /** Title */
+            title: string;
         };
         /** Totals */
         Totals: {
@@ -4298,6 +4463,38 @@ export interface components {
              * @default true
              */
             strong: boolean;
+        };
+        /** WorkLine */
+        WorkLine: {
+            /** Title */
+            title: string;
+            /**
+             * Minutes
+             * @default 0
+             */
+            minutes: number;
+        };
+        /** WorkSections */
+        WorkSections: {
+            /** Completed */
+            completed: components["schemas"]["WorkLine"][];
+            /** Worked */
+            worked: components["schemas"]["WorkLine"][];
+            /** Not Done */
+            not_done: components["schemas"]["NotDoneLine"][];
+            /** Tomorrow */
+            tomorrow: components["schemas"]["TomorrowLine"][];
+        };
+        /** WorkSummary */
+        WorkSummary: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            sections: components["schemas"]["WorkSections"];
+            /** Text */
+            text: string;
         };
     };
     responses: never;
@@ -4904,6 +5101,37 @@ export interface operations {
             };
         };
     };
+    sweep_candidates_api_v1_boards__board_id__sweep_candidates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_SweepCandidates_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_list_api_v1_boards__board_id__lists_post: {
         parameters: {
             query?: never;
@@ -5159,6 +5387,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_CardDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_cards_api_v1_cards_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkCards"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_BulkResult_"];
                 };
             };
             /** @description Validation Error */
@@ -7564,6 +7827,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_DayTemplateResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    work_summary_api_v1_reports_work_summary_get: {
+        parameters: {
+            query: {
+                date: string;
+                board_ids?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_WorkSummary_"];
                 };
             };
             /** @description Validation Error */

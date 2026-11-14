@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, ChevronLeft, ChevronRight, Timer } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Timer } from 'lucide-react'
+import WorkSummaryDialog from '../components/WorkSummaryDialog'
 import { useBoards } from '../api/boards'
 import { localDay, shiftDay, useDayPlan, useSuggestions } from '../api/dayPlans'
 import { useStartDayReview } from '../api/assistant'
@@ -35,6 +36,7 @@ export default function TodayPage() {
   const boards = useBoards()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<UserSettings>('/settings/') })
   const startReview = useStartDayReview()
+  const [summaryOpen, setSummaryOpen] = useState(false)
   const boardMap = useMemo(() => new Map((boards.data ?? []).map((b) => [b.id, b])), [boards.data])
 
   const mode =
@@ -82,6 +84,14 @@ export default function TodayPage() {
           {plan.data?.status === 'reviewed' && (
             <span className="inline-flex items-center gap-1.5 text-green-700"><CheckCircle2 size={15} strokeWidth={1.75} aria-hidden />Değerlendirildi</span>
           )}
+          {plan.data?.status === 'reviewed' && (
+            <button
+              onClick={() => setSummaryOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1 text-slate-700 hover:border-slate-900"
+            >
+              <ClipboardList size={15} strokeWidth={1.75} aria-hidden />İş özeti
+            </button>
+          )}
         </div>
 
         <div className="ml-auto pb-1">
@@ -102,7 +112,9 @@ export default function TodayPage() {
         </div>
       </header>
 
-      {(plan.isLoading || suggestions.isLoading) && <p className="text-slate-500">Yükleniyor…</p>}
+      {summaryOpen && <WorkSummaryDialog day={day} onClose={() => setSummaryOpen(false)} />}
+
+      {(plan.isLoading || suggestions.isLoading) &&<p className="text-slate-500">Yükleniyor…</p>}
       {(plan.error || suggestions.error) && <p className="text-red-600">{(plan.error ?? suggestions.error)?.message}</p>}
 
       {plan.data && suggestions.data && (

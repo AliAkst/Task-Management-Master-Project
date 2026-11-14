@@ -27,6 +27,7 @@ from app.models.card import (
     WhenMatchOut,
 )
 from app.models.common import ApiResponse
+from app.models.sweep import BulkCards, BulkResult
 from app.services import planning_day
 from app.services.nl_when import parse_when
 from app.services.timeutil import DEFAULT_TZ
@@ -43,6 +44,15 @@ cards_router = APIRouter(tags=["Cards"])
 async def create_card(data: CardCreate, service: CardServiceDep, user: CurrentUserDep):
     """Karti verilen listenin sonuna ekler."""
     return ApiResponse(success=True, data=await service.create(user.id, data))
+
+
+@cards_router.post("/cards/bulk", response_model=ApiResponse[BulkResult])
+async def bulk_cards(data: BulkCards, service: CardServiceDep, user: CurrentUserDep):
+    """Toplu arşivle/geri al/tamamla/taşı (Faz 13h1). Biri bile kullanıcının değilse
+    404 ve hiçbir kart değişmez. PAT: yazma kapsamı gerekir (varsayılan kural)."""
+    return ApiResponse(
+        success=True, data=BulkResult(updated=await service.bulk(user.id, data))
+    )
 
 
 @cards_router.post(

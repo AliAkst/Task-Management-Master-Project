@@ -16,6 +16,7 @@ from app.api.v1.events import events_router
 from app.api.v1.goals import goals_router
 from app.api.v1.integrations import integrations_router
 from app.api.v1.learning import learning_router
+from app.api.v1.reports import reports_router
 from app.api.v1.time_sessions import sessions_router
 from app.api.v1.user_settings import settings_router
 from app.config import settings
@@ -110,6 +111,7 @@ app.include_router(learning_router, prefix=settings.api_v1_prefix)
 app.include_router(sessions_router, prefix=settings.api_v1_prefix)
 app.include_router(day_plans_router, prefix=settings.api_v1_prefix)
 app.include_router(day_templates_router, prefix=settings.api_v1_prefix)
+app.include_router(reports_router, prefix=settings.api_v1_prefix)
 app.include_router(health_router)
 
 
