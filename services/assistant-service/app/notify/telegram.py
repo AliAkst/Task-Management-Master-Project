@@ -6,6 +6,7 @@ tum httpx hatalari tokensiz genel bir TelegramError'a cevrilir ve httpx
 kaydedicisi WARNING'e cekilir (istek satirlari token sizdirmasin).
 """
 
+import hmac
 import logging
 from typing import Any
 
@@ -67,16 +68,26 @@ class TelegramClient:
         )
 
 
-def latest_start_chat(updates: list[dict[str, Any]]) -> int | None:
-    """Metni /start olan EN YENI mesajin chat.id'si."""
-    best: tuple[int, int] | None = None
+def latest_start_chat(
+    updates: list[dict[str, Any]], code: str
+) -> tuple[int, str | None] | None:
+    """`/start <kod>` metni tasiyan EN YENI mesajin (chat.id, gorunen ad)'i.
+
+    Kodsuz ya da yanlis kodlu /start kabul edilmez (sahiplik kaniti)."""
+    if not code:
+        return None
+    want = f"/start {code}"
+    best: tuple[int, int, str | None] | None = None
     for u in updates:
         msg = u.get("message") or {}
         text = (msg.get("text") or "").strip()
-        chat = (msg.get("chat") or {}).get("id")
-        if chat is None or not (text == "/start" or text.startswith("/start ")):
+        chat = msg.get("chat") or {}
+        if chat.get("id") is None or not hmac.compare_digest(
+            text.encode(), want.encode()
+        ):
             continue
         uid = int(u.get("update_id") or 0)
         if best is None or uid >= best[0]:
-            best = (uid, int(chat))
-    return best[1] if best else None
+            name = chat.get("first_name") or chat.get("username")
+            best = (uid, int(chat["id"]), name)
+    return (best[1], best[2]) if best else None

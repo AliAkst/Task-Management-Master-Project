@@ -94,9 +94,16 @@ class FakeApi:
 class FakeTelegram:
     def __init__(self) -> None:
         self.sent: list[dict] = []
+        self.fail = False
+        self.attempts = 0
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/sendMessage"):
+            self.attempts += 1
+            if self.fail:
+                return httpx.Response(
+                    403, json={"ok": False, "description": "network down"}
+                )
             self.sent.append(json.loads(request.content))
         return httpx.Response(200, json={"ok": True, "result": {}})
 
@@ -164,6 +171,71 @@ def plan(day, items, status="planned"):
         "status": status,
         "items": [{"was_planned": True, "board_id": None, **i} for i in items],
     }
+
+
+# ---------------- T3-D2: basarisiz gonderim ----------------
+async def test_failed_send_is_retried_after_cooldown_then_sent_once(sched, api, tg):
+    tg.fail = True
+    await sched.tick(utc(2026, 11, 10, 22, 40))
+    assert tg.attempts == 1 and tg.sent == []
+    [row] = [r for r in await runs(sched) if r.kind == "night_plan"]
+    assert row.status == "failed" and row.detail["attempts"] == 1
+    tg.fail = False
+    await sched.tick(utc(2026, 11, 10, 22, 42))  # 5 dk dolmadi: yeniden deneme yok
+    assert tg.attempts == 1
+    await sched.tick(utc(2026, 11, 10, 22, 46))  # bekleme bitti: yeniden gonderir
+    assert len(tg.sent) == 1
+    [row] = [r for r in await runs(sched) if r.kind == "night_plan"]
+    assert row.status == "sent"
+    await sched.tick(utc(2026, 11, 10, 22, 55))  # gonderildi: ikinci gonderim yok
+    assert len(tg.sent) == 1
+
+
+async def test_failed_send_stops_after_three_attempts(sched, api, tg):
+    tg.fail = True
+    for minute in (40, 46, 52, 58):
+        await sched.tick(utc(2026, 11, 10, 22, minute))
+    assert tg.attempts == 3
+    [row] = [r for r in await runs(sched) if r.kind == "night_plan"]
+    assert row.status == "failed" and row.detail["attempts"] == 3
+
+
+async def test_error_inside_job_is_retried(sched, api, tg, monkeypatch):
+    real = sched._build
+    state = {"down": True}
+
+    async def flaky(*a, **kw):
+        if state["down"]:
+            raise RuntimeError("boom")
+        return await real(*a, **kw)
+
+    monkeypatch.setattr(sched, "_build", flaky)
+    await sched.tick(utc(2026, 11, 10, 22, 40))
+    [row] = [r for r in await runs(sched) if r.kind == "night_plan"]
+    assert row.status == "failed" and row.detail["error"] == "RuntimeError"
+    state["down"] = False
+    await sched.tick(utc(2026, 11, 10, 22, 47))
+    assert len(tg.sent) == 1
+    [row] = [r for r in await runs(sched) if r.kind == "night_plan"]
+    assert row.status == "sent" and row.detail["attempts"] == 2
+
+
+async def test_failed_overdue_row_does_not_silence_cards(sched, api, tg):
+    api.cards[1] = [card(11, "Vergi", 1, due_date="2026-11-07T10:00:00+03:00")]
+    async with sched.db() as s:
+        s.add(
+            ScheduledRunEntity(
+                user_id=USER_ID,
+                kind="overdue",
+                period_key="2026-11-09",
+                status="failed",
+                detail={"card_ids": [11], "results": {"telegram": "hata"}},
+            )
+        )
+        await s.commit()
+    await sched.tick(utc(2026, 11, 10, 13, 0))
+    [text] = [t for t in tg.texts if t.startswith("Dikkat")]
+    assert "Vergi" in text
 
 
 # ---------------- gece plani ----------------
@@ -589,3 +661,38 @@ async def test_run_weekly_for_scheduler_model_off_and_done(
     )
     # ayni hafta ikinci kez: is acilmaz, bildirim yok
     assert await jobs_module.run_weekly_for_scheduler(user, day) is None
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        ("AUTH_EXPIRED", "Haftalık değerlendirme yapılamadı: zamanlayıcı anahtarı geçersiz."),
+        (
+            "Ollama bağlantı hatası http://x?key=SIR",
+            "Haftalık değerlendirme yapılamadı; ayrıntı İstatistik sayfasında.",
+        ),
+    ],
+)
+async def test_weekly_failure_message_is_classified_not_raw(
+    monkeypatch, db_session_maker, error, expected
+):
+    import app.api.chat as chat_module
+    import app.api.jobs as jobs_module
+    from app.llm.types import ModelInfo
+
+    monkeypatch.setattr(chat_module, "session_maker", db_session_maker)
+
+    async def installed():
+        return [ModelInfo("ollama:gemma4:26b", "ollama", "gemma4:26b", "gemma4", True)]
+
+    async def fake_execute(job_id, kind, u, model_id, d):
+        await jobs_module._set(job_id, status="failed", error=error)
+        return False
+
+    monkeypatch.setattr(chat_module, "list_local_models", installed)
+    monkeypatch.setattr(jobs_module, "_execute", fake_execute)
+    note = await jobs_module.run_weekly_for_scheduler(
+        {"id": USER_ID, "token": "t"}, datetime(2026, 11, 15).date()
+    )
+    assert note.body == expected
+    assert "SIR" not in note.body and "yerel model kapalı" not in note.body

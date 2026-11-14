@@ -65,6 +65,8 @@ STARTABLE_PROBE = 10  # bagimlilik bakisi icin en cok bu kadar kart ayrintisi
 POSTPONE_MIN = 3
 POSTPONE_WINDOW_DAYS = 28
 SILENCE_RUNS = 3
+MAX_ATTEMPTS = 3  # basarisiz gonderimde en cok bu kadar deneme
+RETRY_AFTER = timedelta(minutes=5)  # denemeler arasi en az
 WEEKLY_MIN_REVIEWED = 3
 AUTH_ERROR = "Zamanlayıcı anahtarı geçersiz; Ayarlar → Bildirimler'den yeniden aç"
 HIDDEN_EVENT = "Başka bir etkinlik"
@@ -278,6 +280,26 @@ async def build_overdue(
 
 
 # ---------------- zamanlayici ----------------
+def _attempt_detail(attempts: int, now: datetime) -> dict[str, Any]:
+    return {"attempts": attempts, "last_attempt": now.isoformat()}
+
+
+def _retryable(status: str, detail: dict[str, Any] | None, now: datetime) -> bool:
+    """failed + deneme hakki kalmis + son denemeden en az RETRY_AFTER gecmis."""
+    if status != "failed":
+        return False
+    d = detail or {}
+    if int(d.get("attempts", 1)) >= MAX_ATTEMPTS:
+        return False
+    try:
+        last = datetime.fromisoformat(d["last_attempt"])
+    except (KeyError, ValueError, TypeError):
+        return True  # eski kayit: zaman bilinmiyor
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    return now - last >= RETRY_AFTER
+
+
 @dataclass
 class Scheduler:
     session_maker: async_sessionmaker[AsyncSession]
@@ -315,15 +337,24 @@ class Scheduler:
             ) is not None
 
     async def _recent_runs(self, user_id: int, now: datetime) -> set[tuple[str, str]]:
+        """Bu periyotta "calisti" sayilanlar: sent/skipped ile deneme hakki bitmis
+        ya da bekleme suresi dolmamis failed satirlari."""
         async with self.session_maker() as session:
             rows = await session.execute(
-                select(ScheduledRunEntity.kind, ScheduledRunEntity.period_key).where(
+                select(
+                    ScheduledRunEntity.kind,
+                    ScheduledRunEntity.period_key,
+                    ScheduledRunEntity.status,
+                    ScheduledRunEntity.detail,
+                ).where(
                     ScheduledRunEntity.user_id == user_id,
                     ScheduledRunEntity.created_at
                     >= now - timedelta(days=RUN_HISTORY_DAYS),
                 )
             )
-            return {(k, p) for k, p in rows}
+            return {
+                (k, p) for k, p, st, d in rows if not _retryable(st, d, now)
+            }
 
     async def _silenced(self, user_id: int) -> set[int]:
         async with self.session_maker() as session:
@@ -332,6 +363,7 @@ class Scheduler:
                 .where(
                     ScheduledRunEntity.user_id == user_id,
                     ScheduledRunEntity.kind == OVERDUE,
+                    ScheduledRunEntity.status == "sent",  # failed/skipped susturmaz
                 )
                 .order_by(ScheduledRunEntity.id.desc())
                 .limit(SILENCE_RUNS)
@@ -341,23 +373,41 @@ class Scheduler:
                 out.update((r.detail or {}).get("card_ids", []))
             return out
 
-    async def _claim(self, user_id: int, kind: str, key: str) -> int | None:
-        """Satiri ekle-dene: unique cakismasi = bu periyot zaten calisti."""
+    async def _claim(
+        self, user_id: int, kind: str, key: str, now: datetime | None = None
+    ) -> tuple[int, int] | None:
+        """Satiri ekle-dene: unique cakismasi = bu periyot zaten calisti. Istisna:
+        yeniden denenebilir `failed` satir (bekleme dolmus, hak kalmis) yeniden alinir.
+        Doner: (satir id, bu kacinci deneme)."""
+        now = now or datetime.now(UTC)
         async with self.session_maker() as session:
             row = ScheduledRunEntity(
                 user_id=user_id,
                 kind=kind,
                 period_key=key,
                 status="failed",
-                detail={"started": True},
+                detail=_attempt_detail(1, now),
             )
             session.add(row)
             try:
                 await session.commit()
             except IntegrityError:
                 await session.rollback()
+            else:
+                return row.id, 1
+            old = await session.scalar(
+                select(ScheduledRunEntity).where(
+                    ScheduledRunEntity.user_id == user_id,
+                    ScheduledRunEntity.kind == kind,
+                    ScheduledRunEntity.period_key == key,
+                )
+            )
+            if old is None or not _retryable(old.status, old.detail, now):
                 return None
-            return row.id
+            n = int((old.detail or {}).get("attempts", 1)) + 1
+            old.detail = _attempt_detail(n, now)
+            await session.commit()
+            return old.id, n
 
     async def _finish(self, run_id: int, status: str, detail: dict[str, Any]) -> None:
         async with self.session_maker() as session:
@@ -435,9 +485,11 @@ class Scheduler:
         kind: str,
         key: str,
     ) -> None:
-        run_id = await self._claim(user["id"], kind, key)
-        if run_id is None:
+        now_utc = now_local.astimezone(UTC)
+        claimed = await self._claim(user["id"], kind, key, now_utc)
+        if claimed is None:
             return
+        run_id, attempt = claimed
         try:
             note, detail = await self._build(api, user, tz, now_local, kind, key)
             if note is None:
@@ -449,14 +501,18 @@ class Scheduler:
             await self._finish(
                 run_id,
                 forced or ("sent" if ok else "failed"),
-                {**detail, "results": results},
+                {**detail, "results": results, **_attempt_detail(attempt, now_utc)},
             )
         except TaskApiAuthError:
             await self._release(run_id)  # anahtar duzelince ayni periyot denenebilsin
             raise
         except Exception as e:
             log.exception("scheduler %s/%s failed", kind, key)
-            await self._finish(run_id, "failed", {"error": type(e).__name__})
+            await self._finish(
+                run_id,
+                "failed",
+                {"error": type(e).__name__, **_attempt_detail(attempt, now_utc)},
+            )
 
     async def tick_user(self, user_id: int, token: str, now_utc: datetime) -> None:
         if not await self._has_channel(user_id):

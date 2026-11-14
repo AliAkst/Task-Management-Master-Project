@@ -7,6 +7,8 @@ Bot token ve zamanlayici PAT'i hicbir yanitta ve log satirinda gorunmez.
 
 import json
 import logging
+import secrets
+import time
 from typing import Any
 
 import httpx
@@ -107,6 +109,22 @@ def _settings_payload(row: NotificationSettingsEntity | None) -> dict[str, Any]:
     }
 
 
+PAIR_CODE_TTL = 600  # sn
+
+
+def _new_pair_code(cfg: dict[str, Any]) -> str:
+    code = f"{secrets.randbelow(10**6):06d}"
+    cfg["pair_code"] = code
+    cfg["pair_expires"] = time.time() + PAIR_CODE_TTL
+    return code
+
+
+def _code_valid(cfg: dict[str, Any]) -> bool:
+    return bool(cfg.get("pair_code")) and time.time() < float(
+        cfg.get("pair_expires") or 0
+    )
+
+
 def _channel_payload(row: NotificationChannelEntity) -> dict[str, Any]:
     """Token ASLA donmez; Telegram icin yalniz bot kullanici adi + eslesme durumu."""
     out: dict[str, Any] = {
@@ -122,6 +140,8 @@ def _channel_payload(row: NotificationChannelEntity) -> dict[str, Any]:
             cfg = {}
         out["bot_username"] = cfg.get("bot_username")
         out["paired"] = cfg.get("chat_id") is not None
+        if not out["paired"] and _code_valid(cfg):
+            out["pair_code"] = cfg["pair_code"]
     return out
 
 
@@ -219,13 +239,27 @@ async def put_telegram(
     if row is None:
         row = NotificationChannelEntity(user_id=user["id"], kind="telegram")
         session.add(row)
-    row.config_encrypted = encrypt(
-        json.dumps({"bot_token": token, "bot_username": username})
-    )
+    cfg: dict[str, Any] = {"bot_token": token, "bot_username": username}
+    code = _new_pair_code(cfg)
+    row.config_encrypted = encrypt(json.dumps(cfg))
     row.is_enabled = False
     row.last_error = None
     await session.commit()
-    return ok({"bot_username": username})
+    return ok({"bot_username": username, "pair_code": code})
+
+
+@router.post("/telegram/code")
+async def new_telegram_code(
+    user: dict = Depends(current_user), session: AsyncSession = Depends(get_session)
+):
+    row = await _channel(session, user["id"], "telegram")
+    if row is None or not row.config_encrypted:
+        return fail(409, "TELEGRAM_NO_TOKEN", "Önce bot anahtarını kaydet")
+    cfg = channel_config(row)
+    code = _new_pair_code(cfg)
+    row.config_encrypted = encrypt(json.dumps(cfg))
+    await session.commit()
+    return ok({"pair_code": code})
 
 
 @router.post("/telegram/pair")
@@ -236,25 +270,38 @@ async def pair_telegram(
     if row is None or not row.config_encrypted:
         return fail(409, "TELEGRAM_NO_TOKEN", "Önce bot anahtarını kaydet")
     cfg = channel_config(row)
+    if not cfg.get("pair_code"):
+        return fail(409, "TELEGRAM_NO_START", "Eşleştirme kodu al, sonra tekrar dene")
+    if not _code_valid(cfg):
+        return fail(
+            409, "TELEGRAM_CODE_EXPIRED", "Kodun süresi doldu; yeni kod al"
+        )
     client = TelegramClient(cfg["bot_token"], TRANSPORT)
     try:
-        chat_id = latest_start_chat(await client.get_updates())
+        found = latest_start_chat(await client.get_updates(), cfg["pair_code"])
     except TelegramError as e:
         return fail(422, "TELEGRAM_ERROR", str(e))
-    if chat_id is None:
-        return fail(409, "TELEGRAM_NO_START", "Bota /start yaz, sonra tekrar dene")
-    cfg["chat_id"] = chat_id
-    row.config_encrypted = encrypt(json.dumps(cfg))
+    if found is None:
+        return fail(
+            409,
+            "TELEGRAM_NO_START",
+            f"Bota /start {cfg['pair_code']} yaz, sonra tekrar dene",
+        )
+    chat_id, chat_name = found
     try:
         await client.send_message(chat_id, "Ajanda bağlandı ✅")
     except TelegramError as e:
-        row.last_error = str(e)[:300]
+        row.last_error = str(e)[:300]  # kod korunur: tekrar denenebilir
         await session.commit()
         return fail(422, "TELEGRAM_ERROR", str(e))
+    cfg["chat_id"] = chat_id
+    cfg.pop("pair_code", None)  # tek kullanimlik
+    cfg.pop("pair_expires", None)
+    row.config_encrypted = encrypt(json.dumps(cfg))
     row.is_enabled = True
     row.last_error = None
     await session.commit()
-    return ok(_channel_payload(row))
+    return ok({**_channel_payload(row), "chat_name": chat_name})
 
 
 @router.delete("/telegram")

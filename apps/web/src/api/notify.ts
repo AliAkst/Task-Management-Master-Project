@@ -12,6 +12,9 @@ export interface NotifyChannel {
   /** Yalniz Telegram: bot kullanici adi (token asla gelmez) */
   bot_username?: string | null
   paired?: boolean
+  /** Yalniz eslesmemis Telegram: 10 dk gecerli tek kullanimlik kod ("/start <kod>") */
+  pair_code?: string | null
+  chat_name?: string | null
 }
 
 export interface NotifyState {
@@ -63,9 +66,10 @@ export function useNotifyActions() {
     enable: useMutation({ mutationFn: () => send('/enable', 'POST'), onSettled: settled }),
     disable: useMutation({ mutationFn: () => send('/disable', 'POST'), onSettled: settled }),
     saveTelegram: useMutation({
-      mutationFn: (botToken: string) => send<{ bot_username: string | null }>('/telegram', 'PUT', { bot_token: botToken }),
+      mutationFn: (botToken: string) => send<{ bot_username: string | null; pair_code: string }>('/telegram', 'PUT', { bot_token: botToken }),
       onSettled: settled,
     }),
+    newCode: useMutation({ mutationFn: () => send<{ pair_code: string }>('/telegram/code', 'POST'), onSettled: settled }),
     pair: useMutation({ mutationFn: () => send<NotifyChannel>('/telegram/pair', 'POST'), onSettled: settled }),
     removeTelegram: useMutation({ mutationFn: () => send('/telegram', 'DELETE'), onSettled: settled }),
     setToast: useMutation({ mutationFn: (enabled: boolean) => send('/toast', 'PUT', { enabled }), onSettled: settled }),

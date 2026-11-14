@@ -151,6 +151,7 @@ export default function NotificationSettings() {
                     <div className="mt-1 space-y-1 text-[14px] text-slate-600">
                       <p className="inline-flex items-center gap-1 text-green-700">
                         <Check size={15} aria-hidden /> @{telegram.bot_username} ile bağlı
+                        {act.pair.data?.chat_name && <> · sohbet: {act.pair.data.chat_name}</>}
                       </p>
                       {telegram.last_sent_at && <p>Son gönderim: {formatDateTime(telegram.last_sent_at)}</p>}
                     </div>
@@ -183,10 +184,20 @@ export default function NotificationSettings() {
                       )}
                       {telegram?.bot_username && (
                         <div className="space-y-2">
-                          <p>
-                            @{telegram.bot_username} bulundu. Telegram’da bota <b>/start</b> yaz, sonra Eşleştir.
-                          </p>
-                          <button type="button" disabled={act.pair.isPending} onClick={() => act.pair.mutate()} className={btn}>
+                          {telegram.pair_code ? (
+                            <p>
+                              @{telegram.bot_username} bulundu. Telegram’da bota <b>/start {telegram.pair_code}</b> yaz
+                              (kod 10 dk geçerli, tek kullanımlık), sonra Eşleştir.
+                            </p>
+                          ) : (
+                            <p>
+                              @{telegram.bot_username} bulundu. Eşleştirme kodunun süresi doldu.{' '}
+                              <button type="button" disabled={act.newCode.isPending} onClick={() => act.newCode.mutate()} className={btn}>
+                                Yeni kod al
+                              </button>
+                            </p>
+                          )}
+                          <button type="button" disabled={act.pair.isPending || !telegram.pair_code} onClick={() => act.pair.mutate()} className={btn}>
                             {act.pair.isPending && (
                               <Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />
                             )}

@@ -254,9 +254,12 @@ async def run_weekly_for_scheduler(user: dict[str, Any], day: date):
             title,
             f"Haftalık değerlendirmen hazır: {n} içgörü — İstatistik sayfasında.",
         )
-    return Notification(
-        "weekly", title, "Haftalık değerlendirme yapılamadı: yerel model kapalı."
-    )
+    # Ham hata metni dis kanala (Telegram) gitmez: yalniz sinif.
+    if job.error == "AUTH_EXPIRED":
+        why = ": zamanlayıcı anahtarı geçersiz."
+    else:
+        why = "; ayrıntı İstatistik sayfasında."
+    return Notification("weekly", title, f"Haftalık değerlendirme yapılamadı{why}")
 
 
 def _spawn(

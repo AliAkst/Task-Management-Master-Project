@@ -161,15 +161,25 @@ async def test_telegram_errors_never_contain_token():
     assert BOT not in str(e2.value)
 
 
-def test_latest_start_picks_newest_start_message():
+def test_latest_start_requires_matching_code_and_picks_newest():
+    def upd(i, text, chat, **extra):
+        return {
+            "update_id": i,
+            "message": {"text": text, "chat": {"id": chat, **extra}},
+        }
+
     updates = [
-        {"update_id": 1, "message": {"text": "/start", "chat": {"id": 11}}},
-        {"update_id": 3, "message": {"text": "merhaba", "chat": {"id": 33}}},
-        {"update_id": 2, "message": {"text": "/start", "chat": {"id": 22}}},
+        upd(1, "/start 111111", 11, first_name="Ali"),
+        upd(3, "merhaba", 33),
+        upd(2, "/start 111111", 22, username="veli"),
+        upd(4, "/start 999999", 44),  # yanlis kod
+        upd(5, "/start", 55),  # kodsuz
     ]
-    assert latest_start_chat(updates) == 22
-    assert latest_start_chat([updates[1]]) is None
-    assert latest_start_chat([]) is None
+    assert latest_start_chat(updates, "111111") == (22, "veli")
+    assert latest_start_chat(updates, "222222") is None
+    assert latest_start_chat([updates[4]], "111111") is None
+    assert latest_start_chat([], "111111") is None
+    assert latest_start_chat(updates, "") is None
 
 
 # ---------------- Windows bildirimi ----------------
@@ -219,8 +229,12 @@ async def test_put_telegram_invalid_token_is_422(client, tg):
 async def test_telegram_pairing_flow_and_no_token_in_responses(client, tg):
     res = await client.put(f"{API}/telegram", json={"bot_token": BOT})
     assert res.status_code == 200, res.text
-    assert res.json()["data"] == {"bot_username": "ajanda_bot"}
+    assert res.json()["data"]["bot_username"] == "ajanda_bot"
+    assert len(res.json()["data"]["pair_code"]) == 6
     assert BOT not in res.text
+
+    code = (await client.get(API)).json()["data"]["channels"][0]["pair_code"]
+    assert len(code) == 6 and code.isdigit()
 
     # /start yok -> 409
     res = await client.post(f"{API}/telegram/pair")
@@ -228,9 +242,19 @@ async def test_telegram_pairing_flow_and_no_token_in_responses(client, tg):
     assert res.json()["error"]["code"] == "TELEGRAM_NO_START"
     assert BOT not in res.text
 
-    tg.updates = [{"update_id": 5, "message": {"text": "/start", "chat": {"id": 555}}}]
+    tg.updates = [
+        {
+            "update_id": 5,
+            "message": {
+                "text": f"/start {code}",
+                "chat": {"id": 555, "first_name": "Ali"},
+            },
+        }
+    ]
     res = await client.post(f"{API}/telegram/pair")
     assert res.status_code == 200, res.text
+    assert res.json()["data"]["chat_name"] == "Ali"
+    assert "pair_code" not in res.json()["data"]
     assert BOT not in res.text
     assert tg.sent()[-1] == {
         "chat_id": 555,
@@ -241,13 +265,62 @@ async def test_telegram_pairing_flow_and_no_token_in_responses(client, tg):
     row = await channel(client.db, "telegram")
     assert row.is_enabled is True
     assert BOT not in row.config_encrypted  # duz metin degil
-    assert json.loads(decrypt(row.config_encrypted))["chat_id"] == 555
+    saved = json.loads(decrypt(row.config_encrypted))
+    assert saved["chat_id"] == 555
+    assert "pair_code" not in saved  # tek kullanimlik
 
     got = await client.get(API)
     assert got.status_code == 200
     assert BOT not in got.text and "bot_token" not in got.text
     tel = next(c for c in got.json()["data"]["channels"] if c["kind"] == "telegram")
     assert tel["is_enabled"] is True and tel["bot_username"] == "ajanda_bot"
+
+
+async def start_and_pair(client, tg, chat_id=9):
+    """Kodu config'ten okuyup bota '/start <kod>' yazilmis gibi eslestirir."""
+    code = (await client.get(API)).json()["data"]["channels"][0]["pair_code"]
+    tg.updates = [
+        {"update_id": 1, "message": {"text": f"/start {code}", "chat": {"id": chat_id}}}
+    ]
+    return await client.post(f"{API}/telegram/pair")
+
+
+async def test_pairing_rejects_foreign_start_without_or_with_wrong_code(client, tg):
+    await client.put(f"{API}/telegram", json={"bot_token": BOT})
+    for text in ("/start", "/start 000000x", "/start 1"):
+        tg.updates = [{"update_id": 9, "message": {"text": text, "chat": {"id": 666}}}]
+        res = await client.post(f"{API}/telegram/pair")
+        assert res.status_code == 409, text
+        assert res.json()["error"]["code"] == "TELEGRAM_NO_START"
+    row = await channel(client.db, "telegram")
+    assert row.is_enabled is False
+    assert "chat_id" not in json.loads(decrypt(row.config_encrypted))
+    assert tg.sent() == []  # yabanciya mesaj gitmedi
+
+
+async def test_pairing_code_is_single_use_and_expires(client, tg, monkeypatch):
+    await client.put(f"{API}/telegram", json={"bot_token": BOT})
+    code = (await client.get(API)).json()["data"]["channels"][0]["pair_code"]
+    real = notify_module.time.time()
+    monkeypatch.setattr(notify_module.time, "time", lambda: real + 601)
+    tg.updates = [
+        {"update_id": 1, "message": {"text": f"/start {code}", "chat": {"id": 7}}}
+    ]
+    res = await client.post(f"{API}/telegram/pair")
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "TELEGRAM_CODE_EXPIRED"
+    chan = (await client.get(API)).json()["data"]["channels"][0]
+    assert chan.get("pair_code") is None
+    res = await client.post(f"{API}/telegram/code")
+    new = res.json()["data"]["pair_code"]
+    assert len(new) == 6
+    tg.updates = [
+        {"update_id": 2, "message": {"text": f"/start {new}", "chat": {"id": 7}}}
+    ]
+    assert (await client.post(f"{API}/telegram/pair")).status_code == 200
+    # eslestikten sonra ayni kodla yeniden eslestirme olmaz
+    res = await client.post(f"{API}/telegram/pair")
+    assert res.status_code == 409
 
 
 async def test_delete_telegram_removes_channel(client, tg):
@@ -305,8 +378,7 @@ async def test_enable_creates_read_pat_and_stores_it_encrypted(client, auth_api)
 
 async def test_test_endpoint_sends_to_enabled_channels(client, tg):
     await client.put(f"{API}/telegram", json={"bot_token": BOT})
-    tg.updates = [{"update_id": 1, "message": {"text": "/start", "chat": {"id": 9}}}]
-    await client.post(f"{API}/telegram/pair")
+    await start_and_pair(client, tg)
     res = await client.post(f"{API}/test")
     assert res.json()["data"]["results"] == {"telegram": "ok"}
     assert tg.sent()[-1]["text"] == "Ajanda\nDeneme bildirimi"
@@ -344,8 +416,7 @@ async def test_notifier_records_success_and_error(db_session_maker):
 async def test_no_secrets_in_logs(client, tg, caplog):
     caplog.set_level(logging.DEBUG)
     await client.put(f"{API}/telegram", json={"bot_token": BOT})
-    tg.updates = [{"update_id": 1, "message": {"text": "/start", "chat": {"id": 9}}}]
-    await client.post(f"{API}/telegram/pair")
+    await start_and_pair(client, tg)
     await client.post(f"{API}/enable")
     await client.post(f"{API}/test")
     assert BOT not in caplog.text and PAT not in caplog.text
