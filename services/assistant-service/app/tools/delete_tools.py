@@ -5,13 +5,14 @@ soyler. Silme geri alinamaz: bu islemler izin "otomatik" olsa bile her zaman
 onay karti olarak gelir (bkz. ActionGate.ALWAYS_ASK).
 """
 
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.llm.types import ToolSpec
+from app.tools.planning import planning_context
 from app.tools.privacy import PrivacyFilter
-from app.tools.schedule_day import find_board, resolve_day
+from app.tools.schedule_day import find_board, resolve_day_ex
 from app.tools.task_api import TaskApiClient, TaskApiError
 
 LIST_LIMIT = 15  # onay kartinda gosterilen en fazla baslik
@@ -123,7 +124,10 @@ async def prepare_cancel_day(
     day: Any,
     delete_cards: bool = False,
 ) -> tuple[dict[str, Any], str]:
-    target: date = resolve_day(day, datetime.now(tz).date())
+    now_local, rollover = await planning_context(api, tz)
+    target, _ = resolve_day_ex(
+        day, now_local.date(), now_local=now_local, rollover=rollover
+    )
     plan = await api.get(f"/day-plans/{target.isoformat()}")
     if plan.get("status") == "reviewed":
         raise ValueError("Bu gün değerlendirildi; planı iptal edilemez")

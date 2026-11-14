@@ -12,7 +12,15 @@ from app.llm.types import LLMError, LLMProvider, Msg, ToolCall, Usage
 from app.tools.read_tools import ToolBox
 
 EventType = Literal[
-    "token", "tool_start", "tool_end", "action", "message", "error", "planned", "failed"
+    "token",
+    "tool_start",
+    "tool_end",
+    "action",
+    "message",
+    "error",
+    "planned",
+    "failed",
+    "question",
 ]
 
 

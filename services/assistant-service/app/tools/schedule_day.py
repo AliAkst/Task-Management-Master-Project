@@ -22,18 +22,19 @@ DEFAULT_MINUTES = 30  # yalniz start verilen blok icin varsayilan sure (Faz 12b)
 
 SCHEDULE_SPEC = ToolSpec(
     "schedule_day",
-    "Bir günü planlar: TEK çağrıyla bütün maddeleri sırasıyla ver. Her madde gün "
-    "planına eklenir. Yapılacak işler (card=true) kart olur; yol, iş, yemek gibi "
-    "sabit şeyler (card=false) kart olmaz. Saati ya da süresi olan madde takvime de "
-    "konur; kullanıcı saat/süre söylemediyse start, minutes, end YAZMA: madde saatsiz "
-    "plan maddesi olur. Saat hesabı yapma: başlangıcı verilmeyen saatli madde bir "
-    "öncekinin bitişinde başlar; bitiş yerine 'minutes' verebilirsin. Gün: 'bugün', "
-    "'yarın', haftanın günü ('salı') ya da YYYY-MM-DD.",
+    "Bir günü planlar: TEK çağrıyla bütün maddeleri ver. İşleri SÖYLENDİĞİ SIRAYLA "
+    "ver. Saatini kullanıcı söylediyse start; süresi varsa minutes. Saat hesabı "
+    "yapma; kod boşluklara yerleştirir, çakışma ya da sığmama varsa kullanıcıya soru "
+    "üretir. Kullanıcı saat/süre söylemediyse start/minutes/end YAZMA (madde saatsiz "
+    "plan maddesi olur). 'Sabah/akşam' dendiyse window. Gün şablonundaki "
+    "yol/mesai/öğle bloklarını YAZMA, kod ekler. Yapılacak işler card=true (kart), "
+    "kartsız sabit şeyler card=false. Gün: 'bugün', 'yarın', haftanın günü ('salı') "
+    "ya da YYYY-MM-DD.",
     {
         "type": "object",
         "properties": {
             "day": {"type": "string", "description": "salı / yarın / 2026-11-10"},
-            "blocks": {
+            "items": {
                 "type": "array",
                 "items": {
                     "type": "object",
@@ -53,12 +54,17 @@ SCHEDULE_SPEC = ToolSpec(
                             "type": "string",
                             "description": "kartın board'u (ad); card=true ise",
                         },
+                        "window": {
+                            "type": "string",
+                            "enum": ["sabah", "öğle", "öğleden sonra", "akşam", "gece"],
+                            "description": "günün hangi diliminde (saat söylenmediyse)",
+                        },
                     },
                     "required": ["title"],
                 },
             },
         },
-        "required": ["day", "blocks"],
+        "required": ["day", "items"],
     },
 )
 
@@ -100,6 +106,29 @@ def resolve_day(value: Any, today: date) -> date:
     raise ValueError(
         f"Gün anlaşılamadı: '{value}'. 'bugün', 'yarın', 'salı' ya da YYYY-MM-DD yaz"
     )
+
+
+def resolve_day_ex(
+    value: Any,
+    today: date,
+    *,
+    now_local: datetime | None = None,
+    rollover: time | None = None,
+) -> tuple[date, bool]:
+    """
+    Gun donumlu cozum (Faz 13d, T4): saat < rollover iken goreli ifade ONCE dun baz
+    alinarak cozulur; sonuc takvimsel bugunden onceyse bugun baz alinarak yeniden
+    cozulur. ISO tarih etkilenmez. -> (gun, rolled): rolled, gun donumunun sonucu
+    degistirdigini soyler ("00:30'da yarin" = bugunun takvimsel gunu).
+    """
+    if now_local is None or rollover is None or now_local.time() >= rollover:
+        return resolve_day(value, today), False
+    cal = now_local.date()
+    plain = resolve_day(value, cal)
+    d = resolve_day(value, cal - timedelta(days=1))
+    if d < cal:
+        d = plain
+    return d, d != plain
 
 
 def parse_clock(value: Any, field: str) -> int:

@@ -10,7 +10,9 @@ from zoneinfo import ZoneInfo
 
 from app.db.models import UserFactEntity
 from app.tools.memory_tools import CATEGORIES
+from app.tools.placement import day_label
 from app.tools.read_tools import ToolBox
+from app.tools.schedule_day import resolve_day_ex
 from app.tools.task_api import TaskApiClient, TaskApiError
 
 PERSONA = """Sen kullanıcının kişisel yaşam ve görev planlama asistanısın. Adın "Asistan".
@@ -62,6 +64,19 @@ async def build_system_prompt(
     ]
     if user.get("full_name"):
         lines.append(f"Kullanıcının adı: {user['full_name']}.")
+    # Faz 13d: gun donumu etkinse "yarin" uyandigin gundur
+    try:
+        now_local, rollover = await toolbox.writer._planning()
+        if now_local.time() < rollover:
+            tomorrow = resolve_day_ex(
+                "yarın", now_local.date(), now_local=now_local, rollover=rollover
+            )[0]
+            lines.append(
+                f"Saat {now_local:%H:%M}: kullanıcının 'yarın' dediği gün "
+                f"{day_label(tomorrow)}."
+            )
+    except TaskApiError:
+        pass
 
     if focus:
         lines.append(focus)

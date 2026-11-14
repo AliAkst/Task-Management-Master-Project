@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from app.llm.types import ToolCall, ToolSpec
 from app.tools.card_lookup import query_tokens, score, visible_cards
+from app.tools.placement import NeedsAnswer
 from app.tools.privacy import HIDDEN_MESSAGE, PrivacyFilter
 from app.tools.task_api import TaskApiClient, TaskApiError
 from app.tools.write_tools import (
@@ -210,6 +211,17 @@ class ToolBox:
                 prepared = await self.writer.prepare(call.name, call.arguments)
             except TypeError as e:
                 return fail(f"Geçersiz argümanlar: {e}")
+            except NeedsAnswer as q:
+                # Faz 13d: hata degil, kullaniciya tek numarali soru
+                text = json.dumps(
+                    {
+                        "status": "needs_answer",
+                        "question": q.question.text,
+                        "options": [o.label for o in q.question.options],
+                    },
+                    ensure_ascii=False,
+                )
+                return ToolResult(text, True, None, q.question, q.state)
             except (TaskApiError, ValueError) as e:
                 return fail(getattr(e, "message", str(e)))
             return await self.gate.handle(call, prepared)

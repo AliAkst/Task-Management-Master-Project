@@ -9,6 +9,7 @@ Yazma araclari (Faz 5). Her arac iki asamali:
 Boylece onay kartinda gordugun sey, onaylayinca yapilan seyin TA KENDISIDIR.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -51,15 +52,23 @@ from app.tools.memory_tools import (
     MemoryTools,
     validate_goal_args,
 )
+from app.tools.placement import (
+    Busy,
+    NeedsAnswer,
+    Placement,
+    Question,
+    TemplateInfo,
+    place_day,
+)
+from app.tools.planning import planning_context
 from app.tools.privacy import HIDDEN_MESSAGE, PrivacyFilter
 from app.tools.schedule_day import (
     SCHEDULE_SPEC,
-    build_timeline,
     find_board,
-    find_conflict,
     hhmm,
     parse_clock,
     resolve_day,
+    resolve_day_ex,
     to_datetime,
 )
 from app.tools.task_api import TaskApiClient, TaskApiError
@@ -253,6 +262,27 @@ def _fmt_day(d: date) -> str:
     return f"{_DAY_FMT[d.weekday()]} {d.day} {_MONTHS[d.month - 1]}"
 
 
+def _fmt_dur(minutes: int) -> str:
+    h, m = divmod(int(minutes), 60)
+    if h and m:
+        return f"{h} sa {m} dk"
+    return f"{h} sa" if h else f"{m} dk"
+
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=ZoneInfo("UTC"))
+
+
+def _plan_time(value: Any, tz: ZoneInfo) -> datetime | None:
+    """Plan satirinin saati (ISO) -> karsilastirilabilir; yoksa None (saatsiz)."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=tz)
+
+
 def _fmt_dt(dt: datetime) -> str:
     return f"{_fmt_day(dt.date())} {dt:%H:%M}"
 
@@ -351,6 +381,16 @@ class WriteTools:
         self.memory = memory
         # Acik kart penceresi ("bu kart" ifadesi); sohbet katmani doldurur
         self.focus_card_id: int | None = None
+        # Faz 13d: planlama baglami (gun donumu) tur basina bir kez; testler saati ezer
+        self.now_fn: Callable[[], datetime] | None = None
+        self._rollover: time | None = None
+
+    async def _planning(self) -> tuple[datetime, time]:
+        """(simdi yerel, rollover) — rollover tur basina bir kez okunur."""
+        now = self.now_fn() if self.now_fn else None
+        now_local, rollover = await planning_context(self.api, self.tz, now, self._rollover)
+        self._rollover = rollover
+        return now_local, rollover
 
     # ---------------- yardimcilar ----------------
     async def _resolve(self, ref: Any, *, include_completed: bool = False) -> dict[str, Any]:
@@ -1073,9 +1113,52 @@ class WriteTools:
         summary = f"🗓 {_fmt_day(day)} planına {len(new)} madde: " + ", ".join(
             _clip(t, 30) for t in titles
         )
+        warn = await self._capacity_warning(day, plan, new, items)
+        if warn:
+            summary += "\n" + warn
         return PreparedAction(
             "plan_day", {"date": day.isoformat(), "items": new}, summary
         )
+
+    async def _capacity_warning(
+        self,
+        day: date,
+        plan: dict[str, Any],
+        new: list[dict[str, Any]],
+        raw: list[dict[str, Any]],
+    ) -> str | None:
+        """Faz 13d: planlanan toplam sure gunun bos zamanini asiyorsa tek satir uyari."""
+        total = sum(
+            i.get("planned_minutes") or 0
+            for i in plan.get("items", [])
+            if i.get("was_planned")
+        ) + sum(
+            (e.get("planned_minutes") or r.get("planned_minutes") or 0)
+            for e, r in zip(new, raw, strict=False)
+        )
+        if total <= 0:
+            return None
+        try:
+            template, _ = await self._day_template(day)
+            busy = await self._busy_for_day(day)
+        except (TaskApiError, ValueError):
+            return None
+        d0 = template.day_start if template else 480
+        d1 = template.day_end if template else 1380
+        blocked = [(b.start, b.end) for b in busy] + [
+            (b.start, b.end) for b in (template.blocks if template else [])
+        ]
+        taken = 0
+        cur = d0
+        for st, en in sorted(blocked):
+            st, en = max(st, cur), min(en, d1)
+            if en > st:
+                taken += en - st
+                cur = en
+        free = max(0, d1 - d0 - taken)
+        if total <= free:
+            return None
+        return f"⚠ Toplam {_fmt_dur(total)} iş; boş zaman {_fmt_dur(free)}."
 
     async def _prepare_triage_inbox(
         self, moves: list[dict[str, Any]]
@@ -1120,8 +1203,9 @@ class WriteTools:
             "triage_inbox", {"moves": resolved}, triage_summary(resolved)
         )
 
-    async def _check_calendar_conflicts(self, target: date, timeline: list) -> None:
-        """Yeni bloklar o gunun saatli etkinlikleriyle (Teams toplantisi...) cakismasin."""
+    async def _busy_for_day(self, target: date) -> list[Busy]:
+        """O gunun saatli (tum gun olmayan) takvim etkinlikleri -> dakika aralıkları.
+        Gizli board'daki etkinligin basligi bulut modele gitmez."""
         start = datetime.combine(target, time(0), tzinfo=self.tz)
         # Bloklar gece yarisini gecebilir: ertesi gunun sonuna kadar bak
         cal = await self.api.get(
@@ -1129,33 +1213,119 @@ class WriteTools:
             start=start.isoformat(),
             end=(start + timedelta(days=2)).isoformat(),
         )
-        events = [
-            i if self.privacy.keep(i) else {**i, "title": "Başka bir etkinlik"}
-            for i in cal.get("items", [])
-        ]
-        conflict = find_conflict(timeline, target, self.tz, events)
-        if conflict:
-            raise ValueError(conflict)
+        busy: list[Busy] = []
+        for i in cal.get("items", []):
+            if i.get("kind") != "event" or i.get("all_day"):
+                continue
+            try:
+                e_start = datetime.fromisoformat(str(i["start"]))
+                e_end = datetime.fromisoformat(str(i["end"]))
+            except (KeyError, ValueError):
+                continue  # ayrilamayan zamanlar atlanir
+            e_start = e_start if e_start.tzinfo else e_start.replace(tzinfo=self.tz)
+            e_end = e_end if e_end.tzinfo else e_end.replace(tzinfo=self.tz)
+            s_min = int((e_start.astimezone(self.tz) - start).total_seconds() // 60)
+            e_min = int((e_end.astimezone(self.tz) - start).total_seconds() // 60)
+            if e_min <= s_min:
+                continue
+            title = i.get("title") if self.privacy.keep(i) else "Başka bir etkinlik"
+            busy.append(Busy(str(title or "Etkinlik"), s_min, e_min, "event"))
+        return busy
+
+    async def _day_template(
+        self, target: date
+    ) -> tuple[TemplateInfo | None, dict[str, Any] | None]:
+        """Gunun cozumlenen sablonu (13c) -> motor girdisi + onay karti meta'si."""
+        try:
+            data = await self.api.get(f"/day-plans/{target.isoformat()}/template")
+        except TaskApiError:
+            return None, None
+        t = data.get("template") if isinstance(data, dict) else None
+        if not t or not isinstance(t, dict) or not t.get("blocks"):
+            return None, None
+
+        def minutes(v: Any) -> int:
+            h, m = str(v).split(":")[:2]
+            return int(h) * 60 + int(m)
+
+        try:
+            blocks = [
+                Busy(str(b["title"]), minutes(b["start"]), minutes(b["end"]), "template")
+                for b in t["blocks"]
+            ]
+            info = TemplateInfo(
+                str(t.get("name") or "Şablon"),
+                blocks,
+                minutes(t.get("day_start") or "08:00"),
+                minutes(t.get("day_end") or "23:00"),
+                int(t.get("buffer_min") or 0),
+            )
+        except (KeyError, ValueError, TypeError):
+            return None, None
+        meta = {
+            "id": t.get("id"),
+            "name": info.name,
+            "blocks": len(blocks),
+            "apply": not data.get("applied_at"),
+        }
+        return info, meta
 
     async def _prepare_schedule_day(
-        self, day: Any, blocks: list[dict[str, Any]]
+        self,
+        day: Any,
+        items: list[dict[str, Any]] | None = None,
+        blocks: list[dict[str, Any]] | None = None,
+        _template: str | None = None,
+        _unfit: str | None = None,
+        _day_raw: Any = None,
     ) -> PreparedAction:
-        target = resolve_day(day, datetime.now(self.tz).date())
-        if target < datetime.now(self.tz).date():
+        raw = items if items is not None else blocks  # items oncelikli, blocks takma ad
+        raw = [dict(b) if isinstance(b, dict) else b for b in raw] if isinstance(raw, list) else []
+        now_local, rollover = await self._planning()
+        today = now_local.date()
+        target, rolled = resolve_day_ex(
+            day, today, now_local=now_local, rollover=rollover
+        )
+        if target < today:
             raise ValueError(f"{_fmt_day(target)} geçmişte kaldı; ileri bir gün ver")
-        timeline = build_timeline(blocks if isinstance(blocks, list) else [])
-        # Faz 12 denetim D2: degerlendirilmis gunun plani degismez; saatsiz kartsiz
-        # blok yalniz plana yazilabildiginden sessizce kaybolmasin, bastan reddet.
+        # Faz 12 denetim D2: degerlendirilmis gunun plani degismez
+        plan = await self.api.get(f"/day-plans/{target.isoformat()}")
+        reviewed = plan.get("status") == "reviewed"
+        template, tmeta = (None, None)
+        if not reviewed and _template != "off":
+            template, tmeta = await self._day_template(target)
+        busy = await self._busy_for_day(target)
+        result = place_day(
+            raw,
+            day=target,
+            now_local=now_local,
+            template=template,
+            busy=busy,
+            rollover_min=rollover.hour * 60 + rollover.minute,
+            unfit=_unfit,
+        )
+        if isinstance(result, Question):
+            raise NeedsAnswer(
+                result,
+                {
+                    "kind": "place",
+                    "day": target.isoformat(),
+                    "day_raw": _day_raw if _day_raw is not None else day,
+                    "items": raw,
+                    "template_off": _template == "off",
+                    "unfit": _unfit,
+                },
+            )
+        assert isinstance(result, Placement)
+        timeline = [*result.rows, *result.untimed]
+        # saatsiz kartsiz blok yalniz plana yazilabildiginden sessizce kaybolmasin
         untimed_free = [b.title for b in timeline if b.start is None and not b.card]
-        if untimed_free:
-            plan = await self.api.get(f"/day-plans/{target.isoformat()}")
-            if plan.get("status") == "reviewed":
-                raise ValueError(
-                    f"{_fmt_day(target)} değerlendirildi; planı değiştirilemez, "
-                    f"saatsiz maddeler eklenemez: {', '.join(untimed_free)}. "
-                    "Saat vererek takvime ekleyebilirsin."
-                )
-        await self._check_calendar_conflicts(target, timeline)
+        if untimed_free and reviewed:
+            raise ValueError(
+                f"{_fmt_day(target)} değerlendirildi; planı değiştirilemez, "
+                f"saatsiz maddeler eklenemez: {', '.join(untimed_free)}. "
+                "Saat vererek takvime ekleyebilirsin."
+            )
         boards = [
             b
             for b in await self.api.get("/boards")
@@ -1213,20 +1383,54 @@ class WriteTools:
                 line = f"{hhmm(blk.start)}–{hhmm(blk.end)} {blk.title} ({kind})"
                 if blk.defaulted:
                     line += " (süre 30 dk varsayıldı)"
+                if blk.moved:
+                    line += " (boşluğa kaydırıldı)"
             else:
                 line = f"saatsiz · {blk.title} ({kind})"
             lines.append(line)
             out.append(item)
         cards = sum(1 for i in out if i["card"] or i.get("card_id"))
         n_timed = sum(1 for i in out if i["timed"])
-        summary = (
+        head = (
             f"🗓 {_fmt_day(target)} planı: {cards} kart, {len(out) - cards} kartsız "
-            f"madde; takvime {n_timed} blok, gün planına {len(out)} madde\n"
-            + "\n".join(lines)
+            f"madde; takvime {n_timed} blok, gün planına {len(out)} madde"
         )
-        return PreparedAction(
-            "schedule_day", {"date": target.isoformat(), "blocks": out}, summary
-        )
+        extra: list[str] = []
+        if tmeta:
+            extra.append(
+                f"📋 Şablon: {tmeta['name']} ({tmeta['blocks']} blok plana eklenecek)"
+                if tmeta["apply"]
+                else f"📋 Şablon: {tmeta['name']} (planda zaten var)"
+            )
+        args: dict[str, Any] = {
+            "date": target.isoformat(),
+            "blocks": out,
+            "template": tmeta,
+            "day_raw": _day_raw if _day_raw is not None else day,
+            "day_rolled": rolled,
+        }
+        tail: list[str] = []
+        if result.carry:
+            nxt = target + timedelta(days=1)
+            carry_items = []
+            for r in result.carry:
+                ci: dict[str, Any] = {"title": r.title}
+                if r.card:
+                    if open_cards is None:
+                        open_cards = await visible_cards(
+                            self.api, self.privacy, include_completed=False
+                        )
+                    found = find_open_for_block(
+                        open_cards, r.title, find_board(boards, r.board)
+                    )
+                    if found:
+                        ci = {"card_id": found["id"]}
+                carry_items.append(ci)
+            args["carry"] = {"date": nxt.isoformat(), "items": carry_items}
+            tail.append("→ yarına: " + ", ".join(r.title for r in result.carry))
+        tail += [f"ℹ {n}" for n in result.notes]
+        summary = "\n".join([head, *extra, *lines, *tail])
+        return PreparedAction("schedule_day", args, summary)
 
     async def _prepare_save_goal(
         self, goal_id: Any = None, **fields: Any
@@ -1370,13 +1574,20 @@ class WriteTools:
                 for i in plan.get("items", [])
                 if i["was_planned"]
             ]
+            ex_times = [
+                _plan_time(i.get("planned_start"), self.tz)
+                for i in plan.get("items", [])
+                if i["was_planned"]
+            ]
             have = {i["card_id"] for i in existing if i.get("card_id")}
             have_ev = {i["event_id"] for i in existing if i.get("event_id")}
             have_title = {
                 str(i["title"]).strip().casefold() for i in existing if i.get("title")
             }
             fresh: list[dict[str, Any]] = []
-            for i in args["items"]:
+            fresh_times: list[datetime | None] = []
+            starts = args.get("_starts") or []
+            for n, i in enumerate(args["items"]):
                 if i.get("event_id"):
                     if i["event_id"] in have_ev:
                         continue
@@ -1389,7 +1600,24 @@ class WriteTools:
                         continue
                     have_title.add(key)
                 fresh.append(i)
+                fresh_times.append(
+                    _plan_time(starts[n], self.tz) if n < len(starts) else None
+                )
             merged = existing + fresh
+            if args.get("_sort_by_time"):
+                # Faz 13d: sablon satirlari + yeni satirlar saat sirasinda. Saati
+                # bilinmeyen MEVCUT satirlar basta (eski davranis), yeni saatsizler
+                # en sonda kendi goreli sirasiyla (sort kararli).
+                times = ex_times + fresh_times
+                n_ex = len(existing)
+
+                def rank(k: int) -> tuple[int, datetime]:
+                    if times[k] is not None:
+                        return 1, times[k]  # type: ignore[return-value]
+                    return (0 if k < n_ex else 2), _EPOCH
+
+                order = sorted(range(len(merged)), key=rank)
+                merged = [merged[k] for k in order]
             p = await api.write("PUT", f"/day-plans/{args['date']}", {"items": merged})
             return {"date": p["date"], "items": len(p["items"])}
         raise ValueError(f"Bilinmeyen işlem: {action_type}")
@@ -1461,6 +1689,15 @@ class WriteTools:
         done: list[dict[str, Any]] = []
         failed: list[dict[str, Any]] = []
         entries: list[dict[str, Any]] = []  # gun plani girdileri, blok sirasiyla
+        starts: list[str | None] = []  # entries ile ayni sirada: saat (siralama icin)
+        extra: dict[str, Any] = {}
+        tpl = args.get("template")
+        if tpl and tpl.get("apply"):  # Faz 13d: sablon bir kez, yazimdan ONCE
+            try:
+                r = await api.write("POST", f"/day-plans/{day}/apply-template", {})
+                extra["template_added"] = (r or {}).get("added")
+            except TaskApiError as err:
+                extra["template_error"] = err.message
         for b in args["blocks"]:
             try:
                 timed = b.get("timed", True)
@@ -1489,6 +1726,7 @@ class WriteTools:
                     except TaskApiError:
                         if card_id:  # kart olustu: etkinliksiz de olsa plana girsin
                             entries.append({"card_id": card_id})
+                            starts.append(None)
                         raise
                 entry: dict[str, Any] = {}
                 if event_id:
@@ -1498,6 +1736,7 @@ class WriteTools:
                 if not entry:
                     entry["title"] = b["title"]
                 entries.append(entry)
+                starts.append(b.get("start_at") if timed else None)
                 done.append(
                     {"title": b["title"], "event_id": event_id, "card_id": card_id}
                 )
@@ -1514,13 +1753,36 @@ class WriteTools:
             )
         planned = False
         try:
-            await self.execute("plan_day", {"date": day, "items": entries})
+            await self.execute(
+                "plan_day",
+                {
+                    "date": day,
+                    "items": entries,
+                    "_sort_by_time": True,
+                    "_starts": starts,
+                },
+            )
             planned = True
         except TaskApiError:
             planned = False  # gun degerlendirilmis olabilir; takvim yine de yazildi
-        return {
+        out: dict[str, Any] = {
             "date": day,
             "created": done,
             "failed": failed,
             "added_to_plan": planned,
+            **extra,
         }
+        carry = args.get("carry")
+        if carry and carry.get("items"):  # sigmayanlar ertesi gunun planina (saatsiz)
+            try:
+                cplan = await api.get(f"/day-plans/{carry['date']}")
+                if cplan.get("status") == "reviewed":
+                    out["carry_skipped"] = True
+                else:
+                    await self.execute(
+                        "plan_day", {"date": carry["date"], "items": carry["items"]}
+                    )
+                    out["carried"] = len(carry["items"])
+            except TaskApiError:
+                out["carry_skipped"] = True
+        return out

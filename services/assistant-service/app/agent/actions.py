@@ -40,6 +40,9 @@ class ToolResult:
     text: str  # modele giden arac sonucu (JSON metni)
     ok: bool
     action: dict[str, Any] | None = None  # sohbet arayuzune giden islem karti
+    # Faz 13d: arac kullaniciya soru sordu (placement.Question) + soru durumu
+    question: Any = None
+    state: dict[str, Any] | None = None
 
 
 def action_payload(a: AiActionEntity) -> dict[str, Any]:

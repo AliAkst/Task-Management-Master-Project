@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 
+from app.tools.placement import NeedsAnswer
 from app.tools.privacy import PrivacyFilter
 from app.tools.schedule_day import build_timeline, find_board, parse_clock, resolve_day
 from app.tools.task_api import TaskApiClient
@@ -194,11 +195,12 @@ async def test_schedule_rejects_overlap_with_timed_meeting(fake_api):
     writer = _conflict_writer(
         fake_api, [_event("Haftalık toplantı", day, "14:00", "15:00")]
     )
-    with pytest.raises(ValueError) as err:
+    # Faz 13d: ValueError degil, tek numarali soru (needs_answer)
+    with pytest.raises(NeedsAnswer) as err:
         await writer.prepare("schedule_day", _plan(day))
-    msg = str(err.value)
-    assert "«Haftalık toplantı» 14:00–15:00 ile çakışıyor" in msg
-    assert "toplantıdan sonraya kaydır" in msg
+    q = err.value.question
+    assert "«Haftalık toplantı» 14:00–15:00" in q.text
+    assert len(q.options) == 3
     assert fake_api.writes == []
 
 
@@ -223,9 +225,9 @@ async def test_conflict_hides_private_event_title_from_cloud(fake_api):
     day = (datetime.now(TZ) + timedelta(days=1)).date()
     items = [_event("Gizli randevu", day, "14:00", "15:00", board_id=2)]
     privacy = PrivacyFilter(active=True, hidden_boards={2})
-    with pytest.raises(ValueError) as err:
+    with pytest.raises(NeedsAnswer) as err:
         await _conflict_writer(fake_api, items, privacy).prepare(
             "schedule_day", _plan(day)
         )
-    assert "Gizli randevu" not in str(err.value)
-    assert "çakışıyor" in str(err.value)
+    assert "Gizli randevu" not in err.value.question.text
+    assert "Başka bir etkinlik" in err.value.question.text

@@ -10,14 +10,16 @@ gemma4:26b verdigi icin varsayilan olarak arka plan modeli kullanilir.
 
 import json
 import re
+import secrets
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Any
 
 from app.agent.loop import AgentEvent
-from app.llm.types import LLMError, LLMProvider, Msg
+from app.llm.types import LLMError, LLMProvider, Msg, ToolCall
+from app.tools.placement import Question, apply_patch, day_label
 from app.tools.read_tools import ToolBox
-from app.tools.schedule_day import SCHEDULE_SPEC
+from app.tools.schedule_day import SCHEDULE_SPEC, resolve_day_ex
 
 MAX_ATTEMPTS = 3
 WEEKDAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
@@ -51,49 +53,87 @@ def is_schedule_request(text: str) -> bool:
 
 
 PROMPT = """Görevin SADECE: kullanıcının anlattığı günü schedule_day aracıyla planlamak.
-Bugün: {today}. Board'lar: {boards}.
+Bugün: {today}. Board'lar: {boards}.{day_line}
 
 Nasıl:
-1. Günün olaylarını GERÇEKLEŞME SIRASIYLA yaz (sabahtan geceye).
-2. Kullanıcının saat verdiği maddeye start yaz; bitişini ya da süresini söylediyse end ya da minutes ekle.
-3. Süresi söylenen ama saati söylenmeyen maddelere SADECE minutes yaz; araç onları bir öncekinin bitişine ekler. Saati belli maddeden önceki maddeler (örn. işe yol) araç tarafından ona göre yerleştirilir.
-4. Kullanıcı saat de süre de söylemediyse start, minutes, end YAZMA (saat uydurma); madde saatsiz olarak gün planına girer.
-5. Yol, iş, yemek: card=false. Yapılacak işler (spor, alışveriş, oyun, temizlik):
-   card=true ve uygun board. Kartlı ya da kartsız, her madde gün planına eklenir.
-6. Kullanıcının verdiği süreleri aynen kullan; birlikte söylediği şeyleri tek blok yap.
-7. Boş kalan zamana kullanıcının söylemediği iş ekleme.
-8. Kullanıcı var olan bir kartı adıyla anıyorsa ("eğitim board'ındaki P2 kartı") title'a SADECE kartın adını yaz ("P2"), board'a board adını ver; araç var olan açık kartı bulup kullanır, yeni kart açmaz.
+1. İşleri kullanıcının SÖYLEDİĞİ SIRAYLA items listesine yaz.
+2. Kullanıcı saat verdiyse start yaz; bitiş ya da süre söylediyse end ya da minutes ekle.
+3. Yalnız süre söylendiyse SADECE minutes yaz. Saat hesaplama: kod boş zamana yerleştirir.
+4. "Sabah", "öğlen", "akşam" dendiyse window yaz.
+5. Saat de süre de söylenmediyse start, minutes, end YAZMA.
+6. Yol, iş, mesai, öğle arası gibi şeyleri YAZMA; gün şablonundan kod ekler. Şablonda olmayan bir sabit şey söylendiyse card=false.
+7. Yapılacak işler (spor, alışveriş, eğitim): card=true ve uygun board.
+8. Var olan kartı adıyla anıyorsa title'a SADECE kartın adını, board'a board adını yaz.
+9. Boş zamana kullanıcının söylemediği iş ekleme.
 
-Örnek: "Yarın 10-17 dersteyim, okula yol 1 saat. Dersten sonra market 20 dk, eve 1 saat,
-sonra 45 dk koşu."
-schedule_day({{"day": "yarın", "blocks": [
- {{"title": "Okula yol", "minutes": 60, "card": false}},
- {{"title": "Ders", "start": "10:00", "end": "17:00", "card": false}},
- {{"title": "Market", "minutes": 20, "card": true, "board": "Günlük işler"}},
- {{"title": "Eve yol", "minutes": 60, "card": false}},
- {{"title": "Koşu", "minutes": 45, "card": true, "board": "Spor"}}]}})
+Örnek: "Yarın evden çalışıyorum. Faruk abinin kavramlarına 1 saat, Power BI P2, akşam 45 dk koşu."
+schedule_day({{"day": "yarın", "items": [
+ {{"title": "Faruk abi — kavramlar", "minutes": 60, "card": true, "board": "İş"}},
+ {{"title": "P2", "card": true, "board": "Eğitimler"}},
+ {{"title": "Koşu", "minutes": 45, "window": "akşam", "card": true, "board": "Spor"}}]}})
 
-Örnek: "Yarın market, kuru temizleme ve kitap iade, planla."
-schedule_day({{"day": "yarın", "blocks": [
- {{"title": "Market", "card": true, "board": "Günlük işler"}},
- {{"title": "Kuru temizleme", "card": false}},
- {{"title": "Kitap iade", "card": false}}]}})
+Örnek: "Cumartesi 10'da kuyumcu, sonra market 30 dk."
+schedule_day({{"day": "cumartesi", "items": [
+ {{"title": "Kuyumcu", "start": "10:00", "card": true, "board": "Günlük işler"}},
+ {{"title": "Market", "minutes": 30, "card": true, "board": "Günlük işler"}}]}})
 
 Metin yazma; sadece aracı çağır."""
 
+MAX_CHAIN = 3  # art arda en fazla bu kadar soru; sonra kullanicidan tek mesaj istenir
+GIVE_UP = "Planı netleştiremedim; saatleri tek mesajda yazıp tekrar dener misin?"
+
+
+def _day_line(forced_day: date | None, now: datetime, rollover: time) -> str:
+    if forced_day is not None:
+        return f"\nGün KESİN: {day_label(forced_day)} (day alanına bunu yaz)."
+    if now.time() < rollover:
+        tomorrow = resolve_day_ex(
+            "yarın", now.date(), now_local=now, rollover=rollover
+        )[0]
+        return f"\nSaat {now:%H:%M}: 'yarın' = {day_label(tomorrow)}."
+    return ""
+
+
+def question_event(
+    question: Question,
+    state: dict[str, Any],
+    user_text: str,
+    chain: int = 0,
+) -> AgentEvent:
+    """Soru + saklanacak durum (ai_actions.args, status='question')."""
+    data = {
+        **state,
+        "text": question.text,
+        "options": [{"label": o.label, "patch": o.patch} for o in question.options],
+        "chain": chain,
+        "user_text": user_text,
+    }
+    return AgentEvent("question", {"question": question, "state": data})
+
 
 async def plan_day(
-    provider: LLMProvider, toolbox: ToolBox, user_text: str
+    provider: LLMProvider,
+    toolbox: ToolBox,
+    user_text: str,
+    forced_day: date | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """
-    Olaylar: tool_start / tool_end / action ve sonunda "planned" (data: ozet) ya
-    da "failed" (normal sohbete devam edilir).
+    Olaylar: tool_start / tool_end / action ve sonunda "planned" (data: ozet),
+    "question" (kullaniciya tek numarali soru) ya da "failed" (normal sohbete
+    devam edilir). `forced_day`: gun kodla belirlendi, modelin day'i yok sayilir.
     """
-    now = datetime.now(toolbox.tz)
+    now, rollover = await toolbox.writer._planning()
     boards = ", ".join(b["name"] for b in await toolbox.boards()) or "(yok)"
     today = f"{now:%Y-%m-%d} {WEEKDAYS[now.weekday()]}"
     msgs = [
-        Msg("system", PROMPT.format(today=today, boards=boards)),
+        Msg(
+            "system",
+            PROMPT.format(
+                today=today,
+                boards=boards,
+                day_line=_day_line(forced_day, now, rollover),
+            ),
+        ),
         Msg("user", user_text),
     ]
     yield AgentEvent("tool_start", {"name": "schedule_day"})
@@ -110,11 +150,19 @@ async def plan_day(
         call = next((c for c in calls if c.name == "schedule_day"), None)
         if call is None:
             break
+        if call.valid:
+            # _day_raw: modelin verdigi gun dizesi (kayit icin); forced ise kod yazar
+            call.arguments = {
+                **call.arguments,
+                "_day_raw": call.arguments.get("day"),
+                **({"day": forced_day.isoformat()} if forced_day else {}),
+            }
         result = await toolbox.execute(call)
-        if result.ok and result.action is not None:
-            yield AgentEvent("tool_end", {"name": "schedule_day", "ok": True})
-            yield AgentEvent("action", result.action)
-            yield AgentEvent("planned", {"summary": result.action["summary"]})
+        done = False
+        async for ev in _outcome(result, user_text, 0):
+            yield ev
+            done = done or ev.type in ("planned", "question")
+        if done:
             return
         # Hata: modele aynen geri ver, duzeltsin
         msgs += [
@@ -123,6 +171,55 @@ async def plan_day(
         ]
     yield AgentEvent("tool_end", {"name": "schedule_day", "ok": False})
     yield AgentEvent("failed", {"error": _last_error(msgs)})
+
+
+async def _outcome(
+    result: Any, user_text: str, chain: int
+) -> AsyncIterator[AgentEvent]:
+    """Arac sonucu -> olaylar (planned | question); hata ise hicbir sey uretmez."""
+    if result.question is not None:
+        yield AgentEvent("tool_end", {"name": "schedule_day", "ok": True})
+        yield question_event(result.question, result.state or {}, user_text, chain)
+    elif result.ok and result.action is not None:
+        yield AgentEvent("tool_end", {"name": "schedule_day", "ok": True})
+        yield AgentEvent("action", result.action)
+        yield AgentEvent("planned", {"summary": result.action["summary"]})
+
+
+async def apply_answer(
+    toolbox: ToolBox, pending: dict[str, Any], index: int
+) -> AsyncIterator[AgentEvent]:
+    """
+    Kullanici soruya numarayla cevap verdi: secenegin patch'i uygulanir, plan MODEL
+    CAGRILMADAN yeniden kurulur (onay karti ya da yeni soru).
+    """
+    state = apply_patch(pending, pending["options"][index]["patch"])
+    args: dict[str, Any] = {
+        "day": state["day"],
+        "items": state["items"],
+        "_day_raw": state.get("day_raw"),
+    }
+    if state.get("template_off"):
+        args["_template"] = "off"
+    if state.get("unfit"):
+        args["_unfit"] = state["unfit"]
+    call = ToolCall(
+        id=f"answer-{secrets.token_hex(4)}", name="schedule_day", arguments=args
+    )
+    yield AgentEvent("tool_start", {"name": "schedule_day"})
+    chain = int(pending.get("chain", 0)) + 1
+    result = await toolbox.execute(call)
+    if result.question is not None and chain > MAX_CHAIN:
+        yield AgentEvent("tool_end", {"name": "schedule_day", "ok": False})
+        yield AgentEvent("failed", {"error": GIVE_UP, "final": True})
+        return
+    produced = False
+    async for ev in _outcome(result, pending.get("user_text", ""), chain):
+        produced = True
+        yield ev
+    if not produced:
+        yield AgentEvent("tool_end", {"name": "schedule_day", "ok": False})
+        yield AgentEvent("failed", {"error": _last_error([Msg("tool", result.text)])})
 
 
 def _last_error(msgs: list[Msg]) -> str | None:

@@ -203,6 +203,10 @@ class FakeTaskApi:
         self.parse_result: dict[str, Any] | None = None
         self.parse_calls: list[dict[str, Any]] = []
         self.parse_status: int | None = None
+        # Faz 13d: gun sablonlari (GET /day-plans/{d}/template, POST .../apply-template)
+        self.templates: dict[str, dict[str, Any]] = {}
+        self.template_applied: dict[str, str] = {}
+        self.settings_extra: dict[str, Any] = {}  # orn. {"day_rollover": "04:00:00"}
 
     def _new_id(self) -> int:
         self._next_id += 1
@@ -222,6 +226,22 @@ class FakeTaskApi:
         def ok(data: Any) -> httpx.Response:
             return httpx.Response(200, json={"success": True, "data": data})
 
+        if method == "GET" and path == "/settings/":
+            return ok({"timezone": "Europe/Istanbul", **self.settings_extra})
+        if (
+            method == "GET"
+            and path.startswith("/day-plans/")
+            and path.endswith("/template")
+        ):
+            day = path.split("/")[2]
+            t = self.templates.get(day)
+            return ok(
+                {
+                    "template": t,
+                    "source": "weekday" if t else None,
+                    "applied_at": self.template_applied.get(day),
+                }
+            )
         if method == "GET" and path.startswith("/day-plans/"):
             day = path.split("/")[2]
             items = self.plans.get(day, [])
@@ -304,6 +324,24 @@ class FakeTaskApi:
             return httpx.Response(
                 422, json={"success": False, "error": {"message": "reddedildi"}}
             )
+        if method == "POST" and path.endswith("/apply-template"):
+            day = path.split("/")[2]
+            t = self.templates.get(day)
+            if not t or day in self.template_applied:
+                return ok({"added": 0, "reason": "already_applied" if t else "no_template"})
+            for b in t["blocks"]:
+                h, m = b["start"].split(":")
+                sh, sm = b["end"].split(":")
+                self.plans.setdefault(day, []).append(
+                    {
+                        "title": b["title"],
+                        "planned_start": f"{day}T{h}:{m}:00+03:00",
+                        "planned_minutes": (int(sh) * 60 + int(sm)) - (int(h) * 60 + int(m)),
+                        "source": "template",
+                    }
+                )
+            self.template_applied[day] = f"{day}T00:00:00+00:00"
+            return ok({"added": len(t["blocks"]), "reason": "applied"})
         if method == "POST" and path.startswith("/boards/") and path.endswith("/labels"):
             bid = int(path.split("/")[2])
             label = {

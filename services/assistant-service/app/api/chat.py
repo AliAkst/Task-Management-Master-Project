@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -13,9 +13,18 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.actions import ActionGate, action_payload, load_modes
+from app.agent.answers import match_answer
 from app.agent.context import build_system_prompt, focus_line
-from app.agent.day_planner import is_schedule_request, is_tidy_request, plan_day
-from app.agent.loop import run_agent
+from app.agent.day_mentions import day_mentions
+from app.agent.day_planner import (
+    GIVE_UP,
+    apply_answer,
+    is_schedule_request,
+    is_tidy_request,
+    plan_day,
+    question_event,
+)
+from app.agent.loop import AgentEvent, run_agent
 from app.agent.memory_extractor import (
     CHAT_HIDDEN_TOOLS,
     MEMORY_TOOLS,
@@ -46,11 +55,14 @@ from app.llm.registry import (
 from app.llm.router import resolve_model
 from app.llm.types import LLMError, Msg, ToolCall
 from app.tools.memory_tools import MemoryTools, load_facts
+from app.tools.placement import day_question
 from app.tools.read_tools import ToolBox
 from app.tools.task_api import TaskApiAuthError, TaskApiClient, TaskApiError
 
 router = APIRouter()
 HISTORY_LIMIT = 40
+QUESTION_TTL = timedelta(minutes=30)  # Faz 13d: soru bu sure cevap bekler
+SETTLED = ("question", "answered", "expired")  # sohbette kart olarak gosterilmez
 DEFAULT_TZ = "Europe/Istanbul"
 
 
@@ -194,7 +206,7 @@ async def messages(
     extra: dict[int, list[dict]] = {}
     answers = [m for m in rows if m.role == "assistant" and m.content]
     for a in all_actions:
-        if a.tool_call_id in linked or not answers:
+        if a.tool_call_id in linked or not answers or a.status in SETTLED:
             continue
         before = [m for m in answers if m.created_at <= a.created_at]
         target = (before or answers)[-1]
@@ -442,21 +454,101 @@ async def _stream(
                 yield sse("done", {"conversation_id": conversation_id})
                 return
 
+            # Faz 13d: bekleyen numarali soruya cevap mi? (model cagrilmaz)
+            events = None
+            planner = provider
+            answering = False  # secenek uygulandi: hata sohbete degil kullaniciya soylenir
+            pending = await _pending_question(session, conversation_id)
+            if pending is not None:
+                opts = pending.args.get("options") or []
+                ans = match_answer(text, len(opts))
+                pending.status = "answered" if isinstance(ans, int) else "expired"
+                await session.commit()
+                if ans == "cancel":
+                    for out in await _say(
+                        session, conversation_id, "Tamam, planı bıraktım.", model_id, is_local
+                    ):
+                        yield out
+                    return
+                if isinstance(ans, int):
+                    if pending.args.get("kind") == "day":
+                        # Q5: secilen gun kodla zorlanir, model yalniz maddeleri cikarir
+                        planner = (
+                            provider
+                            if model_source == "message"
+                            else await _planning_provider(session, user["id"], provider)
+                        )
+                        events = plan_day(
+                            planner,
+                            toolbox,
+                            pending.args.get("user_text") or text,
+                            forced_day=date.fromisoformat(opts[ans - 1]["patch"]["day"]),
+                        )
+                    else:
+                        events = apply_answer(toolbox, pending.args, ans - 1)
+                        answering = True
+
             # Gunu saat saat planlama istegi: odakli planlama adimi (tek arac)
-            if is_schedule_request(text) and toolbox.gate.allowed("schedule_day"):
+            if (
+                events is None
+                and is_schedule_request(text)
+                and toolbox.gate.allowed("schedule_day")
+            ):
                 planner = (
                     provider
                     if model_source == "message"
                     else await _planning_provider(session, user["id"], provider)
                 )
+                now_local, rollover = await toolbox.writer._planning()
+                days = day_mentions(text, now_local, rollover)
+                if len(days) >= 2:  # iki farkli gun: once sor, modeli cagirma
+                    events = _single_event(
+                        question_event(day_question(days), {"kind": "day"}, text, 0)
+                    )
+                else:
+                    events = plan_day(
+                        planner, toolbox, text, forced_day=days[0] if days else None
+                    )
+
+            if events is not None:
                 planned = None
+                question = None
+                failure = None
                 toolbox.gate.model_id = planner.info.id  # oneriyi yapan model
-                async for ev in plan_day(planner, toolbox, text):
+                async for ev in events:
                     if ev.type == "planned":
                         planned = ev.data
-                    elif ev.type != "failed":
+                    elif ev.type == "question":
+                        question = ev.data
+                    elif ev.type == "failed":
+                        failure = ev.data
+                    else:
                         yield sse(ev.type, ev.data)
                 toolbox.gate.model_id = model_id  # normal sohbete donulurse
+                if question is not None:
+                    q = question["question"]
+                    await _expire_questions(session, conversation_id)
+                    session.add(
+                        AiActionEntity(
+                            user_id=user["id"],
+                            conversation_id=conversation_id,
+                            action_type="schedule_day",
+                            args=question["state"],
+                            summary=q.text,
+                            status="question",
+                            model_id=planner.info.id,
+                        )
+                    )
+                    await session.commit()
+                    for out in await _say(
+                        session,
+                        conversation_id,
+                        q.text,
+                        planner.info.id,
+                        planner.info.is_local,
+                    ):
+                        yield out
+                    return
                 if planned is not None:
                     reply = (
                         f"Planı hazırladım ({planner.info.label}). Onay kartından "
@@ -464,21 +556,26 @@ async def _stream(
                         "kullanılır; hepsi takvime ve kartlar günün planına eklenir. Bir "
                         "şey yanlışsa nedenini yazarak reddet, düzelteyim."
                     )
-                    yield sse("token", {"text": reply})
-                    session.add(
-                        MessageEntity(
-                            conversation_id=conversation_id,
-                            role="assistant",
-                            content=reply,
-                            model_id=planner.info.id,
-                            is_local=planner.info.is_local,
-                        )
+                    for out in await _say(
+                        session,
+                        conversation_id,
+                        reply,
+                        planner.info.id,
+                        planner.info.is_local,
+                    ):
+                        yield out
+                    return
+                if answering and failure is not None:
+                    err = (failure or {}).get("error")
+                    reply = (
+                        GIVE_UP
+                        if failure.get("final")
+                        else f"Planı kuramadım: {err or 'bilinmeyen hata'}"
                     )
-                    conv = await session.get(ConversationEntity, conversation_id)
-                    if conv is not None:
-                        conv.updated_at = datetime.now(UTC)
-                    await session.commit()
-                    yield sse("done", {"conversation_id": conversation_id})
+                    for out in await _say(
+                        session, conversation_id, reply, model_id, is_local
+                    ):
+                        yield out
                     return
 
             msgs = [Msg("system", system), *map(to_msg, history), Msg("user", text)]
@@ -547,6 +644,73 @@ async def _stream(
         yield sse("error", {"message": e.message})
     finally:
         await api.close()
+
+
+async def _single_event(ev: AgentEvent) -> AsyncIterator[AgentEvent]:
+    yield ev
+
+
+async def _expire_questions(session: AsyncSession, conversation_id: int) -> None:
+    await session.execute(
+        update(AiActionEntity)
+        .where(
+            AiActionEntity.conversation_id == conversation_id,
+            AiActionEntity.status == "question",
+        )
+        .values(status="expired")
+    )
+
+
+async def _pending_question(
+    session: AsyncSession, conversation_id: int
+) -> AiActionEntity | None:
+    """Bu konusmada cevap bekleyen son soru (TTL icinde); eskiler kapatilir."""
+    row = await session.scalar(
+        select(AiActionEntity)
+        .where(
+            AiActionEntity.conversation_id == conversation_id,
+            AiActionEntity.status == "question",
+        )
+        .order_by(AiActionEntity.id.desc())
+        .limit(1)
+    )
+    if row is None:
+        return None
+    created = row.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    if datetime.now(UTC) - created > QUESTION_TTL:
+        await _expire_questions(session, conversation_id)
+        await session.commit()
+        return None
+    return row
+
+
+async def _say(
+    session: AsyncSession,
+    conversation_id: int,
+    reply: str,
+    model_id: str,
+    is_local: bool,
+) -> list[str]:
+    """Kod yazimli cevap: SSE token + asistan mesaji + done."""
+    session.add(
+        MessageEntity(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=reply,
+            model_id=model_id,
+            is_local=is_local,
+        )
+    )
+    conv = await session.get(ConversationEntity, conversation_id)
+    if conv is not None:
+        conv.updated_at = datetime.now(UTC)
+    await session.commit()
+    return [
+        sse("token", {"text": reply}),
+        sse("done", {"conversation_id": conversation_id}),
+    ]
 
 
 async def _planning_provider(session: AsyncSession, user_id: int, fallback):
