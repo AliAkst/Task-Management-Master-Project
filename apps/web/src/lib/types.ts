@@ -66,6 +66,9 @@ export type EventUpdate = S['EventUpdate']
 export type TimeSession = Res<S['SessionResponse']>
 export type SessionManualCreate = S['SessionManualCreate']
 
+// ---------------- Ogrenme kocu (Faz 13g) ----------------
+export type Course = Res<S['CourseResponse']>
+
 // ---------------- Planlama & istatistik (Faz 3b) ----------------
 export type DayPlan = Omit<Res<S['DayPlanResponse']>, 'items'> & { items: DayPlanItem[] }
 export type DayPlanItem = Res<S['DayPlanItemResponse']>

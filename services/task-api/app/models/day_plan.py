@@ -147,6 +147,7 @@ SuggestionKind = Literal[
     "in_progress",
     "next_in_chain",
     "worked",
+    "course",
 ]
 
 
@@ -162,6 +163,7 @@ class PlanSuggestion(BaseModel):
     tracked_sec: int = 0  # o gun bu karta harcanan
     blocked: bool = False
     already_planned: bool = False
+    reason: str | None = None  # kurs onerisi gibi tur-ozel gerekce (13g)
 
 
 class DaySuggestions(BaseModel):

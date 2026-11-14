@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Mouse
 import { Check, Circle, CornerLeftUp, ExternalLink, Hourglass, X } from 'lucide-react'
 import { useUploads } from '../api/attachments'
 import { useCard, useCardActivity, useCardMutations, useParseTitle } from '../api/boards'
+import { courseErrorText, useCourseMutations, useCourses } from '../api/learning'
 import { useQueryClient } from '@tanstack/react-query'
 import { resolveWhen } from '../lib/when'
 import WhenBadge from './WhenBadge'
@@ -86,6 +87,9 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
   const card = useCard(cardId)
   const activity = useCardActivity(cardId)
   const m = useCardMutations(cardId, board.board.id)
+  const courses = useCourses('all')
+  const { track: trackCourse } = useCourseMutations()
+  const isCourse = (courses.data ?? []).some((x) => x.root_card.id === cardId)
   const uploads = useUploads(cardId, board.board.id)
   const [dropping, setDropping] = useState(false)
   const dragDepth = useRef(0)
@@ -657,6 +661,18 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
             <button onClick={() => m.update.mutate({ is_archived: true }, { onSuccess: onClose })} className="text-slate-700 hover:underline">
               Arşivle
             </button>
+            {c.subtasks.length > 0 &&
+              (isCourse ? (
+                <span className="text-slate-500">Kurs olarak takip ediliyor</span>
+              ) : (
+                <button
+                  disabled={trackCourse.isPending}
+                  onClick={() => trackCourse.mutate(c.id)}
+                  className="text-slate-700 hover:underline disabled:opacity-50"
+                >
+                  Kurs olarak takip et
+                </button>
+              ))}
             <button
               onClick={() => confirm('Kart kalıcı olarak silinsin mi?') && m.remove.mutate(undefined, { onSuccess: onClose })}
               className="text-red-700 hover:underline"
@@ -665,6 +681,7 @@ export default function CardModal({ cardId, board, onClose, onOpenCard }: Props)
             </button>
           </div>
           {m.update.error && <p className="mt-2 text-sm text-red-700">{m.update.error.message}</p>}
+          {trackCourse.error && <p role="alert" className="mt-2 text-sm text-red-700">{courseErrorText(trackCourse.error)}</p>}
         </aside>
       </div>
       </div>

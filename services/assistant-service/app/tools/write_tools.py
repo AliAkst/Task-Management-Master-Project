@@ -1469,6 +1469,7 @@ class WriteTools:
             status = {
                 "achieved": "ulaşıldı olarak işaretlenir",
                 "dropped": "bırakıldı olarak işaretlenir",
+                "paused": "duraklatılır",
                 "active": "yeniden aktif",
             }
             if "status" in body:

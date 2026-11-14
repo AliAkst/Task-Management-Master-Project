@@ -29,7 +29,7 @@ CATEGORIES: dict[str, str] = {
     "other": "Diğer",
 }
 PRIVATE_BY_DEFAULT = {"health", "relationship"}
-GOAL_STATUSES = ("active", "achieved", "dropped")
+GOAL_STATUSES = ("active", "achieved", "dropped", "paused")
 
 # "Profilimi temizle": neyin gidecegine KOD karar verir (kucuk model yanlis
 # bilgiyi silebilir); model sadece belirli bilgileri ek olarak isaretleyebilir.

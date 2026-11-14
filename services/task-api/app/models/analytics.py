@@ -35,6 +35,14 @@ class EstimateSample(BaseModel):
     ratio: float  # tracked / estimated
 
 
+class BoardEstimate(BaseModel):
+    """Board bazinda gercek/tahmin orani (Faz 13g): kartlar + kartsiz plan maddeleri."""
+
+    board_id: int
+    samples: int
+    median_ratio: float
+
+
 class EstimateAccuracy(BaseModel):
     """Tamamlanan, tahmini ve suresi olan kartlarda gercek/tahmin orani."""
 
@@ -42,6 +50,7 @@ class EstimateAccuracy(BaseModel):
     mean_ratio: float | None = None  # 1.35 = tahminden %35 uzun suruyor
     median_ratio: float | None = None
     biggest_overruns: list[EstimateSample] = []
+    by_board: list[BoardEstimate] = []
 
 
 class PostponedCard(BaseModel):

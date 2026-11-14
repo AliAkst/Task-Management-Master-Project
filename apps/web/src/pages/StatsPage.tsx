@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import { localDay, shiftDay, useAnalytics } from '../api/dayPlans'
+import CoursesSection from '../components/CoursesSection'
 import { PageHeader, Segmented } from '../components/Page'
 import { formatDuration } from '../lib/format'
 import { useThemeColors } from '../hooks/useThemeColors'
@@ -154,6 +155,8 @@ export default function StatsPage() {
               }
             />
           </div>
+
+          <CoursesSection />
 
           <div className="space-y-10">
           <div className="grid gap-x-10 gap-y-10 lg:grid-cols-2">

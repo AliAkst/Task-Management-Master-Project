@@ -9,6 +9,7 @@ const GOAL_STATUS: Record<GoalStatus, string> = {
   active: 'Devam ediyor',
   achieved: 'Ulaşıldı',
   dropped: 'Bırakıldı',
+  paused: 'Duraklatıldı',
 }
 
 const ACQUAINT_MESSAGE =

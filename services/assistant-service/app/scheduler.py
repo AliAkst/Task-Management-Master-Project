@@ -70,6 +70,8 @@ RETRY_AFTER = timedelta(minutes=5)  # denemeler arasi en az
 WEEKLY_MIN_REVIEWED = 3
 AUTH_ERROR = "Zamanlayıcı anahtarı geçersiz; Ayarlar → Bildirimler'den yeniden aç"
 HIDDEN_EVENT = "Başka bir etkinlik"
+HIDDEN_COURSE = "gizli board'da kurs parçası"
+MORNING_COURSE_LINES = 2
 
 # kind -> (periyot, ayar) uzerinden bildirim ureten kod; None = gonderilecek bir sey yok
 Built = tuple[Notification | None, dict[str, Any]]
@@ -184,7 +186,34 @@ async def build_morning(
         lines.append("Takvim:")
         lines += [f"{s:%H:%M} {t}" for s, t in events[:MORNING_EVENT_LINES]]
     body = "\n".join(lines) if lines else "Bugün için plan yok."
+    course_lines = await _morning_course_lines(api, priv)
+    if course_lines:
+        body += "\n" + "\n".join(course_lines)
     return Notification(MORNING, f"Günaydın — {day_label(today)}", body), {}
+
+
+async def _morning_course_lines(api: TaskApiClient, priv: PrivacyFilter) -> list[str]:
+    """Aktif kurslar icin "📚 Sıradaki: parca (kurs)" (en cok 2; Faz 13g). Kurs
+    okunamazsa sabah ozeti yine de gider."""
+    try:
+        courses = await api.get("/learning/courses", include="active")
+    except TaskApiAuthError:
+        raise
+    except (TaskApiError, httpx.HTTPError):
+        return []
+    lines: list[str] = []
+    for c in courses or []:
+        part = c.get("next_part")
+        if c.get("status") != "active" or not part:
+            continue
+        root = c.get("root_card") or {}
+        if not priv.keep({"board_id": root.get("board_id"), "card_id": root.get("id")}):
+            lines.append(f"📚 Sıradaki: {HIDDEN_COURSE}")
+        else:
+            lines.append(f"📚 Sıradaki: {part['title']} ({c['title']})")
+        if len(lines) >= MORNING_COURSE_LINES:
+            break
+    return lines
 
 
 def _card_line(c: dict[str, Any], note: str) -> str:

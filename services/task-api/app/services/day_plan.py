@@ -72,24 +72,33 @@ class DayPlanService:
     # ---------------- yardimcilar ----------------
     async def _tracked_for_day(
         self, user_id: int, start: datetime, end: datetime
-    ) -> tuple[dict[int | None, int], dict[int, tuple[str | None, int | None]]]:
-        """O gun karta harcanan saniyeler + oturum snapshot'lari (baslik, board)."""
+    ) -> tuple[
+        dict[int | None, int],
+        dict[int, tuple[str | None, int | None]],
+        dict[int, int],
+    ]:
+        """
+        O gun karta harcanan saniyeler + oturum snapshot'lari (baslik, board) +
+        plan maddesine bagli oturumlarin saniyeleri (kartsiz maddeler icin, 13g).
+        """
         sessions = await self.uow.time_sessions.list_for_user(
             user_id, start, end, limit=1000
         )
         totals: dict[int | None, int] = {}
         meta: dict[int, tuple[str | None, int | None]] = {}
+        by_item: dict[int, int] = {}
         now = _now()
         for s in sessions:
             span = session_span(s, start, end, now)
             if span is None:
                 continue
-            totals[s.card_id] = totals.get(s.card_id, 0) + int(
-                (span[1] - span[0]).total_seconds()
-            )
+            sec = int((span[1] - span[0]).total_seconds())
+            totals[s.card_id] = totals.get(s.card_id, 0) + sec
+            if s.day_plan_item_id is not None:
+                by_item[s.day_plan_item_id] = by_item.get(s.day_plan_item_id, 0) + sec
             if s.card_id is not None:
                 meta[s.card_id] = (s.card_title, s.board_id)
-        return totals, meta
+        return totals, meta, by_item
 
     async def _owned_card(self, card_id: int, user_id: int) -> TaskEntity:
         card = await self.uow.tasks.get_owned(card_id, user_id)
@@ -108,7 +117,7 @@ class DayPlanService:
     ) -> DayPlanResponse:
         tz = await user_tz(self.uow, user_id)
         start, end = day_bounds(day, tz)
-        tracked, _ = await self._tracked_for_day(user_id, start, end)
+        tracked, _, by_item = await self._tracked_for_day(user_id, start, end)
         total_today = sum(tracked.values())
         if plan is None:
             return DayPlanResponse(
@@ -141,7 +150,7 @@ class DayPlanService:
                         else None,
                         "tracked_today_sec": tracked.get(i.card_id, 0)
                         if i.card_id is not None
-                        else 0,
+                        else by_item.get(i.id, 0),
                     }
                 )
                 for i in items
@@ -286,7 +295,7 @@ class DayPlanService:
             )
 
         # 5) O gun uzerinde calisilan kartlar (degerlendirmede "plansiz is")
-        tracked, meta = await self._tracked_for_day(user_id, start, end)
+        tracked, meta, _ = await self._tracked_for_day(user_id, start, end)
         worked_cards = {
             c.id: c
             for c in await self.uow.tasks.get_many(
@@ -305,6 +314,24 @@ class DayPlanService:
                     title=card.title if card else (title or "Silinmiş kart"),
                     board_id=card.board_id if card else board_id,
                     planned_minutes=card.estimated_minutes if card else None,
+                )
+            )
+        # 6) Aktif kurslarin siradaki parcasi (en cok 2; o gun planda olan onerilmez)
+        from app.services.learning import LearningService
+
+        for course_title, part in await LearningService(self.uow).active_next_parts(
+            user_id
+        ):
+            if part.id in planned_cards:
+                continue
+            add(
+                PlanSuggestion(
+                    kind="course",
+                    card_id=part.id,
+                    title=part.title,
+                    board_id=part.board_id,
+                    planned_minutes=part.estimated_minutes,
+                    reason=f"Sıradaki kurs parçası ({course_title})",
                 )
             )
         for s in result:
@@ -886,7 +913,7 @@ class DayPlanService:
         cards_svc = CardService(self.uow, self.actor)
         tz = await user_tz(self.uow, user_id)
         start, end = day_bounds(day, tz)
-        tracked, _ = await self._tracked_for_day(user_id, start, end)
+        tracked, _, by_item = await self._tracked_for_day(user_id, start, end)
 
         # Once dogrula, sonra yaz: gecersiz istek yan etki birakmasin
         plan = await self.uow.day_plans.for_date(user_id, day)
@@ -917,6 +944,8 @@ class DayPlanService:
             )
             if item.card_id is not None:
                 item.tracked_sec = tracked.get(item.card_id, 0)
+            else:
+                item.tracked_sec = by_item.get(item.id, 0)  # kartsiz madde (13g)
             if previous == outcome or item.card_id is None:
                 return  # tekrar degerlendirmede yan etkiler bir kez
             card = await self.uow.tasks.get_by_id(item.card_id)

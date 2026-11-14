@@ -696,3 +696,61 @@ async def test_weekly_failure_message_is_classified_not_raw(
     )
     assert note.body == expected
     assert "SIR" not in note.body and "yerel model kapalı" not in note.body
+
+
+# ---------------- Faz 13g: sabah ozeti kurs satiri ----------------
+def _course_row(title, part, board_id, status="active", cid=10):
+    return {
+        "goal_id": cid,
+        "title": title,
+        "status": status,
+        "root_card": {"id": cid, "title": title, "board_id": board_id},
+        "next_part": {"id": cid + 1, "title": part} if part else None,
+    }
+
+
+async def test_morning_course_lines(sched, api, tg, monkeypatch):
+    rows = [
+        _course_row("Power BI Kursu", "P2 — Veri kalitesi", 1, cid=10),
+        _course_row("Fabric", "F1 — Giriş", 1, cid=20),
+        _course_row("Üçüncü", "X1", 1, cid=30),
+        _course_row("Duraklatıldı", "Y1", 1, status="paused", cid=40),
+    ]
+    orig = api.__call__
+
+    def with_courses(request):
+        if request.url.path.endswith("/learning/courses"):
+            api.requests.append("/learning/courses")
+            return httpx.Response(200, json={"success": True, "data": rows})
+        return orig(request)
+
+    monkeypatch.setattr(FakeApi, "__call__", lambda self, r: with_courses(r))
+    await sched.tick(utc(2026, 11, 10, 7, 35))
+    [text] = [t for t in tg.texts if t.startswith("Günaydın")]
+    lines = [ln for ln in text.splitlines() if ln.startswith("📚")]
+    assert lines == [
+        "📚 Sıradaki: P2 — Veri kalitesi (Power BI Kursu)",
+        "📚 Sıradaki: F1 — Giriş (Fabric)",
+    ]  # en cok 2, duraklatilan yok
+
+
+async def test_morning_course_hidden_board_is_masked(sched, api, tg, monkeypatch):
+    rows = [_course_row("Gizli kurs adı", "Gizli parça", 2)]
+    orig = FakeApi.__call__
+
+    def patched(self, request):
+        if request.url.path.endswith("/learning/courses"):
+            return httpx.Response(200, json={"success": True, "data": rows})
+        return orig(self, request)
+
+    monkeypatch.setattr(FakeApi, "__call__", patched)
+    await sched.tick(utc(2026, 11, 10, 7, 35))
+    [text] = [t for t in tg.texts if t.startswith("Günaydın")]
+    assert "📚 Sıradaki: gizli board'da kurs parçası" in text
+    assert "Gizli kurs adı" not in text and "Gizli parça" not in text
+
+
+async def test_morning_survives_missing_courses_endpoint(sched, api, tg):
+    await sched.tick(utc(2026, 11, 10, 7, 35))  # FakeApi /learning/courses -> 404
+    [text] = [t for t in tg.texts if t.startswith("Günaydın")]
+    assert text.endswith("Bugün için plan yok.") and "📚" not in text

@@ -63,6 +63,7 @@ async def test_scheduler_gets_work_with_read_pat(client, read_pat, seeded):
         (f"/boards/{board['board']['id']}", None),
         (f"/cards/{card['id']}", None),
         ("/analytics/summary", {"start": "2026-10-14", "end": DAY}),
+        ("/learning/courses", None),  # 13g: sabah ozeti kurs satiri
     ]
     bodies = {}
     for path, params in paths:

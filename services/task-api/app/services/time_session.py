@@ -60,6 +60,37 @@ class TimeSessionService:
             raise NotFoundException("Card", card_id)
         return card
 
+    async def _item(self, item_id: int | None, user_id: int):
+        """Plan maddesi (sahiplik: kullanicinin degilse 404)."""
+        if item_id is None:
+            return None
+        item = await self.uow.day_plan_items.get_owned(item_id, user_id)
+        if item is None:
+            raise NotFoundException("DayPlanItem", item_id)
+        return item
+
+    async def _resolve_target(
+        self, user_id: int, card_id: int | None, item_id: int | None
+    ) -> tuple[TaskEntity | None, object | None]:
+        """Madde verildiyse kart/baslik/board maddeden gelir (Faz 13g)."""
+        item = await self._item(item_id, user_id)
+        if item is None:
+            return await self._card(card_id, user_id), None
+        card = None
+        if item.card_id is not None:
+            card = await self.uow.tasks.get_owned(item.card_id, user_id)
+        return card, item
+
+    def _attach_item(self, s: TimeSessionEntity, card, item) -> None:
+        if item is None:
+            s.day_plan_item_id = None
+            return
+        self._attach(s, card)
+        s.day_plan_item_id = item.id
+        s.card_title = item.title
+        if item.board_id is not None:
+            s.board_id = item.board_id
+
     @staticmethod
     def _attach(s: TimeSessionEntity, card: TaskEntity | None) -> None:
         s.card_id = card.id if card else None
@@ -113,7 +144,9 @@ class TimeSessionService:
         return ActiveSession(session=to_response(s) if s else None)
 
     async def start(self, user_id: int, data: SessionStart) -> SessionResponse:
-        card = await self._card(data.card_id, user_id)
+        card, item = await self._resolve_target(
+            user_id, data.card_id, data.day_plan_item_id
+        )
         now = _now()
 
         stopped = await self.uow.time_sessions.active_for_user(user_id)
@@ -126,6 +159,7 @@ class TimeSessionService:
             user_id=user_id, started_at=now, note=data.note, source="timer"
         )
         self._attach(s, card)
+        self._attach_item(s, card, item)
         await self.uow.time_sessions.create(s)
         await self.uow.commit()
 
@@ -149,12 +183,15 @@ class TimeSessionService:
     async def create_manual(
         self, user_id: int, data: SessionManualCreate
     ) -> SessionResponse:
-        card = await self._card(data.card_id, user_id)
+        card, item = await self._resolve_target(
+            user_id, data.card_id, data.day_plan_item_id
+        )
         await self._check_range(user_id, data.started_at, data.ended_at)
         s = TimeSessionEntity(
             user_id=user_id, started_at=data.started_at, note=data.note, source="manual"
         )
         self._attach(s, card)
+        self._attach_item(s, card, item)
         self._close(s, data.ended_at)
         await self.uow.time_sessions.create(s)
         await self.uow.commit()

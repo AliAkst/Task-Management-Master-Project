@@ -15,6 +15,7 @@ from app.db.entities.day_plan import DayPlanStatus, ItemOutcome
 from app.db.unit_of_work import TaskUnitOfWork
 from app.models.analytics import (
     AnalyticsSummary,
+    BoardEstimate,
     BoardStat,
     DayStat,
     EstimateAccuracy,
@@ -31,6 +32,7 @@ from app.services.timeutil import (
 )
 
 MAX_DAYS = 366
+BOARD_SAMPLE_MIN_SEC = 300  # board orani icin: en az 5 dk izlenmis olmali (13g)
 NO_BOARD_COLOR = "#94a3b8"
 
 
@@ -38,7 +40,51 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def board_calibration(cards, totals_sec, plan_items) -> list[BoardEstimate]:
+    """
+    Board bazinda gercek/tahmin orani medyani (Faz 13g).
+    Ornekler: (a) tamamlanmis, tahminli, >= 5 dk izlenmis kartlar;
+    (b) tamamlanmis (outcome=done), planned_minutes > 0, tracked_sec >= 300 olan
+    KARTSIZ plan maddeleri (board_id doluysa).
+    """
+    ratios: dict[int, list[float]] = {}
+    for c in cards:
+        sec = totals_sec.get(c.id, 0)
+        if c.estimated_minutes and c.board_id is not None and sec >= BOARD_SAMPLE_MIN_SEC:
+            ratios.setdefault(c.board_id, []).append(sec / 60 / c.estimated_minutes)
+    for it in plan_items:
+        if (
+            it.card_id is None
+            and it.was_planned
+            and it.outcome == ItemOutcome.DONE
+            and it.planned_minutes
+            and it.board_id is not None
+            and it.tracked_sec >= BOARD_SAMPLE_MIN_SEC
+        ):
+            ratios.setdefault(it.board_id, []).append(
+                it.tracked_sec / 60 / it.planned_minutes
+            )
+    return [
+        BoardEstimate(board_id=b, samples=len(r), median_ratio=round(median(r), 2))
+        for b, r in sorted(ratios.items())
+    ]
+
+
 class AnalyticsService:
+    async def calibration(
+        self, user_id: int, first: date, last: date
+    ) -> list[BoardEstimate]:
+        """Kurs ETA'si gibi icerden kullananlar icin (tek araliktan)."""
+        tz = await user_tz(self.uow, user_id)
+        start, end = range_bounds(first, last, tz)
+        completed = await self.uow.analytics.completed_cards(user_id, start, end)
+        totals = await self.uow.time_sessions.totals_for_cards(
+            [c.id for c in completed if c.estimated_minutes]
+        )
+        plans = await self.uow.day_plans.in_range(user_id, first, last)
+        items = await self.uow.day_plan_items.for_plans([p.id for p in plans])
+        return board_calibration(completed, totals, items)
+
     def __init__(self, uow: TaskUnitOfWork):
         self.uow = uow
 
@@ -168,6 +214,7 @@ class AnalyticsService:
             mean_ratio=round(sum(ratios) / len(ratios), 2) if ratios else None,
             median_ratio=round(median(ratios), 2) if ratios else None,
             biggest_overruns=sorted(samples, key=lambda s: s.ratio, reverse=True)[:5],
+            by_board=board_calibration(completed, totals_sec, items),
         )
 
         # --- en cok ertelenenler ---

@@ -17,7 +17,7 @@ export interface FactCategory {
   private_by_default: boolean
 }
 
-export type GoalStatus = 'active' | 'achieved' | 'dropped'
+export type GoalStatus = 'active' | 'achieved' | 'dropped' | 'paused'
 
 export interface Goal {
   id: number

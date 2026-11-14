@@ -20,13 +20,15 @@ import { formatDuration } from '../lib/format'
 import type { BoardWithCounts, DayPlan, DayPlanItem, PlanSuggestion } from '../lib/types'
 
 /** Plan maddesindeki kart icin kronometre: istedigin an basla / durdur. */
-function PlayButton({ cardId, title }: { cardId: number; title: string }) {
+function PlayButton({ cardId, itemId, title }: { cardId: number | null; itemId: number | null; title: string }) {
   const active = useActiveSession()
   const m = useSessionMutations()
-  const running = active.data?.card_id === cardId
+  // Kartli madde kart id'siyle, kartsiz madde plan maddesi id'siyle eslesir (13g)
+  const running = cardId != null ? active.data?.card_id === cardId : active.data?.day_plan_item_id === itemId
+  const target = cardId != null ? cardId : { day_plan_item_id: itemId! }
   return (
     <button
-      onClick={() => (running ? m.stop.mutate() : m.start.mutate(cardId))}
+      onClick={() => (running ? m.stop.mutate() : m.start.mutate(target))}
       disabled={m.start.isPending || m.stop.isPending}
       aria-label={running ? `${title} için kronometreyi durdur` : `${title} için çalışmaya başla`}
       title={running ? 'Durdur' : active.data ? 'Çalışan süre durur, bu kart başlar' : 'Çalışmaya başla'}
@@ -61,6 +63,7 @@ const KIND_LABEL: Record<PlanSuggestion['kind'], string> = {
   overdue: 'Gecikmiş',
   in_progress: 'Devam eden',
   worked: 'Üzerinde çalışılan',
+  course: 'Kurs parçası',
 }
 
 /** Oneri <-> taslak eslestirmesi icin referans (satir anahtari degil). */
@@ -156,7 +159,7 @@ function PlanRow({ d, color, dirty, menuOpen, boards, busy, error, onToggleDone,
             </span>
           )}
         </span>
-        {d.card_id != null && <PlayButton cardId={d.card_id} title={d.title} />}
+        {(d.card_id != null || d.id != null) && <PlayButton cardId={d.card_id} itemId={d.id} title={d.title} />}
         {d.hint && <span className="text-[13px] text-slate-500">{d.hint}</span>}
         <input
           type="number"

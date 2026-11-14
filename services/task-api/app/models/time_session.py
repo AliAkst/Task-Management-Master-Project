@@ -10,6 +10,8 @@ class SessionStart(BaseModel):
     """card_id bos ise karta bagli olmayan "serbest" calisma."""
 
     card_id: int | None = None
+    # Kartsiz plan maddesi (Faz 13g); verilirse kart/baslik/board maddeden gelir
+    day_plan_item_id: int | None = None
     note: str | None = Field(None, max_length=2000)
 
 
@@ -21,6 +23,7 @@ class SessionManualCreate(BaseModel):
     """Unutulan / sonradan girilen calisma suresi."""
 
     card_id: int | None = None
+    day_plan_item_id: int | None = None
     started_at: datetime
     ended_at: datetime
     note: str | None = Field(None, max_length=2000)
@@ -50,6 +53,7 @@ class SessionResponse(BaseModel):
     card_id: int | None
     board_id: int | None
     card_title: str | None
+    day_plan_item_id: int | None = None
     started_at: datetime
     ended_at: datetime | None
     duration_sec: int | None

@@ -49,8 +49,12 @@ export function useSessionMutations() {
 
   return {
     start: useMutation({
-      mutationFn: (cardId: number | null) =>
-        api<TimeSession>('/sessions/start', { method: 'POST', ...json({ card_id: cardId }) }),
+      // Kart id'si ya da { day_plan_item_id } (kartsiz plan maddesi, Faz 13g)
+      mutationFn: (target: number | null | { day_plan_item_id: number }) =>
+        api<TimeSession>('/sessions/start', {
+          method: 'POST',
+          ...json(target !== null && typeof target === 'object' ? target : { card_id: target }),
+        }),
       onSuccess: (s) => {
         qc.setQueryData(sessionKeys.active, s)
         refresh()

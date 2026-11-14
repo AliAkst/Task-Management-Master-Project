@@ -49,6 +49,11 @@ class GoalService:
         self.actor = actor
         self.activity = ActivityLogger(uow, actor)
 
+    def _learning(self):
+        from app.services.learning import LearningService
+
+        return LearningService(self.uow, self.actor)
+
     async def _owned(self, goal_id: int, user_id: int) -> GoalEntity:
         goal = await self.uow.session.get(GoalEntity, goal_id)
         if goal is None or goal.user_id != user_id:
@@ -78,6 +83,8 @@ class GoalService:
 
     async def create(self, user_id: int, data: GoalCreate) -> GoalResponse:
         await self._check_refs(user_id, data.board_id, data.root_card_id)
+        if data.root_card_id is not None:
+            await self._learning().ensure_can_activate(user_id)
         goal = GoalEntity(user_id=user_id, created_by=self.actor, **data.model_dump())
         self.uow.session.add(goal)
         await self.uow.flush()
@@ -100,6 +107,19 @@ class GoalService:
         await self._check_refs(
             user_id, update.get("board_id"), update.get("root_card_id")
         )
+        # Ucuncu aktif kurs (13g): kurs olmayan ya da aktif olmayan hedef,
+        # kok kartli + ACTIVE olacaksa kota kontrolu
+        new_status = update.get("status", goal.status)
+        new_root = update.get("root_card_id", goal.root_card_id)
+        was_active_course = (
+            goal.status == GoalStatus.ACTIVE and goal.root_card_id is not None
+        )
+        if (
+            new_status == GoalStatus.ACTIVE
+            and new_root is not None
+            and not was_active_course
+        ):
+            await self._learning().ensure_can_activate(user_id, exclude_goal_id=goal.id)
         changes = diff(goal, update)
         for key, value in update.items():
             setattr(goal, key, value)
@@ -107,6 +127,7 @@ class GoalService:
             action = {
                 GoalStatus.ACHIEVED.value: "achieved",
                 GoalStatus.DROPPED.value: "dropped",
+                GoalStatus.PAUSED.value: "paused",
             }.get(changes.get("status", [None, None])[1], "updated")
             await self.activity.log(
                 user_id,

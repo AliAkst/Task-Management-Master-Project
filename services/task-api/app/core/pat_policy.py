@@ -17,6 +17,8 @@ READ_METHODS = frozenset({"GET", "HEAD"})
 SETTINGS_PREFIX = f"{API_PREFIX}/settings"
 # Gun sablonlari ayar sayilir: PAT ile yalniz okunur (T2-D4, yonetici karari)
 DAY_TEMPLATES_PREFIX = f"{API_PREFIX}/day-templates"
+# Faz 13g: /learning/courses - GET read ile okunur, POST (kurs olustur) write ister;
+# ozel bir kural gerekmez (varsayilan yontem kurali). Test: test_learning.TestPatPolicy
 
 
 def _norm(path: str) -> str:

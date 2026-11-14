@@ -382,3 +382,122 @@ async def test_stale_jobs_are_closed_on_startup(client, db_session_maker):
     await jobs_module.recover_stale_jobs()
     job = (await client.get(f"/api/v1/assistant/day-review/{DAY}")).json()["data"]
     assert job["status"] == "failed" and "yeniden başladı" in job["error"]
+
+
+# ---------------- Faz 13g: katmanli kalibrasyon + kurs arac ----------------
+def _acc(general_n, general_r, by_board):
+    return {
+        "estimate_accuracy": {
+            "sample_size": general_n,
+            "median_ratio": general_r,
+            "by_board": [
+                {"board_id": b, "samples": n, "median_ratio": r}
+                for b, n, r in by_board
+            ],
+        }
+    }
+
+
+def test_estimate_factor_board_first_then_general_then_none():
+    s = _acc(5, 1.2, [(1, 3, 2.0), (2, 2, 3.0)])
+    assert estimate_factor(s, 1) == 2.0  # board ornegi >= 3 -> board medyani
+    assert estimate_factor(s, 2) == 1.2  # board ornegi < 3 -> genel medyan
+    assert estimate_factor(s, 9) == 1.2  # bilinmeyen board -> genel
+    assert estimate_factor(s) == 1.2  # board verilmedi -> bugunku davranis
+    assert estimate_factor(_acc(2, 1.2, [(1, 2, 2.0)]), 1) is None  # hicbiri yeterli degil
+    assert estimate_factor(_acc(5, 1.2, [(1, 4, 9.0)]), 1) == 3.0  # FACTOR_BOUNDS aynen
+    assert estimate_factor(_acc(5, 1.2, [(1, 4, 0.1)]), 1) == 0.5
+
+
+def test_build_candidates_uses_board_factor_when_summary_given():
+    suggestions = [
+        {"kind": "due", "card_id": 1, "title": "A", "board_id": 1, "planned_minutes": 60},
+        {"kind": "due", "card_id": 2, "title": "B", "board_id": 2, "planned_minutes": 60},
+    ]
+    summary = _acc(5, 1.0, [(1, 3, 2.0)])
+    cands = build_candidates(
+        suggestions, {1: "Eğitim", 2: "Spor"}, PrivacyFilter(active=False), 1.0, summary
+    )
+    assert [(c.title, c.adjusted) for c in cands] == [("A", 120), ("B", 60)]
+
+
+def _courses_tools(courses, hidden_boards=()):
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path.removeprefix("/api/v1")
+        if path == "/learning/courses":
+            return httpx.Response(200, json={"success": True, "data": courses})
+        if path == "/boards":
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "data": [
+                        {"id": b, "name": f"B{b}", "privacy": "local_only"}
+                        for b in hidden_boards
+                    ],
+                },
+            )
+        if path.startswith("/boards/"):
+            return httpx.Response(
+                200, json={"success": True, "data": {"board": {}, "cards": []}}
+            )
+        return httpx.Response(404, json={"success": False})
+
+    return httpx.MockTransport(handler)
+
+
+def _course(**kw):
+    base = {
+        "goal_id": 1,
+        "title": "Power BI Kursu",
+        "status": "active",
+        "root_card": {"id": 10, "title": "Power BI Kursu", "board_id": 1},
+        "parts_total": 21,
+        "parts_done": 1,
+        "next_part": {"id": 11, "title": "P2 — Veri kalitesi", "estimated_minutes": 60},
+        "velocity_per_week": 0.5,
+        "remaining_minutes": 1200,
+        "eta_date": "2027-03-12",
+        "eta_reason": "ok",
+    }
+    base.update(kw)
+    return base
+
+
+async def test_get_courses_text_and_hidden_board_course():
+    from app.llm.types import ToolCall
+    from app.tools.read_tools import ToolBox
+
+    visible = _course()
+    secret = _course(
+        goal_id=2,
+        title="Gizli kurs",
+        root_card={"id": 20, "title": "Gizli kurs", "board_id": 2},
+        next_part={"id": 21, "title": "Gizli parça", "estimated_minutes": None},
+    )
+    no_vel = _course(
+        goal_id=3,
+        title="Fabric",
+        root_card={"id": 30, "title": "Fabric", "board_id": 1},
+        velocity_per_week=None,
+        eta_date=None,
+        eta_reason="no_velocity",
+        next_part={"id": 31, "title": "F1 — Giriş", "estimated_minutes": None},
+        parts_done=0,
+        parts_total=9,
+    )
+    transport = _courses_tools([visible, secret, no_vel], hidden_boards=(2,))
+    for cloud in (False, True):
+        box = await ToolBox.create(
+            TaskApiClient("t", transport=transport), cloud=cloud, tz=TZ
+        )
+        out = (await box.execute(ToolCall(id="x", name="get_courses", arguments={}))).text
+        assert (
+            "Power BI Kursu: 1/21 parça · sıradaki P2 — Veri kalitesi · "
+            "haftada 0,5 parça · bitiş ~12 Mart" in out
+        )
+        assert "Fabric: 0/9 parça · sıradaki F1 — Giriş · hız verisi yok" in out
+        if cloud:
+            assert "Gizli" not in out  # gizli board kursu bulut modele gitmez
+        else:
+            assert "Gizli kurs" in out

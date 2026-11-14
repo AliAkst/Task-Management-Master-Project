@@ -37,6 +37,10 @@ class TimeSessionEntity(Base, TimestampMixin):
     # Snapshot'lar (FK degil): kart silinse / tasinsa da gecmis dogru kalir
     board_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     card_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Kartsiz plan maddesine bagli oturum (Faz 13g, T7)
+    day_plan_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("day_plan_items.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     started_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
     ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

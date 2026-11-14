@@ -287,3 +287,125 @@ class TestSessionOwnership:
         assert res.status_code == 409
         assert (await active(client, auth_headers))["id"] == s["id"]
         assert (await client.get(f"{API}/sessions", headers=h)).json()["data"] == []
+
+
+# ---------------- Faz 13g: kartsiz plan maddesine kronometre (T7) ----------------
+class TestPlanItemSessions:
+    async def _plan_item(self, client, headers, title="Okuma", **kw):
+        from tests.integration.test_day_plans import D as DAY
+
+        res = await client.put(
+            f"{API}/day-plans/{DAY}",
+            json={"items": [{"title": title, "planned_minutes": 30, **kw}]},
+            headers=headers,
+        )
+        assert res.status_code == 200, res.text
+        return res.json()["data"]["items"][0]
+
+    async def test_start_with_item_sets_snapshots(self, client, auth_headers, clock):
+        item = await self._plan_item(client, auth_headers)
+        s = await start(client, auth_headers, day_plan_item_id=item["id"])
+        assert s["day_plan_item_id"] == item["id"]
+        assert s["card_id"] is None and s["card_title"] == "Okuma"
+        got = await active(client, auth_headers)
+        assert got["day_plan_item_id"] == item["id"]
+
+    async def test_item_ownership_404(self, client, auth_headers, other_headers, clock):
+        item = await self._plan_item(client, other_headers, title="Başkasının")
+        res = await client.post(
+            f"{API}/sessions/start",
+            json={"day_plan_item_id": item["id"]},
+            headers=auth_headers,
+        )
+        assert res.status_code == 404
+        res = await client.post(
+            f"{API}/sessions/start", json={"day_plan_item_id": 9999}, headers=auth_headers
+        )
+        assert res.status_code == 404
+        assert await active(client, auth_headers) is None
+
+    async def test_cardless_tracked_sec_sums_item_sessions_only(
+        self, client, auth_headers
+    ):
+        from tests.integration.test_day_plans import D as DAY
+        from tests.integration.test_day_plans import at, review
+
+        a = await self._plan_item(client, auth_headers, title="A")
+        res = await client.put(
+            f"{API}/day-plans/{DAY}",
+            json={"items": [{"id": a["id"]}, {"title": "B", "planned_minutes": 20}]},
+            headers=auth_headers,
+        )
+        items = {i["title"]: i for i in res.json()["data"]["items"]}
+        for start_h, end_h, key in ((9, 10, "A"), (11, 11.5, "A"), (13, 13.5, "B")):
+            body = {
+                "day_plan_item_id": items[key]["id"],
+                "started_at": at(DAY, int(start_h), int(start_h % 1 * 60)),
+                "ended_at": at(DAY, int(end_h), int(end_h % 1 * 60)),
+            }
+            r = await client.post(f"{API}/sessions", json=body, headers=auth_headers)
+            assert r.status_code == 201, r.text
+        # Maddeyle baglantisiz serbest oturum A'ya yazilmaz
+        await client.post(
+            f"{API}/sessions",
+            json={"started_at": at(DAY, 15), "ended_at": at(DAY, 16)},
+            headers=auth_headers,
+        )
+        plan = (await client.get(f"{API}/day-plans/{DAY}", headers=auth_headers)).json()["data"]
+        today = {i["title"]: i["tracked_today_sec"] for i in plan["items"]}
+        assert today == {"A": 90 * 60, "B": 30 * 60}
+        assert plan["tracked_today_sec"] == 180 * 60  # 90 + 30 + serbest 60
+        done = await review(
+            client,
+            auth_headers,
+            {"items": [{"id": i["id"], "outcome": "done"} for i in plan["items"]]},
+        )
+        assert {i["title"]: i["tracked_sec"] for i in done["items"]} == {
+            "A": 90 * 60,
+            "B": 30 * 60,
+        }
+
+    async def test_card_item_keeps_card_rule(self, client, auth_headers, board):
+        from tests.integration.test_day_plans import D as DAY
+        from tests.integration.test_day_plans import at
+
+        card = await create_card(client, auth_headers, board["lists"][0]["id"], "Kartlı")
+        res = await client.put(
+            f"{API}/day-plans/{DAY}",
+            json={"items": [{"card_id": card["id"]}]},
+            headers=auth_headers,
+        )
+        item = res.json()["data"]["items"][0]
+        # Madde uzerinden baslatilan oturum karti da doldurur; sayim kart kuraliyla
+        r = await client.post(
+            f"{API}/sessions",
+            json={
+                "day_plan_item_id": item["id"],
+                "started_at": at(DAY, 9),
+                "ended_at": at(DAY, 10),
+            },
+            headers=auth_headers,
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["data"]["card_id"] == card["id"]
+        # Ayni karta bagimsiz ikinci oturum: kart kurali ikisini de sayar (3 sa degil 2 sa)
+        await client.post(
+            f"{API}/sessions",
+            json={"card_id": card["id"], "started_at": at(DAY, 11), "ended_at": at(DAY, 12)},
+            headers=auth_headers,
+        )
+        plan = (await client.get(f"{API}/day-plans/{DAY}", headers=auth_headers)).json()["data"]
+        assert plan["items"][0]["tracked_today_sec"] == 2 * 3600
+
+    async def test_deleting_item_keeps_session(self, client, auth_headers, clock):
+        from tests.integration.test_day_plans import D as DAY
+
+        item = await self._plan_item(client, auth_headers)
+        s = await start(client, auth_headers, day_plan_item_id=item["id"])
+        res = await client.put(
+            f"{API}/day-plans/{DAY}", json={"items": []}, headers=auth_headers
+        )
+        assert res.status_code == 200
+        clock.advance(minutes=5)
+        stopped = await stop(client, auth_headers)
+        assert stopped["id"] == s["id"] and stopped["duration_sec"] == 300

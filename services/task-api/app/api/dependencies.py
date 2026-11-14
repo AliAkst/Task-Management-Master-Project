@@ -31,6 +31,7 @@ from app.services.day_plan import DayPlanService
 from app.services.day_template import DayTemplateService
 from app.services.event import EventService
 from app.services.goal import GoalService
+from app.services.learning import LearningService
 from app.services.time_session import TimeSessionService
 from app.services.task import TaskService
 from app.services.user_settings import UserSettingsService
@@ -137,6 +138,13 @@ async def get_analytics_service(
     return AnalyticsService(uow)
 
 
+async def get_learning_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+    actor: str = Depends(get_actor),
+) -> LearningService:
+    return LearningService(uow, actor)
+
+
 async def get_goal_service(
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
     actor: str = Depends(get_actor),
@@ -239,3 +247,4 @@ DayTemplateServiceDep = Annotated[
 ]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 GoalServiceDep = Annotated[GoalService, Depends(get_goal_service)]
+LearningServiceDep = Annotated[LearningService, Depends(get_learning_service)]

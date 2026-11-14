@@ -67,6 +67,12 @@ def _card(
     return out
 
 
+_MONTHS = (
+    "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+    "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+)  # fmt: skip
+
+
 class ToolBox:
     """Bir sohbet turu boyunca yasayan arac seti (kullanicinin token'i ile)."""
 
@@ -90,6 +96,7 @@ class ToolBox:
             "get_day_plan": self.get_day_plan,
             "get_stats_summary": self.get_stats_summary,
             "list_goals": self.list_goals,
+            "get_courses": self.get_courses,
         }
 
     # ---------------- kurulum ----------------
@@ -191,6 +198,10 @@ class ToolBox:
             ToolSpec(
                 "list_goals",
                 "Kullanıcının hayat hedefleri (aktif, ulaşılmış, bırakılmış): başlık, neden, hedef tarih, ilgili board.",
+            ),
+            ToolSpec(
+                "get_courses",
+                "Öğrenme kursları (Power BI, Fabric vb.): ilerleme (biten/toplam parça), sıradaki parça, haftalık hız, tahmini bitiş.",
             ),
         ]
 
@@ -458,6 +469,33 @@ class ToolBox:
                 if d["tracked_min"] or d["planned"] or d["mood"]
             ],
         }
+
+    async def get_courses(self) -> Any:
+        courses = await self.api.get("/learning/courses", include="active")
+        lines = []
+        for c in courses or []:
+            root = c.get("root_card") or {}
+            if self.privacy.board_hidden(
+                root.get("board_id")
+            ) or self.privacy.card_hidden(root.get("id")):
+                continue
+            part = c.get("next_part")
+            bits = [f"{c['parts_done']}/{c['parts_total']} parça"]
+            if c.get("status") == "paused":
+                bits.append("duraklatıldı")
+            if part:
+                bits.append(f"sıradaki {part['title']}")
+            vel = c.get("velocity_per_week")
+            bits.append(
+                f"haftada {vel:g} parça".replace(".", ",") if vel else "hız verisi yok"
+            )
+            if c.get("eta_reason") == "ok" and c.get("eta_date"):
+                eta = date.fromisoformat(c["eta_date"])
+                bits.append(f"bitiş ~{eta.day} {_MONTHS[eta.month - 1]}")
+            elif c.get("eta_reason") == "done":
+                bits.append("tamamlandı")
+            lines.append(f"{c['title']}: " + " · ".join(bits))
+        return lines or {"result": "Takip edilen kurs yok"}
 
     async def list_goals(self) -> Any:
         goals = await self.api.get("/goals")

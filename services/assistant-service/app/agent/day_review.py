@@ -43,6 +43,7 @@ KIND_LABEL = {
     "in_progress": "devam ediyor",
     "next_in_chain": "zincirde önceki iş bitti, sıra bunda",
     "worked": "bugün üzerinde çalışıldı",
+    "course": "kurs: sıradaki parça",
 }
 OUTCOME_LABEL = {
     "done": "yapıldı",
@@ -97,13 +98,28 @@ class Candidate:
 
 
 # ---------------- tahmin katsayisi ----------------
-def estimate_factor(summary: dict[str, Any] | None) -> float | None:
-    """Gercek / tahmin oraninin medyani (yeterli olcum yoksa None)."""
+def estimate_factor(
+    summary: dict[str, Any] | None, board_id: int | None = None
+) -> float | None:
+    """
+    Gercek / tahmin oraninin medyani (yeterli olcum yoksa None). Katmanli (13g):
+    board_id verilmisse ve o board'un ornegi >= FACTOR_MIN_SAMPLES ise board
+    medyani; degilse genel medyan; o da yeterli degilse None (= 1.0 etkisi).
+    """
     acc = (summary or {}).get("estimate_accuracy") or {}
+    lo, hi = FACTOR_BOUNDS
+    if board_id is not None:
+        for b in acc.get("by_board") or []:
+            if b.get("board_id") == board_id:
+                if (
+                    b.get("median_ratio") is not None
+                    and (b.get("samples") or 0) >= FACTOR_MIN_SAMPLES
+                ):
+                    return round(min(hi, max(lo, float(b["median_ratio"]))), 2)
+                break
     ratio = acc.get("median_ratio")
     if ratio is None or (acc.get("sample_size") or 0) < FACTOR_MIN_SAMPLES:
         return None
-    lo, hi = FACTOR_BOUNDS
     return round(min(hi, max(lo, float(ratio))), 2)
 
 
@@ -140,6 +156,7 @@ def build_candidates(
     boards: dict[int, str],
     privacy: PrivacyFilter,
     factor: float | None,
+    summary: dict[str, Any] | None = None,
 ) -> list[Candidate]:
     out: list[Candidate] = []
     seen: set[tuple[str, int]] = set()
@@ -158,6 +175,8 @@ def build_candidates(
         seen.add(key)
         minutes = s.get("planned_minutes")
         is_event = s.get("kind") == "event"
+        if summary is not None:  # board oncelikli katsayi (13g)
+            factor = estimate_factor(summary, s.get("board_id"))
         out.append(
             Candidate(
                 n=len(out) + 1,
@@ -364,7 +383,7 @@ async def run_day_review(
         else None
     )
     candidates = build_candidates(
-        (sugg or {}).get("items", []), boards, privacy, factor
+        (sugg or {}).get("items", []), boards, privacy, factor, summary
     )
     goals = [
         g["title"]

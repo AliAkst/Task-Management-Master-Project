@@ -12,6 +12,7 @@ class GoalStatus(str, enum.Enum):
     ACTIVE = "active"
     ACHIEVED = "achieved"
     DROPPED = "dropped"
+    PAUSED = "paused"  # Faz 13g: duraklatilmis kurs (sutun CHECK'siz, migration yok)
 
 
 class GoalEntity(Base, TimestampMixin):

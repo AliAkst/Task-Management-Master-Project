@@ -1131,6 +1131,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learning/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Courses
+         * @description Kurslar: ilerleme, siradaki parca, haftalik hiz, tahmini bitis.
+         */
+        get: operations["list_courses_api_v1_learning_courses_get"];
+        put?: never;
+        /**
+         * Create Course
+         * @description Alt parcalari olan bir karti kurs olarak takibe alir.
+         */
+        post: operations["create_course_api_v1_learning_courses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/active": {
         parameters: {
             query?: never;
@@ -1769,6 +1793,18 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[CourseResponse] */
+        ApiResponse_CourseResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["CourseResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[DayPlanResponse] */
         ApiResponse_DayPlanResponse_: {
             /** Success */
@@ -2076,6 +2112,19 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[list[CourseResponse]] */
+        ApiResponse_list_CourseResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["CourseResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[list[DayTemplateResponse]] */
         ApiResponse_list_DayTemplateResponse__: {
             /** Success */
@@ -2336,6 +2385,18 @@ export interface components {
             cards: components["schemas"]["CardSummary"][];
             /** Labels */
             labels: components["schemas"]["LabelResponse"][];
+        };
+        /**
+         * BoardEstimate
+         * @description Board bazinda gercek/tahmin orani (Faz 13g): kartlar + kartsiz plan maddeleri.
+         */
+        BoardEstimate: {
+            /** Board Id */
+            board_id: number;
+            /** Samples */
+            samples: number;
+            /** Median Ratio */
+            median_ratio: number;
         };
         /**
          * BoardGraph
@@ -2921,6 +2982,54 @@ export interface components {
             /** Authorize Url */
             authorize_url: string;
         };
+        /** CourseCreate */
+        CourseCreate: {
+            /** Root Card Id */
+            root_card_id: number;
+        };
+        /** CoursePart */
+        CoursePart: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Estimated Minutes */
+            estimated_minutes?: number | null;
+        };
+        /** CourseResponse */
+        CourseResponse: {
+            /** Goal Id */
+            goal_id: number;
+            /** Title */
+            title: string;
+            status: components["schemas"]["GoalStatus"];
+            root_card: components["schemas"]["CourseRootCard"];
+            /** Parts Total */
+            parts_total: number;
+            /** Parts Done */
+            parts_done: number;
+            next_part?: components["schemas"]["CoursePart"] | null;
+            /** Velocity Per Week */
+            velocity_per_week?: number | null;
+            /** Remaining Minutes */
+            remaining_minutes: number;
+            /** Eta Date */
+            eta_date?: string | null;
+            /**
+             * Eta Reason
+             * @enum {string}
+             */
+            eta_reason: "ok" | "no_velocity" | "done";
+        };
+        /** CourseRootCard */
+        CourseRootCard: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Board Id */
+            board_id?: number | null;
+        };
         /**
          * DayPlanItemPatch
          * @description Tek plan maddesini gunceller; verilmeyen alan degismez.
@@ -3204,6 +3313,11 @@ export interface components {
              * @default []
              */
             biggest_overruns: components["schemas"]["EstimateSample"][];
+            /**
+             * By Board
+             * @default []
+             */
+            by_board: components["schemas"]["BoardEstimate"][];
         };
         /** EstimateSample */
         EstimateSample: {
@@ -3375,7 +3489,7 @@ export interface components {
          * GoalStatus
          * @enum {string}
          */
-        GoalStatus: "active" | "achieved" | "dropped";
+        GoalStatus: "active" | "achieved" | "dropped" | "paused";
         /** GoalUpdate */
         GoalUpdate: {
             /** Title */
@@ -3669,7 +3783,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "event" | "carry_over" | "due" | "overdue" | "in_progress" | "next_in_chain" | "worked";
+            kind: "event" | "carry_over" | "due" | "overdue" | "in_progress" | "next_in_chain" | "worked" | "course";
             /** Card Id */
             card_id?: number | null;
             /** Event Id */
@@ -3699,6 +3813,8 @@ export interface components {
              * @default false
              */
             already_planned: boolean;
+            /** Reason */
+            reason?: string | null;
         };
         /** PostponedCard */
         PostponedCard: {
@@ -3724,6 +3840,8 @@ export interface components {
         SessionManualCreate: {
             /** Card Id */
             card_id?: number | null;
+            /** Day Plan Item Id */
+            day_plan_item_id?: number | null;
             /**
              * Started At
              * Format: date-time
@@ -3747,6 +3865,8 @@ export interface components {
             board_id: number | null;
             /** Card Title */
             card_title: string | null;
+            /** Day Plan Item Id */
+            day_plan_item_id?: number | null;
             /**
              * Started At
              * Format: date-time
@@ -3773,6 +3893,8 @@ export interface components {
         SessionStart: {
             /** Card Id */
             card_id?: number | null;
+            /** Day Plan Item Id */
+            day_plan_item_id?: number | null;
             /** Note */
             note?: string | null;
         };
@@ -6566,6 +6688,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_list_TrelloImportResult__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_courses_api_v1_learning_courses_get: {
+        parameters: {
+            query?: {
+                include?: "active" | "all";
+            };
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_CourseResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_course_api_v1_learning_courses_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_CourseResponse_"];
                 };
             };
             /** @description Validation Error */
