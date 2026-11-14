@@ -39,6 +39,7 @@ from app.models.day_plan import (
     DaySuggestions,
     ItemMove,
     ItemToCard,
+    PlanItemInput,
     PlanSuggestion,
 )
 from app.models.task import TaskStatus
@@ -575,6 +576,78 @@ class DayPlanService:
             {"user_id": user_id, "date": day.isoformat(), "items": len(data.items)},
         )
         return await self.get(user_id, day)
+
+    async def add_event_item(self, user_id: int, event: EventEntity) -> bool:
+        """Takvimde olusturulan etkinligi etkinligin gununun planina ekler (12d)."""
+        tz = await user_tz(self.uow, user_id)
+        day = event.start_at.astimezone(tz).date()
+        bounds = day_bounds(day, tz)
+        plan = await self.uow.day_plans.for_date(user_id, day)
+        if plan is not None and plan.status == DayPlanStatus.REVIEWED:
+            return False
+        existing = await self.uow.day_plan_items.for_plans([plan.id]) if plan else []
+        planned = [i for i in existing if i.was_planned]
+        if any(i.event_id == event.id for i in planned):
+            return False
+        card = (
+            await self.uow.tasks.get_by_id(event.card_id)
+            if event.card_id is not None
+            else None
+        )
+        if card is not None:
+            row = next(
+                (i for i in planned if i.card_id == card.id and i.event_id is None),
+                None,
+            )
+            if row is not None:
+                row.event_id = event.id
+                row.planned_start = self._event_start(event, bounds, tz)
+                if row.planned_minutes is None:
+                    row.planned_minutes = self._event_minutes(event)
+                await self.uow.commit()
+                return True
+
+        plan = await self._get_or_create(user_id, day)
+        row = DayPlanItemEntity(
+            user_id=user_id,
+            day_plan_id=plan.id,
+            position=max((i.position for i in existing), default=0) + STEP,
+        )
+        self._fill_item(
+            row, PlanItemInput(event_id=event.id), card, event, bounds, tz, None
+        )
+        await self.uow.day_plan_items.create(row)
+        if card is not None and not any(i.card_id == card.id for i in existing):
+            await self.activity.log(
+                user_id,
+                "card",
+                card.id,
+                "planned",
+                board_id=card.board_id,
+                card_id=card.id,
+                changes={"date": day.isoformat(), "via": "calendar"},
+            )
+        await self.uow.commit()
+        return True
+
+    async def refresh_event_items(self, user_id: int, event: EventEntity) -> None:
+        """Etkinlik tasininca bagli plan maddelerinin saat/sure snapshot'i (commit'siz)."""
+        rows = await self.uow.day_plan_items.for_event(event.id)
+        if not rows:
+            return
+        tz = await user_tz(self.uow, user_id)
+        new_day = event.start_at.astimezone(tz).date()
+        for row in rows:
+            if not row.was_planned:
+                continue
+            plan = await self.uow.day_plans.get_by_id(row.day_plan_id)
+            if plan is None or plan.status == DayPlanStatus.REVIEWED:
+                continue
+            if plan.date == new_day:
+                row.planned_start = None if event.all_day else event.start_at
+                row.planned_minutes = self._event_minutes(event)
+            else:
+                row.planned_start = None
 
     async def patch_item(
         self, item_id: int, user_id: int, data: DayPlanItemPatch

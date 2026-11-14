@@ -6,6 +6,7 @@ zaman blogudur; planlanan zaman bloklari activity_log'a yazilir (Faz 3b
 "planlanan vs gerceklesen" analizi bunlari kullanir).
 """
 
+import logging
 from datetime import datetime, timedelta
 
 from app.core.events import domain_event_publisher
@@ -31,6 +32,7 @@ from app.services.timeutil import user_tz
 
 DEFAULT_COLOR = "#64748b"
 MAX_RANGE = timedelta(days=400)
+logger = logging.getLogger(__name__)
 
 
 class EventService:
@@ -137,7 +139,17 @@ class EventService:
         )
         await self.uow.commit()
         await self._publish("event.created", user_id, event)
-        return EventResponse.model_validate(event)
+        response = EventResponse.model_validate(event)
+        if data.add_to_plan:
+            from app.services.day_plan import DayPlanService
+
+            try:
+                await DayPlanService(self.uow, self.actor).add_event_item(
+                    user_id, event
+                )
+            except Exception:  # plana ekleme etkinligi geri almaz
+                logger.warning("add_to_plan basarisiz", exc_info=True)
+        return response
 
     async def get(self, event_id: int, user_id: int) -> EventResponse:
         return await self._response(await self._owned(event_id, user_id))
@@ -174,8 +186,14 @@ class EventService:
         changes = diff(event, update)
         for key, value in update.items():
             setattr(event, key, value)
+        moved = {"start_at", "end_at", "all_day"} & changes.keys()
+        if moved and not event.recurrence_rule:
+            from app.services.day_plan import DayPlanService
+
+            await DayPlanService(self.uow, self.actor).refresh_event_items(
+                user_id, event
+            )
         if changes:
-            moved = {"start_at", "end_at", "all_day"} & changes.keys()
             await self.activity.log(
                 user_id,
                 "event",

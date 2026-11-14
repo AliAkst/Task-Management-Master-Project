@@ -27,6 +27,8 @@ class EventCreate(BaseModel):
     notes: str | None = Field(None, max_length=20000)
     # RRULE, orn. "FREQ=WEEKLY;BYDAY=MO,WE,FR" (bos: tekrarlanmaz)
     recurrence_rule: str | None = Field(None, max_length=500)
+    # Faz 12d: etkinlik o gunun planina da eklensin (kaydedilmez; varsayilan kapali)
+    add_to_plan: bool = False
 
     @model_validator(mode="after")
     def check(self) -> Self:

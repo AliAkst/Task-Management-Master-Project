@@ -17,6 +17,8 @@ import { useBoard, useBoards, keys as boardKeys } from '../api/boards'
 import { useCalendar, useCalendarMutations } from '../api/calendar'
 import CardModal from '../components/CardModal'
 import EventDialog, { type EventDraft } from '../components/EventDialog'
+import DayPlanPanel from '../components/DayPlanPanel'
+import { localDay } from '../api/dayPlans'
 import { Check, Hourglass, Loader2, RefreshCw, Video } from 'lucide-react'
 import { useIntegrationMutations, useMicrosoftCalendarEnabled } from '../api/integrations'
 import { api } from '../lib/api'
@@ -47,6 +49,7 @@ export default function CalendarPage() {
   const { syncMicrosoftCalendar } = useIntegrationMutations()
 
   const [range, setRange] = useState<{ start: string; end: string } | null>(null)
+  const [planDay, setPlanDay] = useState(() => localDay())
   const [hidden, setHidden] = useState<Set<number>>(new Set())
   const [draft, setDraft] = useState<EventDraft | null>(null)
   const [openCard, setOpenCard] = useState<{ cardId: number; boardId: number } | null>(null)
@@ -112,6 +115,9 @@ export default function CalendarPage() {
 
   function onDatesSet(arg: DatesSetArg) {
     setRange({ start: arg.start.toISOString(), end: arg.end.toISOString() })
+    const now = new Date()
+    if (arg.view.type === 'timeGridDay') setPlanDay(localDay(arg.start))
+    else setPlanDay(now >= arg.start && now < arg.end ? localDay() : localDay(arg.start))
   }
 
   function onSelect(arg: DateSelectArg) {
@@ -136,6 +142,7 @@ export default function CalendarPage() {
       start_at: start.toISOString(),
       end_at: end.toISOString(),
       all_day: arg.allDay,
+      add_to_plan: true,
     })
   }
 
@@ -231,6 +238,8 @@ export default function CalendarPage() {
             })}
           </div>
         </section>
+
+        <DayPlanPanel day={planDay} boards={boardById} />
 
         <section className="min-h-0 flex-1">
           <h2 className="mb-1 text-[17px]">Açık kartlar</h2>

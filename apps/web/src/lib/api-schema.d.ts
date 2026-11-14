@@ -2878,6 +2878,11 @@ export interface components {
             notes?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: string | null;
+            /**
+             * Add To Plan
+             * @default false
+             */
+            add_to_plan: boolean;
         };
         /** EventResponse */
         EventResponse: {

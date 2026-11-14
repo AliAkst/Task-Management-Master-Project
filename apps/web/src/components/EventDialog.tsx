@@ -61,6 +61,7 @@ function EventForm({ draft, boards, onClose, onOpenCard }: Props) {
   const [location, setLocation] = useState(draft.location ?? '')
   const [notes, setNotes] = useState(draft.notes ?? '')
   const [rule, setRule] = useState<string | null>(draft.recurrenceRule ?? null)
+  const [addToPlan, setAddToPlan] = useState(true)
 
   const error = (m.create.error ?? m.update.error ?? m.remove.error)?.message
 
@@ -84,7 +85,7 @@ function EventForm({ draft, boards, onClose, onOpenCard }: Props) {
       )
     } else {
       m.create.mutate(
-        { ...common, board_id: linked ? null : boardId, card_id: draft.cardId },
+        { ...common, board_id: linked ? null : boardId, card_id: draft.cardId, add_to_plan: addToPlan },
         { onSuccess: onClose },
       )
     }
@@ -183,6 +184,18 @@ function EventForm({ draft, boards, onClose, onOpenCard }: Props) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
+
+        {!editing && (
+          <label htmlFor="evt-add-plan" className="flex items-center gap-2">
+            <input
+              id="evt-add-plan"
+              type="checkbox"
+              checked={addToPlan}
+              onChange={(e) => setAddToPlan(e.target.checked)}
+            />
+            Günün planına da ekle
+          </label>
+        )}
 
         {error && <p className="text-red-600">{error}</p>}
 

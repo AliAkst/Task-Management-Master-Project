@@ -75,6 +75,13 @@ class DayPlanItemRepository(BaseRepository[DayPlanItemEntity]):
         return list(result.scalars().all())
 
     @with_db_retry
+    async def for_event(self, event_id: int) -> list[DayPlanItemEntity]:
+        result = await self.session.execute(
+            select(DayPlanItemEntity).where(DayPlanItemEntity.event_id == event_id)
+        )
+        return list(result.scalars().all())
+
+    @with_db_retry
     async def carried_to(self, user_id: int, day: date) -> list[DayPlanItemEntity]:
         """Bu gune ertelenmis maddeler."""
         result = await self.session.execute(

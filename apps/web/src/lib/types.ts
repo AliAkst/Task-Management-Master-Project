@@ -59,7 +59,7 @@ export type TaskStatus = S['TaskStatus']
 // ---------------- Takvim (Faz 2) ----------------
 export type CalendarItem = Res<S['CalendarItem']>
 export type CalendarEvent = Res<S['EventResponse']>
-export type EventCreate = Req<S['EventCreate'], 'all_day'>
+export type EventCreate = Req<S['EventCreate'], 'all_day' | 'add_to_plan'>
 export type EventUpdate = S['EventUpdate']
 
 // ---------------- Zaman takibi (Faz 3a) ----------------

@@ -37,6 +37,7 @@ export function useCalendarMutations() {
     qc.invalidateQueries({ queryKey: calendarKeys.all })
     qc.invalidateQueries({ queryKey: ['card'] })
     qc.invalidateQueries({ queryKey: ['board'] })
+    qc.invalidateQueries({ queryKey: ['day'] }) // gun plani ve oneriler
   }
   const json = (body: unknown) => ({ body: JSON.stringify(body) })
 
