@@ -13,6 +13,7 @@ NIGHT_PLAN = "night_plan"
 MORNING = "morning"
 OVERDUE = "overdue"
 WEEKLY = "weekly"
+FACTS_PURGE = "facts_purge"  # Faz 13h2: bildirim gondermez, kind ayari yok (hep acik)
 ALL_KINDS = (NIGHT_PLAN, MORNING, OVERDUE, WEEKLY)
 
 DEFAULT_PLANNING = time(22, 30)
@@ -84,6 +85,17 @@ def _weekly(now: datetime, cfg: SchedCfg) -> str | None:
     return None
 
 
+PURGE_START = time(3, 0)
+
+
+def _facts_purge(now: datetime) -> str | None:
+    """Pazar 03:00-23:59: pasif + 30 gunden eski hafiza kayitlarinin haftalik silinmesi."""
+    today = now.date()
+    if today.weekday() == 6 and now >= _at(today, PURGE_START, now):
+        return week_key(today)
+    return None
+
+
 def due_jobs(
     now_local: datetime, cfg: SchedCfg, runs: set[tuple[str, str]]
 ) -> list[tuple[str, str]]:
@@ -96,4 +108,5 @@ def due_jobs(
         found.append((OVERDUE, now_local.date().isoformat()))
     if cfg.kinds.get(WEEKLY, True):
         found.append((WEEKLY, _weekly(now_local, cfg)))
+    found.append((FACTS_PURGE, _facts_purge(now_local)))
     return [(k, p) for k, p in found if p is not None and (k, p) not in runs]

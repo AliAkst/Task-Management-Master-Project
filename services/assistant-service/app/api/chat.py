@@ -360,7 +360,11 @@ async def _stream(
             toolbox = await ToolBox.create(api, cloud=not is_local, tz=tz)
             toolbox.hidden = set(CHAT_HIDDEN_TOOLS)
             toolbox.writer.memory = MemoryTools(
-                session_maker, user["id"], cloud=not is_local
+                session_maker,
+                user["id"],
+                cloud=not is_local,
+                api=api,
+                provider=provider if is_local else None,
             )
             facts = await load_facts(session, user["id"], include_private=is_local)
             toolbox.gate = ActionGate(

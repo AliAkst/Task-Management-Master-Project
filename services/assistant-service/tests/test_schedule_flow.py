@@ -428,15 +428,23 @@ async def test_plan_day_warns_when_total_exceeds_free_time(fake_api, task_api_tr
 
 
 # ---------------------------------------------------------------- Faz 13e: tarih cevapta
-async def test_focused_reply_names_the_planned_date(client, fake_api):
+async def test_focused_reply_names_the_planned_date(client, fake_api, monkeypatch):
     from app.agent.fmt import fmt_day_long
 
+    # Saat sabit (gün dönümünden sonra): duvar saatine bağlı olmasın (gece 00:00-04:00
+    # koşulunca "yarın" dünden çözülür ve gün dönümü notu çıkar)
+    sat_noon = datetime(2026, 11, 14, 12, 0, tzinfo=TZ)
+
+    async def fixed_planning(self):
+        return sat_noon, ROLLOVER
+
+    monkeypatch.setattr(WriteTools, "_planning", fixed_planning)
     client.providers["fake:local"] = FakeProvider(
         [[call("schedule_day", day="yarın", items=[{"title": "Spor", "minutes": 30, "card": False}])]]
     )
     events, _ = await say(client, "Yarın günümü planla")
     reply = tokens(events)
-    assert reply.startswith(f"{fmt_day_long(tomorrow())} planını hazırladım (Fake).")
+    assert reply.startswith(f"{fmt_day_long(date(2026, 11, 15))} planını hazırladım (Fake).")
     assert "Onay kartından saatleri kontrol et" in reply
     assert "olarak aldım" not in reply  # gün dönümü yok
 

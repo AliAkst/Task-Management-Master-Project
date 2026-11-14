@@ -35,7 +35,7 @@ const json = (body: unknown) => ({ body: JSON.stringify(body) })
 export function useFacts() {
   return useQuery({
     queryKey: ['assistant', 'facts'],
-    queryFn: () => api<{ categories: FactCategory[]; facts: Fact[] }>('/assistant/facts'),
+    queryFn: () => api<{ categories: FactCategory[]; facts: Fact[]; inactive_count: number }>('/assistant/facts'),
   })
 }
 
@@ -55,6 +55,11 @@ export function useFactMutations() {
     }),
     remove: useMutation({
       mutationFn: (id: number) => api<void>(`/assistant/facts/${id}`, { method: 'DELETE' }),
+      onSuccess: refresh,
+    }),
+    // Faz 13h2: pasif bilgileri KALICI sil (yaş şartı yok; onay arayüzde)
+    purgeInactive: useMutation({
+      mutationFn: () => api<{ deleted: number }>('/assistant/facts/inactive', { method: 'DELETE' }),
       onSuccess: refresh,
     }),
   }

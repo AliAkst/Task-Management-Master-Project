@@ -94,8 +94,31 @@ def test_disabled_kinds_never_due():
     cfg = SchedCfg(
         kinds={"night_plan": False, "morning": False, "overdue": False, "weekly": False}
     )
-    assert due_jobs(at(2026, 11, 15, 22, 40), cfg, set()) == []
+    # facts_purge (13h2) kind ayarina bagli degil: hep acik, bildirim uretmez
+    jobs = [j for j in due_jobs(at(2026, 11, 15, 22, 40), cfg, set()) if j[0] != "facts_purge"]
+    assert jobs == []
     only = SchedCfg(
         kinds={"night_plan": False, "morning": True, "overdue": True, "weekly": True}
     )
     assert "night_plan" not in dict(due_jobs(at(2026, 11, 10, 22, 40), only, set()))
+
+
+def test_facts_purge_sunday_window_and_period():
+    # 2026-11-15 Pazar: 03:00'dan itibaren, ISO hafta anahtari; baska gun yok
+    assert "facts_purge" not in kinds(at(2026, 11, 15, 2, 59))
+    assert kinds(at(2026, 11, 15, 3, 0))["facts_purge"] == "2026-W46"
+    assert kinds(at(2026, 11, 15, 23, 59))["facts_purge"] == "2026-W46"
+    assert "facts_purge" not in kinds(at(2026, 11, 14, 12, 0))  # Cumartesi
+    assert "facts_purge" not in kinds(at(2026, 11, 16, 3, 30))  # Pazartesi
+
+
+def test_facts_purge_not_a_notification_kind_and_runs_once():
+    from app.scheduler_rules import ALL_KINDS
+
+    assert "facts_purge" not in ALL_KINDS  # notification_settings.kinds'e girmez
+    off = SchedCfg(kinds={k: False for k in ALL_KINDS})
+    assert dict(due_jobs(at(2026, 11, 15, 4, 0), off, set())) == {
+        "facts_purge": "2026-W46"
+    }
+    done = {("facts_purge", "2026-W46")}
+    assert due_jobs(at(2026, 11, 15, 4, 0), off, done) == []

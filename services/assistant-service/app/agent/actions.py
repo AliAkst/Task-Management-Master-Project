@@ -26,7 +26,7 @@ from app.tools.write_tools import ACTION_TYPES, PreparedAction, WriteTools
 
 DEFAULT_MODE = "ask"
 # Geri alinamaz islemler: izin "otomatik" olsa bile her zaman onay karti
-ALWAYS_ASK = {"delete_cards", "cancel_day"}
+ALWAYS_ASK = {"delete_cards", "cancel_day", "merge_facts"}
 MODES = ("ask", "auto", "never")
 
 PENDING_NOTE = (
@@ -135,7 +135,7 @@ class ActionGate:
 
     async def handle(self, call: ToolCall, prepared: PreparedAction) -> ToolResult:
         mode = self.modes.get(prepared.action_type, DEFAULT_MODE)
-        if prepared.action_type in ALWAYS_ASK and mode == "auto":
+        if (prepared.action_type in ALWAYS_ASK or prepared.force_ask) and mode == "auto":
             mode = "ask"
         if mode == "never":
             return ToolResult(

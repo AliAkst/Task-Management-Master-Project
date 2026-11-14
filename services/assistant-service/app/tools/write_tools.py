@@ -364,6 +364,8 @@ class PreparedAction:
     action_type: str
     args: dict[str, Any]  # execute() icin cozulmus argumanlar
     summary: str  # onay kartinda gorunen metin
+    # Faz 13h2: izin "auto" olsa bile onay iste (yakin tekrar uzerine yazma)
+    force_ask: bool = False
 
 
 class WriteTools:
@@ -445,12 +447,14 @@ class WriteTools:
             if self.memory is None:
                 raise ValueError("Hafıza şu an kullanılamıyor")
             body, summary = await self.memory.prepare_tidy(**args)
-            return PreparedAction(action_type_of(name), body, summary)
+            kind = "merge_facts" if "merges" in body else action_type_of(name)
+            return PreparedAction(kind, body, summary)
         if name in ("remember_fact", "forget_fact"):
             if self.memory is None:
                 raise ValueError("Hafıza şu an kullanılamıyor")
             if name == "remember_fact":
-                body, summary = await self.memory.prepare_remember(**args)
+                body, summary, force = await self.memory.prepare_remember_ex(**args)
+                return PreparedAction(action_type_of(name), body, summary, force)
             else:
                 body, summary = await self.memory.prepare_forget(**args)
             return PreparedAction(action_type_of(name), body, summary)
@@ -1490,7 +1494,7 @@ class WriteTools:
     # ---------------- calistirma ----------------
     async def execute(self, action_type: str, args: dict[str, Any]) -> dict[str, Any]:
         api = self.api
-        if action_type in ("remember_fact", "forget_fact"):
+        if action_type in ("remember_fact", "forget_fact", "merge_facts"):
             if self.memory is None:
                 raise ValueError("Hafıza şu an kullanılamıyor")
             return await self.memory.execute(action_type, args)

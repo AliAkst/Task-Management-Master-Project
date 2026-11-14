@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import current_user, ok
 from app.db.models import UserFactEntity, get_session
-from app.tools.memory_tools import CATEGORIES, PRIVATE_BY_DEFAULT, load_facts
+from app.tools.memory_tools import (
+    CATEGORIES,
+    PRIVATE_BY_DEFAULT,
+    count_inactive,
+    load_facts,
+    purge_inactive,
+)
 
 router = APIRouter()
 
@@ -61,8 +67,21 @@ async def list_facts(
                 for k, v in CATEGORIES.items()
             ],
             "facts": [_payload(f) for f in facts],
+            "inactive_count": await count_inactive(session, user["id"]),
         }
     )
+
+
+@router.delete("/facts/inactive")
+async def delete_inactive_facts(
+    user: dict = Depends(current_user), session: AsyncSession = Depends(get_session)
+):
+    """Faz 13h2: kullanicinin kendi pasif bilgilerini KALICI siler (yas sarti yok;
+    kullanici onayi arayuzde). Yalniz bu kullanicinin kayitlari."""
+    deleted = await purge_inactive(
+        session, user["id"], datetime.now(UTC), older_than_days=None
+    )
+    return ok({"deleted": deleted})
 
 
 @router.post("/facts", status_code=201)

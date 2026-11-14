@@ -37,6 +37,8 @@ from app.db.models import (
 )
 from app.notify.base import Notification, Notifier, record_error
 from app.scheduler_rules import (
+    ALL_KINDS,
+    FACTS_PURGE,
     MORNING,
     NIGHT_PLAN,
     OVERDUE,
@@ -45,6 +47,7 @@ from app.scheduler_rules import (
     due_jobs,
 )
 from app.security import SecretError, decrypt
+from app.tools.memory_tools import purge_inactive
 from app.tools.privacy import PrivacyFilter
 from app.tools.task_api import TaskApiAuthError, TaskApiClient, TaskApiError
 
@@ -499,6 +502,10 @@ class Scheduler:
             return await build_night_plan(api, date.fromisoformat(key))
         if kind == WEEKLY:
             return await self._build_weekly(api, user, now_local.date())
+        if kind == FACTS_PURGE:  # Faz 13h2 (T11): bildirimsiz; sonuc detail'de
+            async with self.session_maker() as session:
+                n = await purge_inactive(session, user["id"], datetime.now(UTC))
+            return None, {"deleted": n}
         priv = await build_privacy(api)
         if kind == MORNING:
             return await build_morning(api, now_local.date(), tz, priv)
@@ -543,8 +550,19 @@ class Scheduler:
                 {"error": type(e).__name__, **_attempt_detail(attempt, now_utc)},
             )
 
+    async def _purge_only(self, user_id: int, now_utc: datetime) -> None:
+        """Bildirim kanali olmayan kullanici: yalniz hafiza temizligi (task-api'siz)."""
+        tz = ZoneInfo(DEFAULT_TZ)
+        now_local = now_utc.astimezone(tz)
+        cfg = SchedCfg(kinds={k: False for k in ALL_KINDS})
+        runs = await self._recent_runs(user_id, now_utc)
+        for kind, key in due_jobs(now_local, cfg, runs):
+            if kind == FACTS_PURGE:
+                await self.run_one(None, {"id": user_id}, tz, now_local, kind, key)  # type: ignore[arg-type]
+
     async def tick_user(self, user_id: int, token: str, now_utc: datetime) -> None:
         if not await self._has_channel(user_id):
+            await self._purge_only(user_id, now_utc)
             return
         api = self.api_factory(token)
         try:

@@ -98,7 +98,7 @@ function FactsSection() {
 
   if (facts.error) return <p className="text-red-700">{facts.error.message} (asistan servisi çalışıyor mu?)</p>
   if (!facts.data) return <p className="text-slate-500">Yükleniyor…</p>
-  const { categories, facts: list } = facts.data
+  const { categories, facts: list, inactive_count: inactive } = facts.data
 
   return (
     <section>
@@ -137,6 +137,20 @@ function FactsSection() {
           <Plus size={15} aria-hidden /> Ekle
         </button>
       </form>
+      <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3 text-[14px] text-slate-600">
+        <span>Pasif bilgiler: {inactive}</span>
+        <button
+          disabled={inactive === 0 || m.purgeInactive.isPending}
+          onClick={() =>
+            confirm(`${inactive} pasif bilgi kalıcı olarak silinecek; yedekten başka yerde geri alınamaz. Devam?`) &&
+            m.purgeInactive.mutate()
+          }
+          className="rounded-md border border-slate-300 px-3 py-1 text-sm text-red-700 hover:bg-slate-100 disabled:opacity-40"
+        >
+          Kalıcı sil
+        </button>
+        <span className="text-slate-500">Pasif kayıtlar 30 gün sonra zaten kendiliğinden silinir.</span>
+      </div>
     </section>
   )
 }

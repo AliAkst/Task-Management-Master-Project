@@ -754,3 +754,65 @@ async def test_morning_survives_missing_courses_endpoint(sched, api, tg):
     await sched.tick(utc(2026, 11, 10, 7, 35))  # FakeApi /learning/courses -> 404
     [text] = [t for t in tg.texts if t.startswith("Günaydın")]
     assert text.endswith("Bugün için plan yok.") and "📚" not in text
+
+
+# ---------------- Faz 13h2: haftalik hafiza temizligi ----------------
+async def _seed_facts(sched, now):
+    from app.db.models import UserFactEntity
+
+    old = now - timedelta(days=40)
+    async with sched.db() as s:
+        for content, active, upd in (
+            ("eski pasif", False, old),
+            ("yeni pasif", False, now - timedelta(days=3)),
+            ("eski ama aktif", True, old),
+        ):
+            s.add(
+                UserFactEntity(
+                    user_id=USER_ID, category="other", content=content,
+                    is_active=active, updated_at=upd,
+                )
+            )  # fmt: skip
+        await s.commit()
+
+
+async def _contents(sched) -> set[str]:
+    from app.db.models import UserFactEntity
+
+    async with sched.db() as s:
+        return {f.content for f in await s.scalars(select(UserFactEntity))}
+
+
+async def test_facts_purge_sunday_deletes_old_inactive_without_notification(
+    sched, api, tg
+):
+    now = utc(2026, 11, 15, 4, 0)  # Pazar 04:00
+    await _seed_facts(sched, now)
+    await sched.tick(now)
+    assert await _contents(sched) == {"yeni pasif", "eski ama aktif"}
+    assert tg.sent == []  # bildirim yok
+    rows = [r for r in await runs(sched) if r.kind == "facts_purge"]
+    assert len(rows) == 1 and rows[0].detail["deleted"] == 1
+    # ayni hafta tekrar calismaz
+    await _seed_facts(sched, now)
+    await sched.tick(now + timedelta(minutes=30))
+    assert "eski pasif" in await _contents(sched)  # tekrar silinmedi (ayni hafta)
+
+
+async def test_facts_purge_not_before_sunday_window(sched, api, tg):
+    now = utc(2026, 11, 14, 4, 0)  # Cumartesi
+    await _seed_facts(sched, now)
+    await sched.tick(now)
+    assert len(await _contents(sched)) == 3
+
+
+async def test_facts_purge_runs_without_notification_channel(sched, api, tg):
+    async with sched.db() as s:
+        row = await s.scalar(select(NotificationChannelEntity))
+        row.is_enabled = False
+        await s.commit()
+    now = utc(2026, 11, 15, 4, 0)
+    await _seed_facts(sched, now)
+    await sched.tick(now)
+    assert await _contents(sched) == {"yeni pasif", "eski ama aktif"}
+    assert api.requests == [] and tg.sent == []  # task-api'ye gidilmedi
