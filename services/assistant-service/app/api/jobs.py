@@ -27,7 +27,7 @@ from app.config import settings
 from app.db.models import AiActionEntity, AiJobEntity
 from app.llm.registry import cloud_label, is_local_model, parse_model_id
 from app.llm.types import LLMError
-from app.tools.task_api import TaskApiError
+from app.tools.task_api import TaskApiAuthError, TaskApiError
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -152,6 +152,13 @@ async def _execute(
             finished_at=datetime.now(UTC),
         )
         return True
+    except TaskApiAuthError:
+        await _set(
+            job_id,
+            status="failed",
+            error="AUTH_EXPIRED",
+            finished_at=datetime.now(UTC),
+        )
     except (TaskApiError, LLMError, ValueError) as e:
         await _set(
             job_id,

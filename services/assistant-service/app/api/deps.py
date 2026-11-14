@@ -1,5 +1,7 @@
 """Kimlik: gelen JWT task-api'ye sorulur (kendi kullanici tablosu yok)."""
 
+import base64
+import json
 import time
 from typing import Any
 
@@ -10,6 +12,19 @@ from app.config import settings
 
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 CACHE_SECONDS = 60
+
+
+def _cache_ttl(token: str) -> float:
+    """JWT'nin kendi `exp`'ini asmayan onbellek suresi (imza dogrulanmaz; yalniz sure)."""
+    if token.startswith("pat_"):
+        return CACHE_SECONDS
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        exp = float(json.loads(base64.urlsafe_b64decode(payload))["exp"])
+    except Exception:
+        return CACHE_SECONDS
+    return min(CACHE_SECONDS, exp - time.time())
 
 
 async def current_user(authorization: str | None = Header(None)) -> dict[str, Any]:
@@ -30,7 +45,9 @@ async def current_user(authorization: str | None = Header(None)) -> dict[str, An
     if res.status_code != 200:
         raise HTTPException(401, "Geçersiz ya da süresi dolmuş oturum")
     user = {**res.json()["data"], "token": token}
-    _CACHE[token] = (time.monotonic() + CACHE_SECONDS, user)
+    ttl = _cache_ttl(token)
+    if ttl > 0:
+        _CACHE[token] = (time.monotonic() + ttl, user)
     return user
 
 

@@ -4,6 +4,7 @@ import { Check } from 'lucide-react'
 import { api } from '../lib/api'
 import type { UserSettings, UserSettingsUpdate } from '../lib/types'
 import { usePermissions, useSetPermission, type Permission } from '../api/assistant'
+import ApiTokensSettings from '../components/ApiTokensSettings'
 import IntegrationsSettings from '../components/IntegrationsSettings'
 import ModelSettings from '../components/ModelSettings'
 import { PageHeader, Row, Segmented } from '../components/Page'
@@ -24,6 +25,7 @@ const SECTIONS = [
   { id: 'izinler', label: 'Asistan izinleri' },
   { id: 'ses', label: 'Ses' },
   { id: 'baglantilar', label: 'Bağlantılar' },
+  { id: 'anahtarlar', label: 'Erişim anahtarları' },
 ]
 
 /** AI'in hangi islemleri sormadan yapabilecegi: kullanici karar verir. */
@@ -243,6 +245,7 @@ export default function SettingsPage() {
           <AssistantPermissions />
           <VoiceSettings />
           <IntegrationsSettings />
+          <ApiTokensSettings />
         </div>
       </div>
     </div>

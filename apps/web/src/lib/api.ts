@@ -31,7 +31,41 @@ function formatDetail(detail: ValidationDetail[] | string | undefined): string |
   return detail.map((d) => `${d.loc[d.loc.length - 1]}: ${d.msg}`).join(' · ')
 }
 
-export async function tryRefresh(): Promise<boolean> {
+/** Eszamanli yenilemeler tek soz paylasir (donen refresh token iki kez harcanmasin). */
+let refreshing: Promise<boolean> | null = null
+
+export function tryRefresh(): Promise<boolean> {
+  if (!refreshing) {
+    refreshing = doRefresh().finally(() => {
+      refreshing = null
+    })
+  }
+  return refreshing
+}
+
+/** JWT'nin `exp` alani (saniye); cozulemezse null. Imza dogrulanmaz. */
+function tokenExp(token: string | null): number | null {
+  if (!token) return null
+  try {
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const json = JSON.parse(atob(part.padEnd(Math.ceil(part.length / 4) * 4, '=')))
+    return typeof json.exp === 'number' ? json.exp : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Uzun istek (asistan turu) baslamadan once: access token'in kalan omru
+ * `minSeconds`'dan azsa yenile. Yenilenemezse sessizce gecer; 401 yolu devreye girer.
+ */
+export async function ensureFreshToken(minSeconds = 1200): Promise<void> {
+  const exp = tokenExp(useAuthStore.getState().accessToken)
+  if (exp === null) return
+  if (exp - Date.now() / 1000 < minSeconds) await tryRefresh()
+}
+
+async function doRefresh(): Promise<boolean> {
   const { refreshToken, setTokens, logout } = useAuthStore.getState()
   if (!refreshToken) return false
   const res = await fetch(`${BASE}/auth/refresh`, {

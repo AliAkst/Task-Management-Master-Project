@@ -1,4 +1,5 @@
 from .activity import ActivityLogEntity
+from .api_token import ApiTokenEntity
 from .base import Base, TimestampMixin
 from .board import (
     BoardEntity,
@@ -25,6 +26,7 @@ from .user_settings import UserSettingsEntity
 
 __all__ = [
     "ActivityLogEntity",
+    "ApiTokenEntity",
     "Base",
     "BoardEntity",
     "BoardListEntity",

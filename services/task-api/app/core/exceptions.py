@@ -153,3 +153,41 @@ class NotFoundException(AppException):
 class ConflictException(AppException):
     def __init__(self, error_code: str, message: str):
         super().__init__(status_code=409, error_code=error_code, message=message)
+
+
+class PatForbiddenException(AppException):
+    """Bu islem erisim anahtariyla (PAT) yapilamaz (Faz 13b)."""
+
+    def __init__(self):
+        super().__init__(
+            status_code=403,
+            error_code="PAT_FORBIDDEN",
+            message="Bu işlem erişim anahtarıyla yapılamaz",
+        )
+
+
+class PatScopeException(AppException):
+    """PAT'in yazma kapsami yok (Faz 13b)."""
+
+    def __init__(self):
+        super().__init__(
+            status_code=403,
+            error_code="PAT_SCOPE",
+            message="Bu anahtarın yazma izni yok",
+        )
+
+
+class TooManyTokensException(AppException):
+    def __init__(self):
+        super().__init__(
+            status_code=409,
+            error_code="TOO_MANY_TOKENS",
+            message="En fazla 10 erişim anahtarı oluşturulabilir",
+        )
+
+
+class ApiTokenNotFoundException(AppException):
+    def __init__(self):
+        super().__init__(
+            status_code=404, error_code="TOKEN_NOT_FOUND", message="Anahtar bulunamadı"
+        )

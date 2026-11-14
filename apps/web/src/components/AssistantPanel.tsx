@@ -19,6 +19,7 @@ import { AlertTriangle, ChevronDown, Loader2, Lock, Search, Sparkles, X } from '
 import ActionCard from './ActionCard'
 import { DictationStatus, useMic } from './MicButton'
 import { insertDictated } from '../lib/dictation'
+import { tryRefresh } from '../lib/api'
 import { usePrefs } from '../stores/prefs'
 import { useAssistantUi } from '../stores/assistant'
 
@@ -206,10 +207,22 @@ export default function AssistantPanel() {
     const controller = new AbortController()
     abort.current = controller
     let convId = conversationId
+    // Oturum suresi (G3): AUTH_EXPIRED durum gecisleri
+    let resent = false // tek tekrar hakki kullanildi mi
+    let progressed = false // bu turda action / basarili arac geldi mi (tekrar guvenli degil)
+    let authExpired = false
     try {
+      for (;;) {
+      authExpired = false
       await streamChat(
-        { message, conversation_id: conversationId, model_id: manual, board_id: boardId, card_id: contextCardId },
+        { message, conversation_id: convId, model_id: manual, board_id: boardId, card_id: contextCardId, resend: resent },
         (e) => {
+          if (e.event === 'error' && e.data.code === 'AUTH_EXPIRED') {
+            authExpired = true
+            if (e.data.conversation_id) convId = e.data.conversation_id
+            return
+          }
+          if (e.event === 'action' || (e.event === 'tool_end' && e.data.ok)) progressed = true
           setLive((t) => {
             if (!t) return t
             switch (e.event) {
@@ -235,6 +248,22 @@ export default function AssistantPanel() {
         },
         controller.signal,
       )
+      if (!authExpired) break
+      if (resent) {
+        setLive((t) => (t ? { ...t, error: 'Oturum yenilenemedi; yeniden giriş yap.' } : t))
+        break
+      }
+      const refreshed = await tryRefresh() // false ise tryRefresh cikis yaptirdi (giris sayfasi)
+      if (!refreshed) break
+      if (progressed) {
+        setLive((t) =>
+          t ? { ...t, error: 'Oturum süresi doldu; yenilendi. İşlem yarıda kalmış olabilir — mesajı kontrol edip tekrar gönder.' } : t,
+        )
+        break
+      }
+      resent = true
+      setLive((t) => (t ? { ...t, text: '', tools: [], actions: [], notice: 'Oturum yenilendi, mesaj yeniden gönderildi.' } : t))
+      }
     } catch (err) {
       if (!controller.signal.aborted) {
         setLive((t) => (t ? { ...t, error: (err as Error).message } : t))

@@ -14,6 +14,7 @@ from app.core.exceptions import (
     AuthenticationException,
     InvalidTokenException,
     NotFoundException,
+    PatForbiddenException,
 )
 from app.core.security import decode_token
 from app.models.card import AttachmentResponse
@@ -104,6 +105,9 @@ async def download_attachment(
     Authorization basligi. Baskasinin eki 404.
     """
     if credentials is not None:
+        if credentials.credentials.startswith("pat_"):
+            # Erisim anahtari (PAT) dosya indiremez (Faz 13b)
+            raise PatForbiddenException()
         payload = decode_token(credentials.credentials)
         if (
             not payload

@@ -17,8 +17,23 @@ class TaskApiError(Exception):
         self.message = message
 
 
+class TaskApiAuthError(Exception):
+    """task-api 401 dondu (token suresi doldu). Bilerek TaskApiError'in alt sinifi
+    DEGIL: mevcut `except TaskApiError` yakalayicilari onu yutmasin (Faz 13b)."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
 class TaskApiClient:
-    def __init__(self, token: str, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(
+        self,
+        token: str,
+        transport: httpx.AsyncBaseTransport | None = None,
+        actor: str = "ai",
+    ):
+        self.actor = actor
         self.client = httpx.AsyncClient(
             base_url=settings.task_api_url,
             headers={"Authorization": f"Bearer {token}"},
@@ -34,8 +49,10 @@ class TaskApiClient:
         return await self._send("GET", path, params=clean)
 
     async def write(self, method: str, path: str, body: Any | None = None) -> Any:
-        """Yazma istegi. `X-Actor: ai`: task-api kaydi 'AI yapti' diye isaretler."""
-        return await self._send(method, path, json=body, headers={"X-Actor": "ai"})
+        """Yazma istegi. `X-Actor` (ai | mcp): task-api kaydi kimin yaptigini isaretler."""
+        return await self._send(
+            method, path, json=body, headers={"X-Actor": self.actor}
+        )
 
     async def post_read(self, path: str, body: Any) -> Any:
         """Yalnız okuyan POST (ör. parse-title): X-Actor yok, yazma sayılmaz."""
@@ -48,6 +65,8 @@ class TaskApiClient:
             raise TaskApiError(503, f"Görev servisine ulaşılamadı: {e}") from e
         if res.status_code == 204:
             return None
+        if res.status_code == 401:
+            raise TaskApiAuthError("Oturum süresi doldu")
         body = res.json() if res.content else {}
         if res.status_code >= 400 or not body.get("success", False):
             err = (body.get("error") or {}).get("message") or str(

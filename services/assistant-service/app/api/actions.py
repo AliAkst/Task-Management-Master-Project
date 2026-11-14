@@ -21,7 +21,7 @@ from app.api.deps import current_user, ok
 from app.db.models import AiActionEntity, get_session
 from app.tools.memory_tools import MemoryTools
 from app.tools.privacy import PrivacyFilter
-from app.tools.task_api import TaskApiError
+from app.tools.task_api import TaskApiAuthError, TaskApiError
 from app.tools.write_tools import (
     ACTION_TYPES,
     WriteTools,
@@ -106,6 +106,10 @@ async def approve(
         except TaskApiError as e:
             action.result = {"error": e.message}
             action.status = "failed"
+    except TaskApiAuthError as e:
+        # Eylem durumu degismedi (hala 'proposed'); web oturumu yenileyip tekrar dener
+        await session.rollback()
+        raise HTTPException(401, "Oturum süresi doldu") from e
     finally:
         await api.close()
     action.decided_at = datetime.now(UTC)

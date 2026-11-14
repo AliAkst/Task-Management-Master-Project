@@ -6,9 +6,11 @@ Kayit,Giris,Token yenileme ve profil bilgilerine erisim islemlerini yonetir.
 from fastapi import APIRouter, status
 from pydantic import BaseModel
 
-from app.api.dependencies import AuthServiceDep, CurrentUserDep
+from app.api.dependencies import AuthServiceDep, CurrentUserDep, UnitOfWorkDep
+from app.models.api_token import ApiTokenCreate, ApiTokenCreated, ApiTokenResponse
 from app.models.common import ApiResponse
 from app.models.user import TokenResponse, UserCreate, UserLogin, UserResponse
+from app.services.api_token import ApiTokenService
 
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -67,3 +69,43 @@ async def get_me(current_user: CurrentUserDep):
     """
     # CurrentUserDep zaten token'i cozup kullaniciyi DB'den bulup getiriyor.
     return ApiResponse(success=True, data=UserResponse.model_validate(current_user))
+
+
+@auth_router.post(
+    "/tokens",
+    response_model=ApiResponse[ApiTokenCreated],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_api_token(
+    data: ApiTokenCreate, current_user: CurrentUserDep, uow: UnitOfWorkDep
+):
+    """Kisisel erisim jetonu olusturur; duz metin yalniz bu yanitta doner (PAT ile cagrilamaz)."""
+    entity, token = await ApiTokenService(uow).create(current_user.id, data)
+    return ApiResponse(
+        success=True,
+        data=ApiTokenCreated(
+            id=entity.id,
+            name=entity.name,
+            token=token,
+            token_hint=entity.token_hint,
+            scopes=list(entity.scopes),
+            created_at=entity.created_at,
+            expires_at=entity.expires_at,
+        ),
+    )
+
+
+@auth_router.get("/tokens", response_model=ApiResponse[list[ApiTokenResponse]])
+async def list_api_tokens(current_user: CurrentUserDep, uow: UnitOfWorkDep):
+    """Iptal edilmemis jetonlar (hash/duz metin asla)."""
+    items = await ApiTokenService(uow).list(current_user.id)
+    return ApiResponse(
+        success=True, data=[ApiTokenResponse.model_validate(i) for i in items]
+    )
+
+
+@auth_router.delete("/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_api_token(
+    token_id: int, current_user: CurrentUserDep, uow: UnitOfWorkDep
+):
+    await ApiTokenService(uow).revoke(current_user.id, token_id)

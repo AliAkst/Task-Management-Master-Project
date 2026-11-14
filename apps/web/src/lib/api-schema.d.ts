@@ -76,6 +76,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/registration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Registration Status
+         * @description Kayit acik mi? Kimlik istemez (giris sayfasi buna bakar).
+         */
+        get: operations["registration_status_api_v1_auth_registration_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -132,6 +152,47 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Api Tokens
+         * @description Iptal edilmemis jetonlar (hash/duz metin asla).
+         */
+        get: operations["list_api_tokens_api_v1_auth_tokens_get"];
+        put?: never;
+        /**
+         * Create Api Token
+         * @description Kisisel erisim jetonu olusturur; duz metin yalniz bu yanitta doner (PAT ile cagrilamaz).
+         */
+        post: operations["create_api_token_api_v1_auth_tokens_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Api Token */
+        delete: operations["revoke_api_token_api_v1_auth_tokens__token_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1508,6 +1569,18 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[ApiTokenCreated] */
+        ApiResponse_ApiTokenCreated_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["ApiTokenCreated"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[AttachmentResponse] */
         ApiResponse_AttachmentResponse_: {
             /** Success */
@@ -1848,6 +1921,19 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[list[ApiTokenResponse]] */
+        ApiResponse_list_ApiTokenResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["ApiTokenResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[list[AttachmentResponse]] */
         ApiResponse_list_AttachmentResponse__: {
             /** Success */
@@ -1990,6 +2076,58 @@ export interface components {
              * Format: date-time
              */
             timestamp?: string;
+        };
+        /** ApiTokenCreate */
+        ApiTokenCreate: {
+            /** Name */
+            name: string;
+            /** Scopes */
+            scopes: ("read" | "write")[];
+            /** Expires In Days */
+            expires_in_days?: number | null;
+        };
+        /**
+         * ApiTokenCreated
+         * @description Olusturma yaniti: duz metin jeton yalniz burada, bir kez doner.
+         */
+        ApiTokenCreated: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Token */
+            token: string;
+            /** Token Hint */
+            token_hint: string;
+            /** Scopes */
+            scopes: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Expires At */
+            expires_at?: string | null;
+        };
+        /** ApiTokenResponse */
+        ApiTokenResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Token Hint */
+            token_hint: string;
+            /** Scopes */
+            scopes: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Used At */
+            last_used_at?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
         };
         /** AttachmentResponse */
         AttachmentResponse: {
@@ -3973,6 +4111,26 @@ export interface operations {
             };
         };
     };
+    registration_status_api_v1_auth_registration_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_dict_"];
+                };
+            };
+        };
+    };
     login_api_v1_auth_login_post: {
         parameters: {
             query?: never;
@@ -4055,6 +4213,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_UserResponse_"];
+                };
+            };
+        };
+    };
+    list_api_tokens_api_v1_auth_tokens_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_ApiTokenResponse__"];
+                };
+            };
+        };
+    };
+    create_api_token_api_v1_auth_tokens_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ApiTokenCreated_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_api_token_api_v1_auth_tokens__token_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

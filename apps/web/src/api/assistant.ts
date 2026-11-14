@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../lib/api'
+import { api, ensureFreshToken } from '../lib/api'
 import { useAuthStore } from '../stores/auth'
 
 export interface ModelOption {
@@ -93,18 +93,26 @@ export type StreamEvent =
   | { event: 'tool_end'; data: { id: string; name: string; ok: boolean } }
   | { event: 'action'; data: AiAction }
   | { event: 'done'; data: { conversation_id: number } }
-  | { event: 'error'; data: { message: string } }
+  | { event: 'error'; data: { message: string; code?: string; conversation_id?: number } }
 
 /**
  * Sohbet mesajini gonderir ve SSE olaylarini sirayla `onEvent`e verir.
  * (EventSource POST desteklemedigi icin fetch + stream okuyucu.)
  */
 export async function streamChat(
-  body: { message: string; conversation_id: number | null; model_id: string | null; board_id: number | null; card_id?: number | null },
+  body: {
+    message: string
+    conversation_id: number | null
+    model_id: string | null
+    board_id: number | null
+    card_id?: number | null
+    resend?: boolean
+  },
   onEvent: (e: StreamEvent) => void,
   signal: AbortSignal,
   retried = false,
 ): Promise<void> {
+  await ensureFreshToken() // uzun tur token suresi yuzunden yarida kalmasin
   const token = useAuthStore.getState().accessToken
   const res = await fetch(`/api/v1${BASE}/chat`, {
     method: 'POST',
@@ -361,7 +369,10 @@ export function useDayReviewJob(day: string, enabled = true) {
 export function useStartDayReview() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (day: string) => api<DayReviewJob>(`${BASE}/day-review/${day}`, { method: 'POST' }),
+    mutationFn: async (day: string) => {
+      await ensureFreshToken()
+      return api<DayReviewJob>(`${BASE}/day-review/${day}`, { method: 'POST' })
+    },
     onSuccess: (job) => qc.setQueryData(jobKey(job.date), job),
   })
 }
@@ -410,7 +421,10 @@ export function useInboxTriageJob(enabled = true) {
 export function useStartInboxTriage() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api<InboxTriageJob>(`${BASE}/inbox-triage`, { method: 'POST' }),
+    mutationFn: async () => {
+      await ensureFreshToken()
+      return api<InboxTriageJob>(`${BASE}/inbox-triage`, { method: 'POST' })
+    },
     onSuccess: (job) => qc.setQueryData(triageKey, job),
   })
 }

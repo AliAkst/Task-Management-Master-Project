@@ -3,6 +3,7 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.repositories.api_token import ApiTokenRepository
 from app.db.repositories.board import (
     BoardListRepository,
     BoardRepository,
@@ -96,6 +97,7 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.integration_accounts = IntegrationAccountRepository(session)
         self.external_links = ExternalLinkRepository(session)
         self.oauth_clients = OAuthClientRepository(session)
+        self.api_tokens = ApiTokenRepository(session)
     
     @with_db_retry
     async def commit(self):

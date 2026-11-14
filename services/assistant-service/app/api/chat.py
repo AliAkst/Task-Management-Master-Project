@@ -47,7 +47,7 @@ from app.llm.router import resolve_model
 from app.llm.types import LLMError, Msg, ToolCall
 from app.tools.memory_tools import MemoryTools, load_facts
 from app.tools.read_tools import ToolBox
-from app.tools.task_api import TaskApiClient, TaskApiError
+from app.tools.task_api import TaskApiAuthError, TaskApiClient, TaskApiError
 
 router = APIRouter()
 HISTORY_LIMIT = 40
@@ -61,6 +61,8 @@ class ChatRequest(BaseModel):
     model_id: str | None = None
     board_id: int | None = None  # kullanicinin o an baktigi board (varsa)
     card_id: int | None = None  # acik kart penceresi ("bu kart")
+    # Web AUTH_EXPIRED sonrasi ayni mesaji tekrar gonderir: kullanici satiri cogalmaz
+    resend: bool = False
 
 
 class TitleUpdate(BaseModel):
@@ -266,6 +268,8 @@ async def chat(data: ChatRequest, user: dict = Depends(current_user)):
                 board_id=data.board_id,
                 user_default=default,
             )
+        except TaskApiAuthError as e:
+            raise HTTPException(401, "Oturum süresi doldu") from e
         finally:
             await api.close()
         model_id = route.model_id
@@ -303,6 +307,7 @@ async def chat(data: ChatRequest, user: dict = Depends(current_user)):
             route.source,
             board_id=data.board_id,
             card_id=data.card_id,
+            resend=data.resend,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -318,6 +323,7 @@ async def _stream(
     model_source: str = "message",
     board_id: int | None = None,
     card_id: int | None = None,
+    resend: bool = False,
 ) -> AsyncIterator[str]:
     is_local = provider.info.is_local
     api = TaskApiClient(user["token"])
@@ -356,15 +362,41 @@ async def _stream(
                 api, toolbox, user, tz, provider.info.label, is_local, facts, focus
             )
 
-            user_row = MessageEntity(
-                conversation_id=conversation_id,
-                role="user",
-                content=text,
-                model_id=model_id,
-                is_local=is_local,
-            )
-            session.add(user_row)
-            await session.commit()
+            user_row = None
+            if resend:
+                # Onceki (AUTH_EXPIRED ile kesilen) tur ayni mesaji zaten kaydettiyse
+                # onu kullan; yenisini ekleme
+                # (Kesilen turun araci cagiran asistan satiri kullanicinin ardindan
+                # kalmis olabilir: tamamlanmis cevap yoksa tur yarim sayilir.)
+                last = await session.scalar(
+                    select(MessageEntity)
+                    .where(
+                        MessageEntity.conversation_id == conversation_id,
+                        MessageEntity.role == "user",
+                    )
+                    .order_by(MessageEntity.id.desc())
+                    .limit(1)
+                )
+                if last is not None and last.content == text:
+                    later = await session.scalars(
+                        select(MessageEntity).where(
+                            MessageEntity.conversation_id == conversation_id,
+                            MessageEntity.id > last.id,
+                            MessageEntity.role == "assistant",
+                        )
+                    )
+                    if not any(not m.tool_calls for m in later):
+                        user_row = last
+            if user_row is None:
+                user_row = MessageEntity(
+                    conversation_id=conversation_id,
+                    role="user",
+                    content=text,
+                    model_id=model_id,
+                    is_local=is_local,
+                )
+                session.add(user_row)
+                await session.commit()
             yield sse(
                 "start",
                 {
@@ -501,6 +533,16 @@ async def _stream(
                 conv.updated_at = datetime.now(UTC)
                 await session.commit()
             yield sse("done", {"conversation_id": conversation_id})
+    except TaskApiAuthError:
+        # Arac sonucu modele/kayda yazilmadi; web yeniler ve (uygunsa) tek tekrar yapar
+        yield sse(
+            "error",
+            {
+                "code": "AUTH_EXPIRED",
+                "message": "Oturum süresi doldu",
+                "conversation_id": conversation_id,
+            },
+        )
     except TaskApiError as e:
         yield sse("error", {"message": e.message})
     finally:

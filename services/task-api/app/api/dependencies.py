@@ -5,16 +5,23 @@ Servislerin olusturulmasi ve mevcut kullanicinin dogrulanmasi burada yapilir.
 
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ForbiddenException, InvalidTokenException
+from app.core.exceptions import (
+    ForbiddenException,
+    InvalidTokenException,
+    PatForbiddenException,
+    PatScopeException,
+)
+from app.core.pat_policy import is_forbidden, needs_write
 from app.core.security import decode_token
 from app.db.database import get_db_session
 from app.db.entities import UserEntity
 from app.db.repositories.user import UserRepository
 from app.db.unit_of_work import TaskUnitOfWork
+from app.services.api_token import PAT_PREFIX, ApiTokenService
 from app.services.auth import AuthService
 from app.services.board import BoardService
 from app.services.attachment import AttachmentService
@@ -59,11 +66,12 @@ async def get_user_settings_service(
 
 def get_actor(x_actor: str | None = Header(None)) -> str:
     """
-    Islemi kimin yaptigi: asistan servisi istekleri `X-Actor: ai` ile gonderir.
+    Islemi kimin yaptigi: asistan servisi `X-Actor: ai`, MCP sunucusu `X-Actor: mcp` gonderir.
     Sadece etiket (created_by / activity_log.actor); yetki vermez - kullanici
     zaten sadece kendi kayitlarina erisebilir.
     """
-    return "ai" if (x_actor or "").lower() == "ai" else "user"
+    value = (x_actor or "").lower()
+    return value if value in ("ai", "mcp") else "user"
 
 
 async def get_board_service(
@@ -124,7 +132,29 @@ async def get_auth_service(uow: TaskUnitOfWork = Depends(get_unit_of_work)):
     return AuthService(uow)
 
 
+async def _authenticate_pat(
+    request: Request, token: str, session: AsyncSession
+) -> UserEntity:
+    """Kisisel erisim jetonu yolu (Faz 13b): gecerlilik -> yasak yol -> kapsam."""
+    service = ApiTokenService(TaskUnitOfWork(session))
+    entity = await service.authenticate(token)
+    if entity is None:
+        raise InvalidTokenException()
+    user = await UserRepository(session).get_by_id(entity.user_id)
+    if not user:
+        raise InvalidTokenException()
+    method, path = request.method, request.url.path
+    if is_forbidden(method, path):
+        raise PatForbiddenException()
+    if needs_write(method, path) and "write" not in (entity.scopes or []):
+        raise PatScopeException()
+    await service.touch(entity)
+    request.state.auth_kind = "pat"
+    return user
+
+
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     session: AsyncSession = Depends(get_db_session),
 ) -> UserEntity:
@@ -142,6 +172,9 @@ async def get_current_user(
     """
     # token al ve decode et
     token = credentials.credentials
+    if token.startswith(PAT_PREFIX):
+        return await _authenticate_pat(request, token, session)
+    request.state.auth_kind = "jwt"
     payload = decode_token(token)
 
     # Token gecerlilik ve tip kontrolu
