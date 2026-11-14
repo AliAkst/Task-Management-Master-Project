@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -10,14 +12,27 @@ from app.api.facts import router as facts_router
 from app.api.insights import router as insights_router
 from app.api.jobs import recover_stale_jobs
 from app.api.jobs import router as jobs_router
+from app.api.notify import router as notify_router
 from app.api.providers import router as providers_router
 from app.config import settings
+from app.db.models import session_maker
+from app.notify.base import Notifier
+from app.scheduler import Scheduler, scheduler_loop
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await recover_stale_jobs()
-    yield
+    task = None
+    if settings.scheduler_enabled:
+        task = asyncio.create_task(scheduler_loop(Scheduler(session_maker, Notifier(session_maker))))
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
@@ -50,6 +65,7 @@ app.include_router(facts_router, prefix="/api/v1/assistant")
 app.include_router(providers_router, prefix="/api/v1/assistant")
 app.include_router(jobs_router, prefix="/api/v1/assistant")
 app.include_router(insights_router, prefix="/api/v1/assistant")
+app.include_router(notify_router, prefix="/api/v1/assistant")
 
 
 @app.get("/health")

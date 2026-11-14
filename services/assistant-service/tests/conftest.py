@@ -501,3 +501,11 @@ def test_secret_key(monkeypatch):
     security._fernet.cache_clear()
     yield
     security._fernet.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_scheduler(monkeypatch):
+    """Zamanlayici testlerde arka planda calismasin (Faz 13f)."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "scheduler_enabled", False)

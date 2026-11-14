@@ -7,6 +7,7 @@ import { usePermissions, useSetPermission, type Permission } from '../api/assist
 import ApiTokensSettings from '../components/ApiTokensSettings'
 import DayTemplatesSettings from '../components/DayTemplatesSettings'
 import IntegrationsSettings from '../components/IntegrationsSettings'
+import NotificationSettings from '../components/NotificationSettings'
 import ModelSettings from '../components/ModelSettings'
 import { PageHeader, Row, Segmented } from '../components/Page'
 import { usePrefs } from '../stores/prefs'
@@ -25,6 +26,7 @@ const SECTIONS = [
   { id: 'gorunum', label: 'Görünüm' },
   { id: 'model', label: 'Asistan modeli' },
   { id: 'izinler', label: 'Asistan izinleri' },
+  { id: 'bildirimler', label: 'Bildirimler' },
   { id: 'ses', label: 'Ses' },
   { id: 'baglantilar', label: 'Bağlantılar' },
   { id: 'anahtarlar', label: 'Erişim anahtarları' },
@@ -259,6 +261,7 @@ export default function SettingsPage() {
           <Appearance />
           <div id="model" className="scroll-mt-6"><ModelSettings /></div>
           <AssistantPermissions />
+          <NotificationSettings />
           <VoiceSettings />
           <IntegrationsSettings />
           <ApiTokensSettings />

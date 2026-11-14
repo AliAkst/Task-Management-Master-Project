@@ -115,7 +115,7 @@ export default function InsightsSection() {
         )}
         {job?.status === 'failed' && <p className="text-red-700">Analiz yapılamadı: {job.error}</p>}
         {analyze.error && <p className="text-red-700">{analyze.error.message}</p>}
-        {job?.status === 'done' && job.result && (
+        {(job?.status === 'done' || job?.status === 'skipped') && job.result && (
           <>
             {job.result.week_summary && <p className="max-w-prose text-[16px] text-slate-900">{job.result.week_summary}</p>}
             <p className="mt-1 text-[13px] text-slate-500">

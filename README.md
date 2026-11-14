@@ -19,7 +19,6 @@ Trello benzeri kanban panoları, takvim ve bir yapay zekâ asistanını tek uygu
 apps/web                  React 19 + Vite + TypeScript (TanStack Query, Zustand, Tailwind)   :5173
 services/task-api         FastAPI + SQLAlchemy + SQLite (Alembic)                            :8000
 services/assistant-service FastAPI, modelden bağımsız LLM katmanı (SSE sohbet)               :8100
-services/notification-service  RabbitMQ tüketicisi (opsiyonel)
 ```
 
 Frontend, `/api` isteklerini Vite proxy ile servislere yönlendirir. Docker gerekmez: task-api SQLite ile çalışır; Redis ve RabbitMQ yoksa önbellek ve olay bildirimleri devre dışı kalır, uygulama çalışmaya devam eder. (`infrastructure/docker/docker-compose.yml` isteğe bağlı PostgreSQL/Redis/RabbitMQ içindir.)
@@ -60,7 +59,11 @@ npm install
 npm run dev
 ```
 
-Ayrıntılar: [apps/web](apps/web/README.md), [assistant-service](services/assistant-service/README.md), [notification-service](services/notification-service/README.md).
+Ayrıntılar: [apps/web](apps/web/README.md), [assistant-service](services/assistant-service/README.md).
+
+## Bildirimler
+
+Bildirimler assistant-service içindeki zamanlayıcıdan Telegram botu ve Windows bildirimiyle gönderilir (gece plan hatırlatması, sabah özeti, geciken kartlar, haftalık değerlendirme); bilgisayar kapalı ya da uykudayken bildirim gitmez (bulut sunucu yok). Kurulum: Ayarlar → Bildirimler. Windows oturumu açılınca servislerin tarayıcısız başlaması için `scripts/install-tasks.ps1 -Logon`.
 
 ## Yapılandırma
 

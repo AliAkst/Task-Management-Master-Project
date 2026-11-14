@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Video } from 'lucide-react'
 import { localDay, shiftDay, useDayPlan } from '../api/dayPlans'
+import { useBrowserRemindersOff } from '../api/notify'
 import { api } from '../lib/api'
 import type { CalendarItem, UserSettings } from '../lib/types'
 import { safeHttpsUrl } from './EventDialog'
@@ -65,6 +66,8 @@ function notifyOnce(key: string, title: string, body: string) {
 
 export default function Reminders() {
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<UserSettings>('/settings/') })
+  // Sunucu bildirimi (Telegram / Windows) varken tarayici bildirimi cift olmasin (Faz 13f)
+  const browserOff = useBrowserRemindersOff()
   const [now, setNow] = useState(() => new Date())
   const [, force] = useState(0)
 
@@ -122,7 +125,7 @@ export default function Reminders() {
   }
 
   const visible = banners.filter((b) => !storageGet(`dismissed:${b.key}`))
-  visible.forEach((b) => notifyOnce(b.key, 'Yaşam Planlayıcı', b.text))
+  if (!browserOff) visible.forEach((b) => notifyOnce(b.key, 'Yaşam Planlayıcı', b.text))
   if (visible.length === 0) return null
 
   return (

@@ -46,5 +46,11 @@ class Settings(BaseSettings):
     memory_extraction: bool = True
     llm_timeout_seconds: float = 300.0
 
+    # --- Proaktif bildirimler (Faz 13f) ---
+    # Sunucu zamanlayicisi (gece plani / sabah / geciken / haftalik); testlerde kapali
+    scheduler_enabled: bool = True
+    scheduler_first_delay_seconds: float = 30.0
+    scheduler_interval_seconds: float = 60.0
+
 
 settings = Settings()

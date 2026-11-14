@@ -333,7 +333,7 @@ export interface DayReviewPlanItem {
 export interface DayReviewJob {
   id: number
   date: string
-  status: 'queued' | 'running' | 'done' | 'failed'
+  status: 'queued' | 'running' | 'done' | 'failed' | 'skipped'
   model_id: string
   model_label: string
   is_local: boolean

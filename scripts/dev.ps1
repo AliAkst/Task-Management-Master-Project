@@ -8,8 +8,8 @@
      event'ler devre disi kalir (uygulama yine calisir - graceful degradation).
   2. task-api migration'larini uygular ve 8000 portunda baslatir.
   3. assistant-service'i (AI) 8100 portunda baslatir (Ollama gerekir).
-  4. RabbitMQ ayaktaysa notification-service consumer'ini baslatir.
-  5. Frontend'i (Vite) 5173 portunda baslatir.
+  4. Frontend'i (Vite) 5173 portunda baslatir.
+  Bildirimler (Telegram / Windows) assistant-service icindeki zamanlayicidan gider.
 
 .EXAMPLE
   ./scripts/dev.ps1
@@ -22,7 +22,6 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $taskApi = Join-Path $root "services/task-api"
-$notification = Join-Path $root "services/notification-service"
 $web = Join-Path $root "apps/web"
 $assistant = Join-Path $root "services/assistant-service"
 
@@ -59,16 +58,6 @@ $jobs += Start-Process -PassThru -NoNewWindow -WorkingDirectory $assistant `
     -FilePath "uv" -ArgumentList "run", "uvicorn", "app.main:app", "--reload", "--port", "8100"
 if (-not (Test-Command "ollama")) {
     Write-Host "Ollama bulunamadi: local modeller calismaz (https://ollama.com)." -ForegroundColor Yellow
-}
-
-$rabbitUp = $false
-try { $rabbitUp = (Test-NetConnection localhost -Port 5672 -WarningAction SilentlyContinue).TcpTestSucceeded } catch {}
-if ($rabbitUp) {
-    Write-Host "notification-service consumer baslatiliyor" -ForegroundColor Green
-    $jobs += Start-Process -PassThru -NoNewWindow -WorkingDirectory $notification `
-        -FilePath "uv" -ArgumentList "run", "python", "-m", "app.consumer"
-} else {
-    Write-Host "RabbitMQ yok: notification-service atlandi." -ForegroundColor Yellow
 }
 
 if (-not (Test-Path (Join-Path $web "node_modules"))) {

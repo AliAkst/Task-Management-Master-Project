@@ -234,6 +234,85 @@ class AiInsightEntity(Base):
     decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
+class NotificationChannelEntity(Base):
+    """
+    Bildirim kanali (Faz 13f). kind: telegram | toast. config_encrypted: Fernet ile
+    sifreli JSON ({bot_token, chat_id}); API yanitlarinda asla geri donmez.
+    """
+
+    __tablename__ = "notification_channels"
+    __table_args__ = (UniqueConstraint("user_id", "kind"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    config_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), default=_now, onupdate=_now
+    )
+
+
+DEFAULT_NOTIFY_KINDS: dict[str, bool] = {
+    "night_plan": True,
+    "morning": True,
+    "overdue": True,
+    "weekly": True,
+}
+
+
+def _default_kinds() -> dict[str, bool]:
+    return dict(DEFAULT_NOTIFY_KINDS)
+
+
+class NotificationSettingsEntity(Base):
+    """Kullanici basina bildirim tercihleri (hangi is turleri, tarayici bildirimi)."""
+
+    __tablename__ = "notification_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, unique=True)
+    kinds: Mapped[dict[str, bool]] = mapped_column(JSON, default=_default_kinds)
+    browser_reminders_off: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), default=_now, onupdate=_now
+    )
+
+
+class ScheduledRunEntity(Base):
+    """
+    Zamanlayicinin calisma kaydi. unique(user, kind, period_key): ayni periyotta
+    ikinci gonderim olmaz (servis yeniden baslasa da). status: sent | skipped | failed
+    """
+
+    __tablename__ = "scheduled_runs"
+    __table_args__ = (UniqueConstraint("user_id", "kind", "period_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(30))
+    period_key: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(10))
+    detail: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class ServiceCredentialEntity(Base):
+    """Zamanlayicinin task-api'ye girdigi okuma kapsamli PAT (Fernet ile sifreli)."""
+
+    __tablename__ = "service_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, unique=True)
+    token_encrypted: Mapped[str] = mapped_column(Text)
+    token_id: Mapped[int] = mapped_column(Integer)  # task-api PAT id (iptal icin)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
 engine = create_async_engine(settings.database_url)
 session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

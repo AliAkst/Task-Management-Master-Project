@@ -1,7 +1,9 @@
 <#
 .SYNOPSIS
   start-app.ps1 ile baslatilan Ajanda servislerini durdurur (8000, 8100, 5173).
-  Ollama'ya dokunmaz.
+  Arka plan modunda (start-app.ps1 -Background) acilanlar da ayni mantikla durur
+  (web calismiyorsa 5173 atlanir). Ollama'ya dokunmaz.
+  Not: servisler durunca bildirim zamanlayicisi da durur.
 #>
 foreach ($port in 8000, 8100, 5173) {
     $owners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |

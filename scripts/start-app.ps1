@@ -9,7 +9,11 @@
   - Ollama kapaliysa baslatir (local modeller icin).
   - Kayitlar: scripts/logs/*.log. Durdurmak icin: scripts/stop-app.ps1
   - Masaustu kisayolu: scripts/install-shortcut.ps1
+  - -Background: oturum acilisinda (Baslangic kisayolu, install-tasks.ps1 -Logon)
+    task-api + asistan + Ollama baslar; web (5173) ve tarayici BASLATILMAZ.
+    Asistanin zamanlayicisi (Telegram/Windows bildirimi) tarayicisiz calisir.
 #>
+param([switch]$Background)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $logs = Join-Path $PSScriptRoot "logs"
@@ -131,7 +135,7 @@ if (-not (Test-Port 8100)) {
     Invoke-Migration "assistant" $assistant
     Start-Hidden "assistant" $uv @("run", "uvicorn", "app.main:app", "--port", "8100") $assistant
 }
-if (-not (Test-Port 5173)) {
+if ((-not $Background) -and (-not (Test-Port 5173))) {
     if (-not (Test-Path (Join-Path $web "node_modules"))) {
         Start-Process -Wait -WindowStyle Hidden -FilePath $npm -ArgumentList "install" -WorkingDirectory $web | Out-Null
     }
@@ -139,10 +143,11 @@ if (-not (Test-Port 5173)) {
 }
 
 # Hazir olana kadar bekle (en fazla ~90 sn), sonra tarayicida ac
-foreach ($p in 8000, 8100, 5173) {
+$ports = if ($Background) { @(8000, 8100) } else { @(8000, 8100, 5173) }
+foreach ($p in $ports) {
     for ($i = 0; $i -lt 90 -and -not (Test-Port $p); $i++) { Start-Sleep -Seconds 1 }
 }
-$down = @(8000, 8100, 5173 | Where-Object { -not (Test-Port $_) })
+$down = @($ports | Where-Object { -not (Test-Port $_) })
 if ($down.Count) { throw "Su portlar acilmadi: $($down -join ', '). Kayitlar: $logs" }
-Start-Process "http://localhost:5173"
+if (-not $Background) { Start-Process "http://localhost:5173" }
 Stop-Transcript | Out-Null

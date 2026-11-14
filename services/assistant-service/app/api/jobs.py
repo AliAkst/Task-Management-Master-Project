@@ -36,6 +36,8 @@ WEEKLY = "weekly_insight"
 INBOX = "inbox_triage"
 WEEKLY_EVERY = timedelta(days=7)
 ACTIVE = ("queued", "running")
+# Haftalik kilidi yalniz bunlar tutar; failed/skipped (bos sonuc) tutmaz
+WEEKLY_LOCKING = ("queued", "running", "done")
 RESTART_ERROR = "Servis yeniden başladı; iş yarım kaldı. Yeniden başlatabilirsin."
 
 _LOCK = asyncio.Lock()  # isler sirayla: buyuk model bir kez yuklensin
@@ -144,9 +146,11 @@ async def _execute(
                 day=day,
                 tz=tz,
             )
+        # Hic icgoru uretmeyen haftalik is 7 gun kilitlemesin (Faz 13f G2)
+        empty_weekly = kind == WEEKLY and not result.get("insight_ids")
         await _set(
             job_id,
-            status="done",
+            status="skipped" if empty_weekly else "done",
             result=result,
             action_id=action_id,
             finished_at=datetime.now(UTC),
@@ -187,7 +191,7 @@ async def _weekly_due(user_id: int, day: date, model_id: str) -> int | None:
             .where(
                 AiJobEntity.user_id == user_id,
                 AiJobEntity.kind == WEEKLY,
-                AiJobEntity.status != "failed",
+                AiJobEntity.status.in_(WEEKLY_LOCKING),
                 AiJobEntity.created_at >= datetime.now(UTC) - WEEKLY_EVERY,
             )
             .limit(1)
@@ -216,6 +220,43 @@ async def run_job(
             weekly_id = await _weekly_due(user["id"], day, model_id)
             if weekly_id is not None:
                 await _execute(weekly_id, WEEKLY, user, model_id, day)
+
+
+async def run_weekly_for_scheduler(user: dict[str, Any], day: date):
+    """Zamanlayici (Faz 13f): haftalik analizi sirayla calistirir, bildirimi dondurur.
+
+    Ayni `_weekly_due` kilidi ve `_LOCK` kullanilir: gun sonu sonrasi otomatik
+    tetikle ayni haftada cift is acilmaz. Bildirimi atlanacaksa None.
+    """
+    from app.notify.base import Notification
+
+    title = "Haftalık değerlendirme"
+    async with chat_module.session_maker() as session:
+        installed = {m.id for m in await chat_module.list_local_models()}
+        model_id = await user_background_model(session, user["id"], installed)
+    if is_local_model(model_id) and model_id not in installed:
+        return Notification(
+            "weekly", title, "Haftalık değerlendirme yapılamadı: yerel model kapalı."
+        )
+    job_id = await _weekly_due(user["id"], day, model_id)
+    if job_id is None:
+        return None  # bu hafta zaten (gun sonu tetigiyle) calisti
+    async with _LOCK:
+        await _execute(job_id, WEEKLY, user, model_id, day)
+    async with chat_module.session_maker() as session:
+        job = await session.get(AiJobEntity, job_id)
+    if job is None or job.status == "skipped":
+        return None
+    if job.status == "done":
+        n = len((job.result or {}).get("insight_ids", []))
+        return Notification(
+            "weekly",
+            title,
+            f"Haftalık değerlendirmen hazır: {n} içgörü — İstatistik sayfasında.",
+        )
+    return Notification(
+        "weekly", title, "Haftalık değerlendirme yapılamadı: yerel model kapalı."
+    )
 
 
 def _spawn(
