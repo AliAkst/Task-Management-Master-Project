@@ -48,6 +48,7 @@ export function useDayPlanMutations(day: string) {
     qc.invalidateQueries({ queryKey: ['board'] })
     qc.invalidateQueries({ queryKey: ['boards'] })
     qc.invalidateQueries({ queryKey: ['card'] })
+    qc.invalidateQueries({ queryKey: ['calendar'] }) // takvim ogelerinin card_status'u (D8)
   }
   const json = (body: unknown) => ({ body: JSON.stringify(body) })
   return {

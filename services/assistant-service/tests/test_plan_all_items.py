@@ -267,3 +267,67 @@ async def test_plan_day_weak_or_other_day_ignored(fake_api, task_api_transport):
         "plan_day", {"date": day.isoformat(), "items": [{"title": "Annemi ara 15'te"}]}
     )
     assert p.args["items"][0] == {"title": "Annemi ara 15'te"}
+
+
+# ---- Faz 12 denetim duzeltmeleri ----
+async def test_schedule_reviewed_day_rejects_untimed_blocks(fake_api):
+    """D2: degerlendirilmis gunde saatsiz kartsiz blok plana yazilamaz -> hazirlikta hata."""
+    import pytest
+
+    day = _tomorrow()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path.endswith(f"/day-plans/{day}"):
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "data": {"date": str(day), "status": "reviewed", "items": []},
+                },
+            )
+        return fake_api(request)
+
+    writer = _writer(httpx.MockTransport(handler))
+    with pytest.raises(ValueError, match="değerlendirildi"):
+        await writer.prepare(
+            "schedule_day",
+            {"day": day.isoformat(), "blocks": [{"title": "Market", "card": False}]},
+        )
+    # saatli blok hala takvime yazilabilir
+    prepared = await writer.prepare(
+        "schedule_day",
+        {
+            "day": day.isoformat(),
+            "blocks": [{"title": "Fatura", "start": "10:00", "minutes": 15, "card": False}],
+        },
+    )
+    assert prepared.action_type == "schedule_day"
+
+
+async def test_schedule_all_events_fail_new_cards_still_planned(fake_api):
+    """D6: tum etkinlik yazimlari duserse acilan kart yine de plana girer."""
+    import pytest
+
+    from app.tools.task_api import TaskApiError
+
+    day = _tomorrow()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path.endswith("/events"):
+            return httpx.Response(
+                422, json={"success": False, "error": {"message": "etkinlik hatası"}}
+            )
+        return fake_api(request)
+
+    writer = _writer(httpx.MockTransport(handler))
+    prepared = await writer.prepare(
+        "schedule_day",
+        {
+            "day": day.isoformat(),
+            "blocks": [{"title": "Rapor", "start": "10:00", "minutes": 30, "card": True}],
+        },
+    )
+    with pytest.raises(TaskApiError):
+        await writer.execute(prepared.action_type, prepared.args)
+    puts = [w for w in fake_api.writes if w["method"] == "PUT"]
+    assert puts and puts[0]["body"]["items"] == [{"card_id": 100}]

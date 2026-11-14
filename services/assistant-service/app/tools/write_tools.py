@@ -1144,6 +1144,17 @@ class WriteTools:
         if target < datetime.now(self.tz).date():
             raise ValueError(f"{_fmt_day(target)} geçmişte kaldı; ileri bir gün ver")
         timeline = build_timeline(blocks if isinstance(blocks, list) else [])
+        # Faz 12 denetim D2: degerlendirilmis gunun plani degismez; saatsiz kartsiz
+        # blok yalniz plana yazilabildiginden sessizce kaybolmasin, bastan reddet.
+        untimed_free = [b.title for b in timeline if b.start is None and not b.card]
+        if untimed_free:
+            plan = await self.api.get(f"/day-plans/{target.isoformat()}")
+            if plan.get("status") == "reviewed":
+                raise ValueError(
+                    f"{_fmt_day(target)} değerlendirildi; planı değiştirilemez, "
+                    f"saatsiz maddeler eklenemez: {', '.join(untimed_free)}. "
+                    "Saat vererek takvime ekleyebilirsin."
+                )
         await self._check_calendar_conflicts(target, timeline)
         boards = [
             b
@@ -1493,6 +1504,11 @@ class WriteTools:
             except TaskApiError as err:
                 failed.append({"title": b["title"], "error": err.message})
         if not done:
+            if entries:  # Faz 12 denetim D6: acilan kartlar plana yine de girsin
+                try:
+                    await self.execute("plan_day", {"date": day, "items": entries})
+                except TaskApiError:
+                    pass
             raise TaskApiError(
                 422, failed[0]["error"] if failed else "Hiçbir blok yazılamadı"
             )

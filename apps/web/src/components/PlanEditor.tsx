@@ -86,9 +86,10 @@ interface RowProps {
   onMenu: (open: boolean) => void
   onToCard: (boardId: number) => void
   onMove: () => void
+  moveLabel: string
 }
 
-function PlanRow({ d, color, dirty, menuOpen, boards, busy, error, onToggleDone, onMinutes, onRemove, onMenu, onToCard, onMove }: RowProps) {
+function PlanRow({ d, color, dirty, menuOpen, boards, busy, error, onToggleDone, onMinutes, onRemove, onMenu, onToCard, onMove, moveLabel }: RowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: d.key })
   const [convert, setConvert] = useState(false)
   const [boardId, setBoardId] = useState<number | null>(d.board_id ?? boards[0]?.id ?? null)
@@ -208,18 +209,20 @@ function PlanRow({ d, color, dirty, menuOpen, boards, busy, error, onToggleDone,
                       Karta dönüştür
                     </button>
                   )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={menuItem}
-                    disabled={locked || busy}
-                    onClick={() => {
-                      if (d.event_id != null && !confirm('Takvimdeki etkinlik yerinde kalır. Madde yarının planına taşınsın mı?')) return
-                      onMove()
-                    }}
-                  >
-                    Yarına taşı
-                  </button>
+                  {!done && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={menuItem}
+                      disabled={locked || busy}
+                      onClick={() => {
+                        if (d.event_id != null && !confirm('Takvimdeki etkinlik yerinde kalır. Madde taşınsın mı?')) return
+                        onMove()
+                      }}
+                    >
+                      {moveLabel}
+                    </button>
+                  )}
                   {locked && <p className="px-2 pb-1 text-[12px] text-slate-500">Önce planı kaydet</p>}
                 </>
               )}
@@ -247,6 +250,10 @@ export default function PlanEditor({
   boards: Map<number, BoardWithCounts>
 }) {
   const m = useDayPlanMutations(day)
+  // Gecmis gune tasima 422 verir (D7): hedef en erken bugun
+  const today = localDay()
+  const moveTarget = shiftDay(day, 1) < today ? today : shiftDay(day, 1)
+  const moveLabel = moveTarget === today ? 'Bugüne taşı' : moveTarget === shiftDay(today, 1) ? 'Yarına taşı' : 'Sonraki güne taşı'
   const qc = useQueryClient()
   const [draft, setDraft] = useState<Draft[]>([])
   const [free, setFree] = useState('')
@@ -255,6 +262,8 @@ export default function PlanEditor({
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [rowError, setRowError] = useState<{ key: string; msg: string } | null>(null)
   const dirtyRef = useRef(false)
+  // Kirli taslakta kullanicinin bu oturumda cikardigi sunucu satirlari (D1)
+  const removedIds = useRef(new Set<number>())
   const busyRef = useRef(false)
   const seq = useRef(0)
   const setDirty = (v: boolean) => {
@@ -266,6 +275,7 @@ export default function PlanEditor({
   useEffect(() => {
     const items = plan.items.filter((i) => i.was_planned)
     if (!dirtyRef.current) {
+      removedIds.current.clear()
       setDraft(
         items.map((i) => ({
           key: `i${i.id}`,
@@ -284,12 +294,30 @@ export default function PlanEditor({
       return
     }
     const byId = new Map(items.map((i) => [i.id, i]))
-    setDraft((cur) =>
-      cur.map((d) => {
+    setDraft((cur) => {
+      const known = new Set(cur.map((d) => d.id).filter((x): x is number => x != null))
+      const refreshed = cur.map((d) => {
         const s = d.id != null ? byId.get(d.id) : undefined
         return s ? { ...d, outcome: s.outcome, card_status: s.card_status ?? null } : d
-      }),
-    )
+      })
+      // Baska yerden (asistan, takvim) eklenen satirlar taslakta yoksa kaydetmede silinirdi (D1)
+      const added: Draft[] = items
+        .filter((i) => !known.has(i.id) && !removedIds.current.has(i.id))
+        .map((i) => ({
+          key: `i${i.id}`,
+          id: i.id,
+          card_id: i.card_id,
+          event_id: i.event_id,
+          title: i.title,
+          board_id: i.board_id,
+          planned_minutes: i.planned_minutes,
+          planned_start: i.planned_start,
+          outcome: i.outcome,
+          card_status: i.card_status ?? null,
+          hint: i.planned_start ? timeFmt.format(new Date(i.planned_start)) : undefined,
+        }))
+      return added.length ? [...refreshed, ...added] : refreshed
+    })
   }, [plan])
 
   const inDraft = useMemo(() => new Set(draft.map((d) => refOf(d))), [draft])
@@ -320,6 +348,7 @@ export default function PlanEditor({
     const ref = refOf(s)
     if (inDraft.has(ref)) {
       const first = draft.find((x) => refOf(x) === ref)
+      if (first?.id != null) removedIds.current.add(first.id)
       return update((d) => d.filter((x) => x !== first))
     }
     update((d) => [
@@ -389,7 +418,12 @@ export default function PlanEditor({
         planned_minutes: d.planned_minutes,
         ...(d.planned_start != null && d.event_id == null ? { planned_start: d.planned_start } : {}),
       })),
-      { onSuccess: () => setDirty(false) },
+      {
+        onSuccess: () => {
+          removedIds.current.clear()
+          setDirty(false)
+        },
+      },
     )
   }
 
@@ -458,15 +492,19 @@ export default function PlanEditor({
                     if (d.id != null) m.patchItem.mutate({ id: d.id, body: { done: checked } }, { onError: fail(d.key) })
                   }}
                   onMinutes={(v) => update((all) => all.map((x) => (x.key === d.key ? { ...x, planned_minutes: v } : x)))}
-                  onRemove={() => update((all) => all.filter((x) => x.key !== d.key))}
+                  onRemove={() => {
+                    if (d.id != null) removedIds.current.add(d.id)
+                    update((all) => all.filter((x) => x.key !== d.key))
+                  }}
                   onToCard={(board_id) => {
                     setRowError(null)
                     if (d.id != null) m.toCard.mutate({ id: d.id, body: { board_id } }, { onSuccess: () => setOpenMenu(null), onError: fail(d.key) })
                   }}
+                  moveLabel={moveLabel}
                   onMove={() => {
                     setOpenMenu(null)
                     setRowError(null)
-                    if (d.id != null) m.moveItem.mutate({ id: d.id, body: { date: shiftDay(day, 1) } }, { onError: fail(d.key) })
+                    if (d.id != null) m.moveItem.mutate({ id: d.id, body: { date: moveTarget } }, { onError: fail(d.key) })
                   }}
                 />
               ))}

@@ -404,3 +404,15 @@ class TestSuggestions:
             if s["kind"] == "carry_over"
         ]
         assert carry[0]["already_planned"] is True
+
+
+class TestAuditFixesFaz12:
+    async def test_move_done_item_rejected(self, client, auth_headers):
+        """D3: tamamlanmis madde tasinirsa outcome kaybolurdu -> 422."""
+        plan = await save_plan(client, auth_headers, [{"title": "X"}], day=T)
+        a = plan["items"][0]["id"]
+        await patch_item(client, auth_headers, a, {"done": True})
+        await move(client, auth_headers, a, {}, expect=422)
+        # tamamlanmamis hala tasinabilir
+        await patch_item(client, auth_headers, a, {"done": False})
+        await move(client, auth_headers, a, {}, expect=200)

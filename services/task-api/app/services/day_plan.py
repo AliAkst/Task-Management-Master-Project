@@ -790,6 +790,8 @@ class DayPlanService:
             raise NotFoundException("DayPlanItem", item_id)
         if not item.was_planned:
             raise ValidationException("Yalnız planlanmış madde taşınabilir")
+        if item.outcome == ItemOutcome.DONE:
+            raise ValidationException("Tamamlanmış madde taşınamaz")
         source = await self.uow.day_plans.get_by_id(item.day_plan_id)
         if source.status == DayPlanStatus.REVIEWED:
             raise ConflictException(
