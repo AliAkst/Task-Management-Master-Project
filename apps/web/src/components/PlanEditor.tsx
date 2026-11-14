@@ -1,9 +1,22 @@
-import { Check, Hourglass, Play, Plus, Square, X } from 'lucide-react'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { useDayPlanMutations } from '../api/dayPlans'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { useQueryClient } from '@tanstack/react-query'
+import { Check, GripVertical, Hourglass, MoreHorizontal, Play, Plus, Square, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { parseTitleNow } from '../api/boards'
+import { localDay, shiftDay, useDayPlanMutations } from '../api/dayPlans'
 import { useActiveSession, useSessionMutations } from '../api/sessions'
 import { formatDuration } from '../lib/format'
-import type { BoardWithCounts, DayPlan, PlanSuggestion } from '../lib/types'
+import type { BoardWithCounts, DayPlan, DayPlanItem, PlanSuggestion } from '../lib/types'
 
 /** Plan maddesindeki kart icin kronometre: istedigin an basla / durdur. */
 function PlayButton({ cardId, title }: { cardId: number; title: string }) {
@@ -26,12 +39,17 @@ function PlayButton({ cardId, title }: { cardId: number; title: string }) {
 /** Plandaki bir madde (kaydedilmeden onceki taslak). */
 interface Draft {
   key: string
+  id: number | null
   card_id: number | null
   event_id: number | null
   title: string
   board_id: number | null
   planned_minutes: number | null
+  planned_start: string | null
+  outcome: DayPlanItem['outcome'] | null
+  card_status: DayPlanItem['card_status'] | null
   hint?: string
+  warn?: boolean
 }
 
 const KIND_LABEL: Record<PlanSuggestion['kind'], string> = {
@@ -44,10 +62,178 @@ const KIND_LABEL: Record<PlanSuggestion['kind'], string> = {
   worked: 'Üzerinde çalışılan',
 }
 
-const keyOf = (s: { card_id: number | null; event_id: number | null; title: string }) =>
-  s.event_id != null ? `e${s.event_id}` : s.card_id != null ? `c${s.card_id}` : `t${s.title}`
+/** Oneri <-> taslak eslestirmesi icin referans (satir anahtari degil). */
+const refOf = (s: { card_id?: number | null; event_id?: number | null; title: string }) =>
+  s.event_id != null ? `e${s.event_id}` : s.card_id != null ? `c${s.card_id}` : `t${s.title.trim().toLocaleLowerCase('tr')}`
+
+const isDone = (d: Draft) => d.outcome === 'done' || d.card_status === 'completed'
+
+const hideUntilHover = 'opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100'
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' })
+
+interface RowProps {
+  d: Draft
+  color?: string
+  dirty: boolean
+  menuOpen: boolean
+  boards: BoardWithCounts[]
+  busy: boolean
+  error?: string
+  onToggleDone: (checked: boolean) => void
+  onMinutes: (v: number | null) => void
+  onRemove: () => void
+  onMenu: (open: boolean) => void
+  onToCard: (boardId: number) => void
+  onMove: () => void
+}
+
+function PlanRow({ d, color, dirty, menuOpen, boards, busy, error, onToggleDone, onMinutes, onRemove, onMenu, onToCard, onMove }: RowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: d.key })
+  const [convert, setConvert] = useState(false)
+  const [boardId, setBoardId] = useState<number | null>(d.board_id ?? boards[0]?.id ?? null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const onMenuRef = useRef(onMenu)
+  onMenuRef.current = onMenu
+  const saved = d.id != null
+  const done = isDone(d)
+
+  useEffect(() => {
+    if (!menuOpen) {
+      setConvert(false)
+      return
+    }
+    const onDoc = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onMenuRef.current(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onMenuRef.current(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
+
+  const menuItem = 'w-full rounded px-2 py-1.5 text-left text-[14px] hover:bg-slate-100 disabled:opacity-50'
+  const locked = !saved || dirty
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`group relative py-2 text-[15px] ${isDragging ? 'opacity-60' : ''}`}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`${d.title} sırasını değiştir`}
+          className={`cursor-grab rounded p-0.5 text-slate-400 hover:text-slate-700 ${hideUntilHover}`}
+        >
+          <GripVertical size={14} aria-hidden />
+        </button>
+        <input
+          type="checkbox"
+          className="size-4 accent-green-700"
+          aria-label={`${d.title} tamamlandı`}
+          checked={done}
+          disabled={!saved || busy}
+          title={saved ? undefined : 'Önce planı kaydet'}
+          onChange={(e) => onToggleDone(e.target.checked)}
+        />
+        <span aria-hidden className="h-5 w-1 shrink-0 rounded-full" style={{ backgroundColor: color ?? 'var(--color-slate-300)' }} />
+        <span className={`flex-1 ${done ? 'text-slate-500 line-through' : ''}`}>
+          {d.title}
+          {d.warn && (
+            <span className="ml-2 rounded bg-amber-100 px-1.5 text-[12px] text-amber-900" title="Başlıkta başka bir gün geçiyor; madde bu günün planında">
+              başlıkta başka gün
+            </span>
+          )}
+        </span>
+        {d.card_id != null && <PlayButton cardId={d.card_id} title={d.title} />}
+        {d.hint && <span className="text-[13px] text-slate-500">{d.hint}</span>}
+        <input
+          type="number"
+          min={0}
+          step={5}
+          title="Planlanan dakika"
+          aria-label={`${d.title} için planlanan dakika`}
+          className="w-16 rounded border border-slate-300 bg-surface px-1.5 py-0.5 text-right text-[13px] tabular-nums"
+          value={d.planned_minutes ?? ''}
+          placeholder="dk"
+          onChange={(e) => onMinutes(e.target.value === '' ? null : Number(e.target.value))}
+        />
+        <div className="relative" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => onMenu(!menuOpen)}
+            aria-label={`${d.title} için işlemler`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className={`rounded p-0.5 text-slate-400 hover:text-slate-900 ${hideUntilHover}`}
+          >
+            <MoreHorizontal size={16} aria-hidden />
+          </button>
+          {menuOpen && (
+            <div role="menu" className="absolute right-0 z-10 mt-1 w-56 rounded-md border border-slate-200 bg-surface p-1 shadow-md">
+              {convert ? (
+                <div className="flex items-center gap-1 p-1">
+                  <select
+                    aria-label="Board"
+                    className="min-w-0 flex-1 rounded border border-slate-300 bg-surface px-1 py-1 text-[13px]"
+                    value={boardId ?? ''}
+                    onChange={(e) => setBoardId(Number(e.target.value))}
+                  >
+                    {boards.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={boardId == null || busy}
+                    onClick={() => boardId != null && onToCard(boardId)}
+                    className="rounded bg-slate-900 px-2 py-1 text-[13px] text-on-ink disabled:opacity-50"
+                  >
+                    Dönüştür
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {d.card_id == null && boards.length > 0 && (
+                    <button type="button" role="menuitem" className={menuItem} disabled={locked} onClick={() => setConvert(true)}>
+                      Karta dönüştür
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={menuItem}
+                    disabled={locked || busy}
+                    onClick={() => {
+                      if (d.event_id != null && !confirm('Takvimdeki etkinlik yerinde kalır. Madde yarının planına taşınsın mı?')) return
+                      onMove()
+                    }}
+                  >
+                    Yarına taşı
+                  </button>
+                  {locked && <p className="px-2 pb-1 text-[12px] text-slate-500">Önce planı kaydet</p>}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <button onClick={onRemove} className="rounded p-0.5 text-slate-400 hover:text-red-700" aria-label={`${d.title} plandan çıkar`}>
+          <X size={15} aria-hidden />
+        </button>
+      </div>
+      {error && <p className="mt-1 pl-8 text-[13px] text-red-700">{error}</p>}
+    </li>
+  )
+}
 
 export default function PlanEditor({
   day,
@@ -61,71 +247,153 @@ export default function PlanEditor({
   boards: Map<number, BoardWithCounts>
 }) {
   const m = useDayPlanMutations(day)
+  const qc = useQueryClient()
   const [draft, setDraft] = useState<Draft[]>([])
   const [free, setFree] = useState('')
-  const [dirty, setDirty] = useState(false)
+  const [freeBusy, setFreeBusy] = useState(false)
+  const [dirty, setDirtyState] = useState(false)
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const [rowError, setRowError] = useState<{ key: string; msg: string } | null>(null)
+  const dirtyRef = useRef(false)
+  const busyRef = useRef(false)
+  const seq = useRef(0)
+  const setDirty = (v: boolean) => {
+    dirtyRef.current = v
+    setDirtyState(v)
+  }
 
-  // Sunucudaki plan degisince taslagi ondan kur
+  // Sunucudaki plan degisince: temizse taslagi bastan kur; kirliyse yalniz durum alanlarini tazele
   useEffect(() => {
-    setDraft(
-      plan.items
-        .filter((i) => i.was_planned)
-        .map((i) => ({
-          key: keyOf(i),
+    const items = plan.items.filter((i) => i.was_planned)
+    if (!dirtyRef.current) {
+      setDraft(
+        items.map((i) => ({
+          key: `i${i.id}`,
+          id: i.id,
           card_id: i.card_id,
           event_id: i.event_id,
           title: i.title,
           board_id: i.board_id,
           planned_minutes: i.planned_minutes,
+          planned_start: i.planned_start,
+          outcome: i.outcome,
+          card_status: i.card_status ?? null,
           hint: i.planned_start ? timeFmt.format(new Date(i.planned_start)) : undefined,
         })),
+      )
+      return
+    }
+    const byId = new Map(items.map((i) => [i.id, i]))
+    setDraft((cur) =>
+      cur.map((d) => {
+        const s = d.id != null ? byId.get(d.id) : undefined
+        return s ? { ...d, outcome: s.outcome, card_status: s.card_status ?? null } : d
+      }),
     )
-    setDirty(false)
   }, [plan])
 
-  const inDraft = useMemo(() => new Set(draft.map((d) => d.key)), [draft])
+  const inDraft = useMemo(() => new Set(draft.map((d) => refOf(d))), [draft])
   const total = draft.reduce((s, d) => s + (d.planned_minutes ?? 0), 0)
+  const activeBoards = useMemo(() => [...boards.values()].filter((b) => !b.is_archived), [boards])
 
   const update = (fn: (d: Draft[]) => Draft[]) => {
     setDraft(fn)
     setDirty(true)
   }
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    update((d) => {
+      const from = d.findIndex((x) => x.key === active.id)
+      const to = d.findIndex((x) => x.key === over.id)
+      return from < 0 || to < 0 ? d : arrayMove(d, from, to)
+    })
+  }
+
   function toggle(s: PlanSuggestion) {
-    const key = keyOf(s)
-    if (inDraft.has(key)) return update((d) => d.filter((x) => x.key !== key))
+    const ref = refOf(s)
+    if (inDraft.has(ref)) {
+      const first = draft.find((x) => refOf(x) === ref)
+      return update((d) => d.filter((x) => x !== first))
+    }
     update((d) => [
       ...d,
       {
-        key,
-        card_id: s.card_id,
-        event_id: s.event_id,
+        key: `n${++seq.current}`,
+        id: null,
+        card_id: s.card_id ?? null,
+        event_id: s.event_id ?? null,
         title: s.title,
-        board_id: s.board_id,
-        planned_minutes: s.planned_minutes,
+        board_id: s.board_id ?? null,
+        planned_minutes: s.planned_minutes ?? null,
+        planned_start: s.planned_start ?? null,
+        outcome: null,
+        card_status: null,
         hint: s.planned_start ? timeFmt.format(new Date(s.planned_start)) : undefined,
       },
     ])
   }
 
-  function addFree(e: FormEvent) {
+  async function addFree(e: FormEvent) {
     e.preventDefault()
-    const title = free.trim()
-    if (!title) return
-    update((d) => [...d, { key: `t${title}${Date.now()}`, card_id: null, event_id: null, title, board_id: null, planned_minutes: null }])
-    setFree('')
+    const raw = free.trim()
+    if (!raw || busyRef.current) return
+    busyRef.current = true
+    setFreeBusy(true)
+    try {
+      let title = raw
+      let minutes: number | null = null
+      let start: string | null = null
+      let hint: string | undefined
+      let warn = false
+      const mt = await parseTitleNow(qc, raw)
+      if (mt && mt.strong) {
+        if (!mt.due_date) {
+          title = mt.clean_title || raw
+          minutes = mt.estimated_minutes ?? null
+        } else if (localDay(new Date(mt.due_date)) === day) {
+          title = mt.clean_title || raw
+          if (mt.has_time) {
+            start = mt.due_date
+            hint = timeFmt.format(new Date(mt.due_date))
+          }
+          minutes = mt.estimated_minutes ?? null
+        } else {
+          warn = true
+        }
+      }
+      update((d) => [
+        ...d,
+        { key: `n${++seq.current}`, id: null, card_id: null, event_id: null, title, board_id: null, planned_minutes: minutes, planned_start: start, outcome: null, card_status: null, hint, warn },
+      ])
+      setFree('')
+    } finally {
+      busyRef.current = false
+      setFreeBusy(false)
+    }
   }
 
   function save() {
     m.save.mutate(
       draft.map((d) => ({
+        id: d.id,
         card_id: d.card_id,
         event_id: d.event_id,
         title: d.card_id == null && d.event_id == null ? d.title : null,
         planned_minutes: d.planned_minutes,
+        ...(d.planned_start != null && d.event_id == null ? { planned_start: d.planned_start } : {}),
       })),
+      { onSuccess: () => setDirty(false) },
     )
   }
+
+  const fail = (key: string) => (err: Error) => setRowError({ key, msg: err.message })
 
   const grouped = (Object.keys(KIND_LABEL) as PlanSuggestion['kind'][])
     .map((kind) => ({ kind, items: suggestions.filter((s) => s.kind === kind) }))
@@ -142,10 +410,10 @@ export default function PlanEditor({
             <h3 className="mb-1 text-[14px] font-semibold text-slate-700">{KIND_LABEL[g.kind]}</h3>
             <ul className="space-y-1">
               {g.items.map((s) => {
-                const on = inDraft.has(keyOf(s))
+                const on = inDraft.has(refOf(s))
                 const board = s.board_id != null ? boards.get(s.board_id) : undefined
                 return (
-                  <li key={keyOf(s)}>
+                  <li key={`${refOf(s)}-${s.kind}`}>
                     <button
                       onClick={() => toggle(s)}
                       aria-pressed={on}
@@ -171,35 +439,44 @@ export default function PlanEditor({
           <h2 className="text-[22px]">Planın</h2>
           <span className="text-[14px] text-slate-600 tabular-nums">{draft.length} madde, {formatDuration(total * 60)}</span>
         </div>
-        <ul className="divide-y divide-slate-200 border-y border-slate-200">
-          {draft.map((d) => (
-            <li key={d.key} className="group flex items-center gap-2 py-2 text-[15px]">
-              <span aria-hidden className="h-5 w-1 shrink-0 rounded-full" style={{ backgroundColor: d.board_id != null ? boards.get(d.board_id)?.color : 'var(--color-slate-300)' }} />
-              <span className="flex-1">{d.title}</span>
-              {d.card_id != null && <PlayButton cardId={d.card_id} title={d.title} />}
-              {d.hint && <span className="text-[13px] text-slate-500">{d.hint}</span>}
-              <input
-                type="number"
-                min={0}
-                step={5}
-                title="Planlanan dakika"
-                aria-label={`${d.title} için planlanan dakika`}
-                className="w-16 rounded border border-slate-300 bg-surface px-1.5 py-0.5 text-right text-[13px] tabular-nums"
-                value={d.planned_minutes ?? ''}
-                placeholder="dk"
-                onChange={(e) => {
-                  const v = e.target.value === '' ? null : Number(e.target.value)
-                  update((all) => all.map((x) => (x.key === d.key ? { ...x, planned_minutes: v } : x)))
-                }}
-              />
-              <button onClick={() => update((all) => all.filter((x) => x.key !== d.key))} className="rounded p-0.5 text-slate-400 hover:text-red-700" aria-label={`${d.title} plandan çıkar`}><X size={15} aria-hidden /></button>
-            </li>
-          ))}
-        </ul>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={draft.map((d) => d.key)} strategy={verticalListSortingStrategy}>
+            <ul className="divide-y divide-slate-200 border-y border-slate-200">
+              {draft.map((d) => (
+                <PlanRow
+                  key={d.key}
+                  d={d}
+                  color={d.board_id != null ? boards.get(d.board_id)?.color : undefined}
+                  dirty={dirty}
+                  menuOpen={openMenu === d.key}
+                  onMenu={(open) => setOpenMenu(open ? d.key : null)}
+                  boards={activeBoards}
+                  busy={m.patchItem.isPending || m.toCard.isPending || m.moveItem.isPending}
+                  error={rowError?.key === d.key ? rowError.msg : undefined}
+                  onToggleDone={(checked) => {
+                    setRowError(null)
+                    if (d.id != null) m.patchItem.mutate({ id: d.id, body: { done: checked } }, { onError: fail(d.key) })
+                  }}
+                  onMinutes={(v) => update((all) => all.map((x) => (x.key === d.key ? { ...x, planned_minutes: v } : x)))}
+                  onRemove={() => update((all) => all.filter((x) => x.key !== d.key))}
+                  onToCard={(board_id) => {
+                    setRowError(null)
+                    if (d.id != null) m.toCard.mutate({ id: d.id, body: { board_id } }, { onSuccess: () => setOpenMenu(null), onError: fail(d.key) })
+                  }}
+                  onMove={() => {
+                    setOpenMenu(null)
+                    setRowError(null)
+                    if (d.id != null) m.moveItem.mutate({ id: d.id, body: { date: shiftDay(day, 1) } }, { onError: fail(d.key) })
+                  }}
+                />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
         {draft.length === 0 && <p className="py-3 text-[15px] text-slate-500">Henüz madde yok. Önerilerden ekle ya da aşağıya yaz.</p>}
         <form onSubmit={addFree} className="mt-2 flex items-center gap-2 border-b border-slate-200 pb-2">
           <Plus size={16} className="text-slate-400" aria-hidden />
-          <input className="flex-1 bg-transparent py-1 text-[15px] placeholder:text-slate-400 focus:outline-none" maxLength={200} aria-label="Karta bağlı olmayan madde" placeholder="Karta bağlı olmayan bir madde yaz" value={free} onChange={(e) => setFree(e.target.value)} />
+          <input className="flex-1 bg-transparent py-1 text-[15px] placeholder:text-slate-400 focus:outline-none" maxLength={200} aria-label="Karta bağlı olmayan madde" placeholder="Karta bağlı olmayan bir madde yaz" value={free} readOnly={freeBusy} aria-busy={freeBusy} onChange={(e) => setFree(e.target.value)} />
         </form>
         <div className="mt-4 flex items-center justify-end gap-3">
           {m.save.isSuccess && !dirty && <span className="text-[14px] text-green-700">Plan kaydedildi</span>}

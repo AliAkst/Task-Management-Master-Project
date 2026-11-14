@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import type { AnalyticsSummary, DayPlan, DayReview, PlanItemInput, PlanSuggestion } from '../lib/types'
+import type { AnalyticsSummary, DayPlan, DayPlanItemPatch, DayReview, ItemMove, ItemToCard, PlanItemInput, PlanSuggestion } from '../lib/types'
 
 export const dayKeys = {
   all: ['day'] as const,
@@ -56,6 +56,30 @@ export function useDayPlanMutations(day: string) {
         api<DayPlan>(`/day-plans/${day}`, { method: 'PUT', ...json({ items }) }),
       onSuccess: (plan) => {
         qc.setQueryData(dayKeys.plan(day), plan)
+        refresh()
+      },
+    }),
+    patchItem: useMutation({
+      mutationFn: ({ id, body }: { id: number; body: DayPlanItemPatch }) =>
+        api<DayPlan>(`/day-plan-items/${id}`, { method: 'PATCH', ...json(body) }),
+      onSuccess: (plan) => {
+        qc.setQueryData(dayKeys.plan(plan.date), plan)
+        refresh()
+      },
+    }),
+    toCard: useMutation({
+      mutationFn: ({ id, body }: { id: number; body: ItemToCard }) =>
+        api<DayPlan>(`/day-plan-items/${id}/to-card`, { method: 'POST', ...json(body) }),
+      onSuccess: (plan) => {
+        qc.setQueryData(dayKeys.plan(plan.date), plan)
+        refresh()
+      },
+    }),
+    moveItem: useMutation({
+      mutationFn: ({ id, body }: { id: number; body: ItemMove }) =>
+        api<DayPlan>(`/day-plan-items/${id}/move`, { method: 'POST', ...json(body) }),
+      onSuccess: (plan) => {
+        qc.setQueryData(dayKeys.plan(plan.date), plan)
         refresh()
       },
     }),
