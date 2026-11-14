@@ -51,6 +51,7 @@ def action_payload(a: AiActionEntity) -> dict[str, Any]:
         "action_type": a.action_type,
         "summary": a.summary,
         "status": a.status,
+        "args": a.args,
         "result": a.result,
         "user_feedback": a.user_feedback,
     }

@@ -8,6 +8,22 @@ const STATUS: Record<AiAction['status'], { label: string; cls: string }> = {
   failed: { label: '⚠️ Başarısız', cls: 'bg-red-100 text-red-700' },
 }
 
+const DAY_ACTIONS = new Set(['schedule_day', 'plan_day', 'cancel_day'])
+const DAY_FMT = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })
+
+/** Plan islemlerinde kartin en ustundeki belirgin tarih: "Cumartesi 14 Kasım" + bugün/yarın/n gün sonra. */
+function dayHeading(action: AiAction, now: Date = new Date()): { label: string; badge: string; rolled: boolean } | null {
+  const raw = action.args?.date
+  if (!DAY_ACTIONS.has(action.action_type) || typeof raw !== 'string') return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
+  if (!m) return null
+  const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000)
+  const badge = diff === 0 ? 'bugün' : diff === 1 ? 'yarın' : diff > 1 ? `${diff} gün sonra` : `${-diff} gün önce`
+  return { label: DAY_FMT.format(day), badge, rolled: action.args?.day_rolled === true }
+}
+
 /** Madde madde onaylanan islemlerde (Gelen Kutusu dagitimi) tek tek cikarilabilen satir. */
 export interface ActionItem {
   id: number
@@ -37,6 +53,7 @@ export default function ActionCard({ action, items }: { action: AiAction; items?
   const remaining = items ? items.length - skipped.size : 0
   // Madde listesi varken ozetin ilk satiri baslik; maddeler asagida ayri gosterilir
   const summary = items?.length ? current.summary.split('\n')[0] : current.summary
+  const heading = dayHeading(current)
   const result = current.result as { moved?: unknown[]; skipped?: unknown[]; failed?: unknown[] } | null
 
   function toggle(id: number) {
@@ -50,6 +67,17 @@ export default function ActionCard({ action, items }: { action: AiAction; items?
 
   return (
     <div className={`rounded-xl border bg-surface p-2.5 text-sm ${proposed ? 'border-amber-300' : 'border-slate-200'}`}>
+      {heading && (
+        <div className="mb-1.5">
+          <p className="flex items-center gap-2">
+            <span className="text-base font-semibold">📅 {heading.label}</span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{heading.badge}</span>
+          </p>
+          {heading.rolled && (
+            <p className="text-[11px] text-slate-500">Saat 04:00'ten önce söylenen "yarın" bu gün sayıldı.</p>
+          )}
+        </div>
+      )}
       <div className="flex items-start gap-2">
         <span className="flex-1 whitespace-pre-line">{summary}</span>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${status.cls}`}>{status.label}</span>

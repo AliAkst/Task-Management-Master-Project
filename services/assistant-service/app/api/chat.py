@@ -24,6 +24,8 @@ from app.agent.day_planner import (
     plan_day,
     question_event,
 )
+from app.agent.fmt import fmt_day_long
+from app.agent.guard import TurnFacts, check_reply
 from app.agent.loop import AgentEvent, run_agent
 from app.agent.memory_extractor import (
     CHAT_HIDDEN_TOOLS,
@@ -551,11 +553,12 @@ async def _stream(
                     return
                 if planned is not None:
                     reply = (
-                        f"Planı hazırladım ({planner.info.label}). Onay kartından "
+                        f"{_plan_day_prefix(planned)}planını hazırladım "
+                        f"({planner.info.label}). Onay kartından "
                         "saatleri kontrol et: onaylarsan özetteki YENİ kartlar açılır, var olan kartlar "
                         "kullanılır; hepsi takvime ve kartlar günün planına eklenir. Bir "
                         "şey yanlışsa nedenini yazarak reddet, düzelteyim."
-                    )
+                    ) + await _rollover_note(toolbox, planned)
                     for out in await _say(
                         session,
                         conversation_id,
@@ -581,13 +584,15 @@ async def _stream(
             msgs = [Msg("system", system), *map(to_msg, history), Msg("user", text)]
             used_memory_tool = False
             used_action_tool = False  # komut turu (kart/plan...) -> hafiza adimi yok
+            facts_pending = 0  # Faz 13e: bu turdaki onay bekleyen / yapilmis yazmalar
+            facts_executed = 0
+            last_reply_row: MessageEntity | None = None  # araç çağrısız son asistan metni
             async for ev in run_agent(
                 provider, msgs, toolbox, max_rounds=settings.max_tool_rounds
             ):
                 if ev.type == "message" and ev.message is not None:
                     m = ev.message
-                    session.add(
-                        MessageEntity(
+                    row = MessageEntity(
                             conversation_id=conversation_id,
                             role=m.role,
                             content=m.content,
@@ -603,8 +608,10 @@ async def _stream(
                             is_local=is_local,
                             tokens_in=ev.usage.prompt_tokens if ev.usage else None,
                             tokens_out=ev.usage.completion_tokens if ev.usage else None,
-                        )
                     )
+                    session.add(row)
+                    if m.role == "assistant" and not m.tool_calls:
+                        last_reply_row = row
                     await session.commit()
                 elif ev.type == "error":
                     yield sse("error", ev.data)
@@ -614,7 +621,22 @@ async def _stream(
                         used_memory_tool = True
                     if ev.type == "action":
                         used_action_tool = True
+                        if ev.data.get("status") == "proposed":
+                            facts_pending += 1
+                        elif ev.data.get("status") == "executed":
+                            facts_executed += 1
                     yield sse(ev.type, ev.data)
+
+            # Faz 13e: "ekledim/yaptim" iddiasi gercekle celisiyorsa balonun altina uyari
+            if last_reply_row is not None:
+                warning = check_reply(
+                    last_reply_row.content or "",
+                    TurnFacts(facts_pending, facts_executed),
+                )
+                if warning:
+                    last_reply_row.content = f"{last_reply_row.content}\n\n{warning}"
+                    await session.commit()
+                    yield sse("guard", {"text": warning})
 
             # Sohbet modeli hafizaya dokunmadiysa: ayri, odakli hafiza cikarimi
             if (
@@ -644,6 +666,25 @@ async def _stream(
         yield sse("error", {"message": e.message})
     finally:
         await api.close()
+
+
+def _plan_day_prefix(planned: dict[str, Any]) -> str:
+    """'Cumartesi 14 Kasım ' (tarih bilinmiyorsa 'Günün ') — cümle başı."""
+    try:
+        d = date.fromisoformat((planned.get("args") or {})["date"])
+    except (KeyError, ValueError, TypeError):
+        return "Günün "
+    return f"{fmt_day_long(d)} "
+
+
+async def _rollover_note(toolbox: ToolBox, planned: dict[str, Any]) -> str:
+    args = planned.get("args") or {}
+    if not args.get("day_rolled"):
+        return ""
+    now_local, _ = await toolbox.writer._planning()
+    raw = str(args.get("day_raw") or "yarın").strip()
+    day = fmt_day_long(date.fromisoformat(args["date"]))
+    return f' (Saat {now_local:%H:%M}; "{raw}"ı {day} olarak aldım.)'
 
 
 async def _single_event(ev: AgentEvent) -> AsyncIterator[AgentEvent]:

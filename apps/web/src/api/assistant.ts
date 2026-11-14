@@ -21,6 +21,8 @@ export interface AiAction {
   action_type: string
   summary: string
   status: 'proposed' | 'executed' | 'rejected' | 'failed'
+  /** Islem argumanlari (ör. schedule_day: date, day_rolled) */
+  args?: Record<string, unknown> | null
   result: Record<string, unknown> | null
   user_feedback: string | null
 }
@@ -92,6 +94,7 @@ export type StreamEvent =
   | { event: 'tool_start'; data: { id: string; name: string; arguments: Record<string, unknown> } }
   | { event: 'tool_end'; data: { id: string; name: string; ok: boolean } }
   | { event: 'action'; data: AiAction }
+  | { event: 'guard'; data: { text: string } }
   | { event: 'done'; data: { conversation_id: number } }
   | { event: 'error'; data: { message: string; code?: string; conversation_id?: number } }
 

@@ -425,3 +425,35 @@ async def test_plan_day_warns_when_total_exceeds_free_time(fake_api, task_api_tr
         {"date": day.isoformat(), "items": [{"title": "Küçük iş", "planned_minutes": 60}]},
     )
     assert "⚠" not in ok.summary
+
+
+# ---------------------------------------------------------------- Faz 13e: tarih cevapta
+async def test_focused_reply_names_the_planned_date(client, fake_api):
+    from app.agent.fmt import fmt_day_long
+
+    client.providers["fake:local"] = FakeProvider(
+        [[call("schedule_day", day="yarın", items=[{"title": "Spor", "minutes": 30, "card": False}])]]
+    )
+    events, _ = await say(client, "Yarın günümü planla")
+    reply = tokens(events)
+    assert reply.startswith(f"{fmt_day_long(tomorrow())} planını hazırladım (Fake).")
+    assert "Onay kartından saatleri kontrol et" in reply
+    assert "olarak aldım" not in reply  # gün dönümü yok
+
+
+async def test_focused_reply_has_rollover_note_only_when_rolled(
+    client, fake_api, monkeypatch
+):
+    sat_0030 = datetime(2026, 11, 14, 0, 30, tzinfo=TZ)
+
+    async def fixed_planning(self):
+        return sat_0030, ROLLOVER
+
+    monkeypatch.setattr(WriteTools, "_planning", fixed_planning)
+    client.providers["fake:local"] = FakeProvider(
+        [[call("schedule_day", day="yarın", items=[{"title": "Spor", "minutes": 30, "card": False}])]]
+    )
+    events, _ = await say(client, "Yarın günümü planla")
+    reply = tokens(events)
+    assert reply.startswith("Cumartesi 14 Kasım planını hazırladım")
+    assert reply.endswith('(Saat 00:30; "yarın"ı Cumartesi 14 Kasım olarak aldım.)')

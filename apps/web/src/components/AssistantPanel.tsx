@@ -29,6 +29,7 @@ interface LiveTurn {
   tools: { id: string; name: string; done: boolean; ok: boolean }[]
   actions: AiAction[]
   notice?: string
+  guard?: string
   error?: string
 }
 
@@ -239,6 +240,8 @@ export default function AssistantPanel() {
                 return { ...t, tools: t.tools.map((x) => (x.id === e.data.id ? { ...x, done: true, ok: e.data.ok } : x)) }
               case 'action':
                 return { ...t, actions: [...t.actions, e.data] }
+              case 'guard':
+                return { ...t, guard: e.data.text } // ayni tur icin yalniz sonuncusu
               case 'error':
                 return { ...t, error: e.data.message }
               default:
@@ -262,7 +265,7 @@ export default function AssistantPanel() {
         break
       }
       resent = true
-      setLive((t) => (t ? { ...t, text: '', tools: [], actions: [], notice: 'Oturum yenilendi, mesaj yeniden gönderildi.' } : t))
+      setLive((t) => (t ? { ...t, text: '', tools: [], actions: [], guard: undefined, notice: 'Oturum yenilendi, mesaj yeniden gönderildi.' } : t))
       }
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -365,6 +368,12 @@ export default function AssistantPanel() {
                 </div>
               ) : (
                 !live.error && <p className="text-xs text-slate-400">{current?.is_local ? 'Local model düşünüyor… (ilk mesajda model belleğe yükleniyor)' : 'Düşünüyor…'}</p>
+              )}
+              {live.guard && !live.error && (
+                <p role="status" className="mt-1 flex gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                  <AlertTriangle size={12} className="mt-0.5 shrink-0" aria-hidden />
+                  {live.guard}
+                </p>
               )}
               <Actions items={live.actions} />
               {live.error && <p className="mt-1 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{live.error}</p>}

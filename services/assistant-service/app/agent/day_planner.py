@@ -183,7 +183,13 @@ async def _outcome(
     elif result.ok and result.action is not None:
         yield AgentEvent("tool_end", {"name": "schedule_day", "ok": True})
         yield AgentEvent("action", result.action)
-        yield AgentEvent("planned", {"summary": result.action["summary"]})
+        yield AgentEvent(
+            "planned",
+            {
+                "summary": result.action["summary"],
+                "args": result.action.get("args") or {},
+            },
+        )
 
 
 async def apply_answer(

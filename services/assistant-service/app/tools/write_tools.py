@@ -1288,6 +1288,16 @@ class WriteTools:
         )
         if target < today:
             raise ValueError(f"{_fmt_day(target)} geçmişte kaldı; ileri bir gün ver")
+        if not rolled and isinstance(_day_raw, str) and _day_raw != str(day):
+            # Faz 13e: gun metinden kodla zorlandiysa (ISO), modelin "yarin"i de ayni
+            # gune gun donumuyle cozuluyorsa kart/cevap not dusebilsin
+            try:
+                raw_target, raw_rolled = resolve_day_ex(
+                    _day_raw, today, now_local=now_local, rollover=rollover
+                )
+                rolled = raw_rolled and raw_target == target
+            except ValueError:
+                pass
         # Faz 12 denetim D2: degerlendirilmis gunun plani degismez
         plan = await self.api.get(f"/day-plans/{target.isoformat()}")
         reviewed = plan.get("status") == "reviewed"
