@@ -356,6 +356,96 @@ async def test_get_action_status_other_users_action_is_error(make_client, db_ses
     assert out["status"] == "rejected" and out["user_feedback"] == "gerek yok"
 
 
+async def test_get_action_status_hides_non_mcp_actions(make_client, db_session_maker):
+    """T4-D1: yerel model/sohbet onerileri (gizli baslik, hafiza icerigi) Claude'a acilmaz."""
+    async with db_session_maker() as s:
+        local = AiActionEntity(
+            user_id=USER_ID, action_type="create_card", args={},
+            summary="🗂 Yeni kart: 'GizliBaslikXYZ' → Gizli board / Liste",
+            status="proposed", model_id="ollama:qwen", user_feedback="GizliNotXYZ",
+        )
+        chat = AiActionEntity(
+            user_id=USER_ID, action_type="remember_fact", args={},
+            summary="🗑 Unutulacak: «GizliHafizaXYZ»", status="proposed",
+            model_id="mcp:claude", conversation_id=5,
+        )
+        mcp = AiActionEntity(
+            user_id=USER_ID, action_type="create_card", args={}, summary="mcp onerisi",
+            status="proposed", model_id="mcp:claude",
+        )
+        s.add_all([local, chat, mcp])
+        await s.commit()
+        local_id, chat_id, mcp_id = local.id, chat.id, mcp.id
+    bridge = await make_client()
+
+    async def run(c):
+        out = []
+        for i in (local_id, chat_id, mcp_id):
+            out.append(await c.call_tool("get_action_status", {"action_id": i}))
+        return out
+
+    a, b, d = await with_client(bridge, run)
+    for r in (a, b):
+        assert r.is_error and text_of(r) == "İşlem bulunamadı"
+        assert "XYZ" not in text_of(r)
+    assert json.loads(text_of(d))["summary"] == "mcp onerisi"
+
+
+async def test_read_only_key_has_no_write_tools(make_client, fake_api):
+    """T4-D4: 'read' kapsamli anahtarla yazma araclari listelenmez ve cagrilamaz."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        res = fake_api(request)
+        if request.url.path == "/api/v1/auth/me":
+            data = json.loads(res.content)["data"]
+            data["token_scopes"] = ["read"]
+            return httpx.Response(200, json={"success": True, "data": data})
+        return res
+
+    bridge = await make_client(httpx.MockTransport(handler))
+
+    async def run(c):
+        listed = await names(c)
+        r = await c.call_tool("create_card", {"list_id": 1, "title": "x"})
+        return listed, r
+
+    listed, r = await with_client(bridge, run)
+    assert listed == set(MCP_READ)
+    assert r.is_error and text_of(r) == "Bu anahtar yalnız okuma izinli."
+    assert fake_api.writes == []
+
+
+async def test_personal_fields_never_reach_claude(make_client, fake_api):
+    """T4-D3: mood/energy/reflection MCP ciktisinda yok (yonetici karari 2026-11-15)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        res = fake_api(request)
+        if request.method == "GET" and request.url.path.startswith("/api/v1/day-plans/"):
+            data = json.loads(res.content)["data"]
+            data.update(exists=True, mood=4, energy=2, reflection="GizliYansimaXYZ")
+            return httpx.Response(200, json={"success": True, "data": data})
+        return res
+
+    bridge = await make_client(httpx.MockTransport(handler))
+
+    async def run(c):
+        return await c.call_tool("get_day_plan", {"date": "2026-11-09"})
+
+    r = await with_client(bridge, run)
+    assert not r.is_error
+    body = text_of(r)
+    for word in ("GizliYansimaXYZ", "mood", "energy", "reflection"):
+        assert word not in body
+    assert "tracked_today_min" in body  # gerisi yerinde
+
+
+def test_strip_personal_is_recursive():
+    from app.mcp_tools import _strip_personal
+
+    got = _strip_personal({"days": [{"date": "d", "mood": 3, "energy": 1, "done": 2}]})
+    assert got == {"days": [{"date": "d", "done": 2}]}
+
+
 # ---------------- kimlik ----------------
 @pytest.mark.parametrize(
     ("status", "reason"),

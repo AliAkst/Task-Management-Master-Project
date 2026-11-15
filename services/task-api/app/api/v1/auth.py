@@ -3,13 +3,19 @@ Kimlik dogrulama (Authentication) uc noktalarini iceren router.
 Kayit,Giris,Token yenileme ve profil bilgilerine erisim islemlerini yonetir.
 """
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 from pydantic import BaseModel
 
 from app.api.dependencies import AuthServiceDep, CurrentUserDep, UnitOfWorkDep
 from app.models.api_token import ApiTokenCreate, ApiTokenCreated, ApiTokenResponse
 from app.models.common import ApiResponse
-from app.models.user import TokenResponse, UserCreate, UserLogin, UserResponse
+from app.models.user import (
+    MeResponse,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+)
 from app.services.api_token import ApiTokenService
 
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -61,14 +67,16 @@ async def refresh_token(request: RefreshRequest, service: AuthServiceDep):
     return ApiResponse(success=True, data=tokens)
 
 
-@auth_router.get("/me", response_model=ApiResponse[UserResponse])
-async def get_me(current_user: CurrentUserDep):
+@auth_router.get("/me", response_model=ApiResponse[MeResponse])
+async def get_me(request: Request, current_user: CurrentUserDep):
     """
     O an giris yapmis olan kullanicinin bilgilerinin doner.
     bu endpoint Bearer Token (Autharization basligi) gerektirir.
     """
     # CurrentUserDep zaten token'i cozup kullaniciyi DB'den bulup getiriyor.
-    return ApiResponse(success=True, data=UserResponse.model_validate(current_user))
+    me = MeResponse.model_validate(current_user)
+    me.token_scopes = getattr(request.state, "pat_scopes", None)
+    return ApiResponse(success=True, data=me)
 
 
 @auth_router.post(

@@ -4,6 +4,7 @@ işlerini Trello'ya yapıştırılabilir Markdown'a çevirir. Yalnız okur.
 """
 
 from datetime import date, timedelta
+from typing import Any
 
 from app.core.exceptions import NotFoundException
 from app.db.entities.day_plan import DayPlanItemEntity, ItemOutcome
@@ -109,10 +110,26 @@ class ReportService:
             user_id, start, end, limit=5000
         )
         item_cache: dict[int, DayPlanItemEntity | None] = {i.id: i for i in items}
-        card_cache: dict[int, object] = {}
+        card_cache: dict[int, Any] = {}
         seconds: dict[Key, int] = {}
         titles: dict[Key, str] = {}
         boards_of: dict[Key, int | None] = {}
+
+        async def cached_card(card_id: int):
+            if card_id not in card_cache:
+                card_cache[card_id] = await self.uow.tasks.get_by_id(card_id)
+            return card_cache[card_id]
+
+        # Board süzgeci kartın CANLI board'una bakar (kart sonradan taşınmış olabilir;
+        # saklanan board_id anlık görüntüdür) — T4-D2
+        item_board: dict[int, int | None] = {}
+        for it in [*items, *next_items]:
+            board_now = it.board_id
+            if it.card_id is not None:
+                card_now = await cached_card(it.card_id)
+                if card_now is not None:
+                    board_now = card_now.board_id
+            item_board[it.id] = board_now
 
         for s in sessions:
             span = session_span(s, start, end)
@@ -124,12 +141,9 @@ class ReportService:
             board: int | None
             if s.card_id is not None:
                 key = ("c", s.card_id)
-                card = card_cache.get(s.card_id)
-                if card is None:
-                    card = await self.uow.tasks.get_by_id(s.card_id)
-                    card_cache[s.card_id] = card
+                card = await cached_card(s.card_id)
                 title = getattr(card, "title", None) or s.card_title or "(adsız)"
-                board = s.board_id
+                board = card.board_id if card is not None else s.board_id
             elif s.day_plan_item_id is not None:
                 if s.day_plan_item_id not in item_cache:
                     item_cache[s.day_plan_item_id] = await self.uow.day_plan_items.get_by_id(
@@ -137,7 +151,8 @@ class ReportService:
                     )
                 it = item_cache[s.day_plan_item_id]
                 if it is not None and it.card_id is not None:
-                    key, title, board = ("c", it.card_id), it.title, it.board_id
+                    key, title = ("c", it.card_id), it.title
+                    board = (await cached_card(it.card_id) or it).board_id
                 elif it is not None:
                     key, title, board = ("i", it.id), it.title, it.board_id
                 else:
@@ -166,7 +181,7 @@ class ReportService:
             done_keys.add(key)
             completed.append(WorkLine(title=card.title, minutes=minutes(key)))
         for it in items:
-            if it.outcome != ItemOutcome.DONE or not ok(it.board_id):
+            if it.outcome != ItemOutcome.DONE or not ok(item_board[it.id]):
                 continue
             key = item_key(it)
             if key in done_keys:
@@ -183,7 +198,7 @@ class ReportService:
                 continue
             worked_map[key] = WorkLine(title=titles[key], minutes=minutes(key))
         for it in items:
-            if it.outcome != ItemOutcome.PARTIAL or not ok(it.board_id):
+            if it.outcome != ItemOutcome.PARTIAL or not ok(item_board[it.id]):
                 continue
             key = item_key(it)
             if key in done_keys or key in worked_map:
@@ -204,10 +219,10 @@ class ReportService:
             )
             for it in items
             if it.outcome in (ItemOutcome.NOT_DONE, ItemOutcome.POSTPONED)
-            and ok(it.board_id)
+            and ok(item_board[it.id])
         ]
 
-        tomorrow = [TomorrowLine(title=it.title) for it in next_items if ok(it.board_id)]
+        tomorrow = [TomorrowLine(title=it.title) for it in next_items if ok(item_board[it.id])]
 
         sections = WorkSections(
             completed=completed, worked=worked, not_done=not_done, tomorrow=tomorrow

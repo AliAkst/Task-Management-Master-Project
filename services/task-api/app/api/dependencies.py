@@ -175,6 +175,7 @@ async def _authenticate_pat(
         raise PatScopeException()
     await service.touch(entity)
     request.state.auth_kind = "pat"
+    request.state.pat_scopes = list(entity.scopes or [])
     return user
 
 

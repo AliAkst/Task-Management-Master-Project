@@ -43,3 +43,9 @@ class TokenPayload(BaseModel):
     sub: str  # User ID (Subject)
     exp: datetime
     type: str  # "Access" veya "Refresh"
+
+
+class MeResponse(UserResponse):
+    """GET /auth/me: PAT ile cagrilirsa anahtarin kapsamlari (JWT'de None)."""
+
+    token_scopes: list[str] | None = None

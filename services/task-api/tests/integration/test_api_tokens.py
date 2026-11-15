@@ -141,6 +141,17 @@ class TestPatAccess:
             assert res.status_code == 403, (method, path, res.text)
             assert res.json()["error"]["code"] == "PAT_FORBIDDEN", (method, path)
 
+    async def test_me_reports_pat_scopes_only_for_pat(
+        self, client, auth_headers, read_pat, write_pat
+    ):
+        """T4-D4: MCP koprusu kapsami /auth/me'den okur (JWT'de None)."""
+        me = await client.get(f"{API}/auth/me", headers=bearer(read_pat))
+        assert me.json()["data"]["token_scopes"] == ["read"]
+        me = await client.get(f"{API}/auth/me", headers=bearer(write_pat))
+        assert sorted(me.json()["data"]["token_scopes"]) == ["read", "write"]
+        me = await client.get(f"{API}/auth/me", headers=auth_headers)
+        assert me.json()["data"]["token_scopes"] is None
+
     async def test_allowed_exceptions(self, client, auth_headers, read_pat):
         h = bearer(read_pat)
         assert (await client.get(f"{API}/auth/me", headers=h)).status_code == 200

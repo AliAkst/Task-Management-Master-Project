@@ -123,6 +123,34 @@ async def test_board_filter_and_foreign_board_404(
     await summary(client, auth_headers, expect=422, board_ids="abc")
 
 
+async def test_board_filter_uses_live_board_of_moved_card(client, auth_headers):
+    """T4-D2: kart sonradan başka board'a taşınırsa süzgeç anlık görüntüye değil canlı board'a bakar."""
+    a = await create_board(client, auth_headers, name="A")
+    b = await create_board(client, auth_headers, name="B")
+    doktor = await create_card(client, auth_headers, a["lists"][0]["id"], "Doktor randevusu")
+    await log_time(client, auth_headers, at(D, 9), at(D, 9, 20), doktor["id"])
+    await save_plan(client, auth_headers, [{"card_id": doktor["id"], "title": "Doktor randevusu"}])
+    await save_plan(
+        client,
+        auth_headers,
+        [{"card_id": doktor["id"], "title": "Doktor randevusu"}],
+        day=D + timedelta(days=1),
+    )
+    moved = await client.post(
+        f"{API}/cards/{doktor['id']}/move",
+        json={"list_id": b["lists"][0]["id"], "index": 0},
+        headers=auth_headers,
+    )
+    assert moved.status_code == 200, moved.text
+    a_id, b_id = str(a["board"]["id"]), str(b["board"]["id"])
+    in_a = await summary(client, auth_headers, board_ids=a_id)
+    assert "Doktor" not in in_a["text"]
+    in_b = await summary(client, auth_headers, board_ids=b_id)
+    assert "Doktor randevusu" in in_b["text"]
+    assert [w["title"] for w in in_b["sections"]["worked"]] == ["Doktor randevusu"]
+    assert [t["title"] for t in in_b["sections"]["tomorrow"]] == ["Doktor randevusu"]
+
+
 async def test_minutes_format_variants(client, auth_headers):
     board = await create_board(client, auth_headers)
     todo = board["lists"][0]["id"]

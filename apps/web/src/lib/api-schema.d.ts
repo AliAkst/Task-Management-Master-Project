@@ -1987,6 +1987,18 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[MeResponse] */
+        ApiResponse_MeResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["MeResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[MicrosoftStatus] */
         ApiResponse_MicrosoftStatus_: {
             /** Success */
@@ -3787,6 +3799,27 @@ export interface components {
             /** Is Done List */
             is_done_list?: boolean | null;
         };
+        /**
+         * MeResponse
+         * @description GET /auth/me: PAT ile cagrilirsa anahtarin kapsamlari (JWT'de None).
+         */
+        MeResponse: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            /** Full Name */
+            full_name: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Token Scopes */
+            token_scopes?: string[] | null;
+        };
         /** MicrosoftCalendarUpdate */
         MicrosoftCalendarUpdate: {
             /** Enabled */
@@ -4802,7 +4835,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponse_UserResponse_"];
+                    "application/json": components["schemas"]["ApiResponse_MeResponse_"];
                 };
             };
         };

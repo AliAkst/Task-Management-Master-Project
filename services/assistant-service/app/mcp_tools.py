@@ -63,6 +63,7 @@ MCP_WRITE: tuple[str, ...] = (
 STATUS_TOOL = "ajanda_status"
 
 NOT_AVAILABLE = "Bu araç Claude bağlantısında yok."
+READ_ONLY_KEY = "Bu anahtar yalnız okuma izinli."
 CLOSED = "Kullanıcı bu tür işlemleri kapattı."
 APPROVAL_NOTE = (
     "Bu işlem henüz YAPILMADI. Kullanıcı Ajanda'da Asistan → Bekleyen işlemler'den "
@@ -113,6 +114,28 @@ def _write_specs() -> dict[str, Any]:
     return {s.name: s for s in WRITE_SPECS if s.name in MCP_WRITE}
 
 
+PERSONAL_KEYS = frozenset({"mood", "energy", "reflection"})
+
+
+def _strip_personal(value: Any) -> Any:
+    """Ruh hali / enerji / gun sonu yansimasi Claude'a gitmez (T4-D3, yonetici karari)."""
+    if isinstance(value, dict):
+        return {
+            k: _strip_personal(v) for k, v in value.items() if k not in PERSONAL_KEYS
+        }
+    if isinstance(value, list):
+        return [_strip_personal(v) for v in value]
+    return value
+
+
+def _scrub_read_text(text: str) -> str:
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return text
+    return json.dumps(_strip_personal(data), ensure_ascii=False)
+
+
 def _error_text(raw: str) -> str:
     try:
         data = json.loads(raw)
@@ -121,6 +144,12 @@ def _error_text(raw: str) -> str:
     if isinstance(data, dict) and isinstance(data.get("error"), str):
         return data["error"]
     return raw
+
+
+def _can_write(user: dict[str, Any]) -> bool:
+    """PAT kapsami /auth/me'den gelir; 'write' yoksa yazma araclari yok (T4-D4)."""
+    scopes = user.get("token_scopes")
+    return not isinstance(scopes, list) or "write" in scopes
 
 
 class McpBridge:
@@ -191,6 +220,8 @@ class McpBridge:
                 s = read[name]
                 tools.append(McpToolDef(name, s.description, s.parameters))
         for name in MCP_WRITE:
+            if not _can_write(user):
+                break
             if modes.get(action_type_of(name), "ask") == "never":
                 continue
             s = writes[name]
@@ -210,6 +241,8 @@ class McpBridge:
             return McpReply(f"Ajanda bağlantısı çalışıyor (kullanıcı #{user['id']}).")
         if name not in MCP_READ and name not in MCP_WRITE:
             return McpReply(NOT_AVAILABLE, True)
+        if name in MCP_WRITE and not _can_write(user):
+            return McpReply(READ_ONLY_KEY, True)
         try:
             return await self._dispatch(user, name, args)
         except TaskApiAuthError:
@@ -256,7 +289,8 @@ class McpBridge:
         if name in MCP_WRITE:
             return await self._write_reply(user["id"], result)
         return McpReply(
-            result.text if result.ok else _error_text(result.text), not result.ok
+            _scrub_read_text(result.text) if result.ok else _error_text(result.text),
+            not result.ok,
         )
 
     async def _write_reply(self, user_id: int, result: ToolResult) -> McpReply:
@@ -295,7 +329,12 @@ class McpBridge:
         async with self.session_maker() as session:
             row = await session.scalar(
                 select(AiActionEntity).where(
-                    AiActionEntity.id == raw, AiActionEntity.user_id == user_id
+                    AiActionEntity.id == raw,
+                    AiActionEntity.user_id == user_id,
+                    # yalniz Claude'un kendi onerileri: sohbet/yerel model satirlari
+                    # gizlilik filtresinden gecmemis metin tasiyabilir (T4-D1)
+                    AiActionEntity.model_id == MCP_MODEL_ID,
+                    AiActionEntity.conversation_id.is_(None),
                 )
             )
         if row is None:
