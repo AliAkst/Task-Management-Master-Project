@@ -2,6 +2,7 @@ import { NavLink, Outlet, useMatch } from 'react-router-dom'
 import {
   BarChart3,
   CalendarDays,
+  Languages,
   LayoutGrid,
   LogOut,
   Settings,
@@ -26,6 +27,7 @@ const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
   { to: '/calendar', label: 'Takvim', icon: CalendarDays },
   { to: '/', label: "Board'lar", icon: LayoutGrid, end: true },
   { to: '/stats', label: 'İstatistik', icon: BarChart3 },
+  { to: '/english', label: 'İngilizce', icon: Languages },
   { to: '/profile', label: 'Profil', icon: UserRound },
 ]
 
