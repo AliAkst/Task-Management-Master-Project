@@ -27,6 +27,13 @@ from app.agent.actions import ActionGate, ToolResult, load_modes
 from app.db.models import AiActionEntity
 from app.llm.types import ToolCall
 from app.notify.base import Notification, Notifier
+from app.tools.english_tools import (
+    CONTEXT_SPEC,
+    CONTEXT_TOOL,
+    english_context,
+)
+from app.tools.english_tools import WRITE_NAMES as ENGLISH_WRITE_NAMES
+from app.tools.english_tools import WRITE_SPECS as ENGLISH_WRITE_SPECS
 from app.tools.read_tools import ToolBox
 from app.tools.task_api import TaskApiAuthError, TaskApiClient, TaskApiError
 from app.tools.write_tools import WRITE_SPECS, action_type_of
@@ -49,6 +56,7 @@ MCP_READ: tuple[str, ...] = (
     "get_courses",
     "get_work_summary",
     "get_action_status",
+    CONTEXT_TOOL,  # Faz 13j2
 )
 MCP_WRITE: tuple[str, ...] = (
     "create_card",
@@ -59,6 +67,7 @@ MCP_WRITE: tuple[str, ...] = (
     "plan_day",
     "schedule_day",
     "create_event",
+    *ENGLISH_WRITE_NAMES,  # Faz 13j2: izin turu log_english
 )
 STATUS_TOOL = "ajanda_status"
 
@@ -111,7 +120,24 @@ REASON_DOWN = "Ajanda kapalı ya da ulaşılamıyor"
 
 
 def _write_specs() -> dict[str, Any]:
-    return {s.name: s for s in WRITE_SPECS if s.name in MCP_WRITE}
+    return {s.name: s for s in [*WRITE_SPECS, *ENGLISH_WRITE_SPECS] if s.name in MCP_WRITE}
+
+
+ENGLISH_PROMPT = "english_deep_session"
+ENGLISH_PROMPT_DEFAULT_MINUTES = "20"
+ENGLISH_PROMPT_TEXT = """Ajanda'daki İngilizce koçu verilerimle {minutes} dakikalık bir pratik seansı yapalım.
+1) Önce english_get_context aracıyla profilimi, son hatalarımı ve vadesi gelen kelimeleri oku.
+2) Seviyeme uygun bir konuşma/yazma pratiği yürüt; en sık hata kategorilerime odaklan. Türkçe açıklama yap, pratik İngilizce olsun.
+3) Seans sonunda yaptığım hataları english_log_mistakes ile, öğrendiğim yeni kelimeleri english_add_vocab ile kaydet ve english_log_session ile kısa bir özet yaz.
+Kayıt araçları onay bekliyor derse bunu bana söyle; onaylanmadan kaydedildi deme."""
+
+
+def english_prompt_text(minutes: str | None) -> str:
+    """`minutes` istemci girdisi: yalniz 1-240 arasi rakam kabul, yoksa varsayilan (enjeksiyon yok)."""
+    m = (minutes or "").strip()
+    if not (m.isascii() and m.isdigit() and 1 <= int(m) <= 240):
+        m = ENGLISH_PROMPT_DEFAULT_MINUTES
+    return ENGLISH_PROMPT_TEXT.format(minutes=int(m))
 
 
 PERSONAL_KEYS = frozenset({"mood", "energy", "reflection"})
@@ -208,7 +234,7 @@ class McpBridge:
             ]
         async with self.session_maker() as session:
             modes = await load_modes(session, user["id"])
-        read = {s.name: s for s in ToolBox.read_specs()}
+        read = {s.name: s for s in [*ToolBox.read_specs(), CONTEXT_SPEC]}
         writes = _write_specs()
         tools: list[McpToolDef] = []
         for name in MCP_READ:
@@ -263,6 +289,11 @@ class McpBridge:
             return await self._action_status(user["id"], args)
         api = self._client()
         try:
+            if name == CONTEXT_TOOL:
+                data = await english_context(api)
+                return McpReply(
+                    _scrub_read_text(json.dumps(data, ensure_ascii=False, default=str))
+                )
             settings_data = await api.get("/settings/")
             try:
                 tz = ZoneInfo(settings_data.get("timezone") or DEFAULT_TZ)
@@ -283,7 +314,10 @@ class McpBridge:
             if name in MCP_WRITE and not box.gate.allowed(action_type_of(name)):
                 return McpReply(CLOSED, True)
             call = ToolCall(id="mcp-" + uuid.uuid4().hex[:12], name=name, arguments=args)
-            result = await box.execute(call)
+            if name in ENGLISH_WRITE_NAMES:
+                result = await self._english_write(box, call)
+            else:
+                result = await box.execute(call)
         finally:
             await api.close()
         if name in MCP_WRITE:
@@ -292,6 +326,24 @@ class McpBridge:
             _scrub_read_text(result.text) if result.ok else _error_text(result.text),
             not result.ok,
         )
+
+    @staticmethod
+    async def _english_write(box: ToolBox, call: ToolCall) -> ToolResult:
+        """Ingilizce yazma araclari WRITE_SPECS'te degil: hazirlik + izin kapisi burada."""
+
+        def fail(msg: str) -> ToolResult:
+            return ToolResult(json.dumps({"error": msg}, ensure_ascii=False), False)
+
+        if not call.valid:
+            return fail("Argümanlar geçerli JSON değil")
+        try:
+            prepared = await box.writer.prepare(call.name, call.arguments)
+        except TypeError as e:
+            return fail(f"Geçersiz argümanlar: {e}")
+        except (TaskApiError, ValueError) as e:
+            return fail(getattr(e, "message", str(e)))
+        assert box.gate is not None
+        return await box.gate.handle(call, prepared)
 
     async def _write_reply(self, user_id: int, result: ToolResult) -> McpReply:
         if result.question is not None:

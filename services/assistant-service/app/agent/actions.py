@@ -25,6 +25,14 @@ from app.tools.task_api import TaskApiError
 from app.tools.write_tools import ACTION_TYPES, PreparedAction, WriteTools
 
 DEFAULT_MODE = "ask"
+# Faz 13j2 (T10): kendi ogrenme verisi -> varsayilan otomatik; digerleri "ask"
+DEFAULT_MODES = {"log_english": "auto"}
+
+
+def default_mode(action_type: str) -> str:
+    return DEFAULT_MODES.get(action_type, DEFAULT_MODE)
+
+
 # Geri alinamaz islemler: izin "otomatik" olsa bile her zaman onay karti
 ALWAYS_ASK = {"delete_cards", "cancel_day", "merge_facts"}
 MODES = ("ask", "auto", "never")
@@ -64,7 +72,7 @@ async def load_modes(session: AsyncSession, user_id: int) -> dict[str, str]:
     rows = await session.scalars(
         select(AiPermissionEntity).where(AiPermissionEntity.user_id == user_id)
     )
-    modes = {t: DEFAULT_MODE for t in ACTION_TYPES}
+    modes = {t: default_mode(t) for t in ACTION_TYPES}
     modes.update({r.action_type: r.mode for r in rows if r.action_type in ACTION_TYPES})
     return modes
 
@@ -134,10 +142,12 @@ class ActionGate:
         self.modes = modes
 
     def allowed(self, action_type: str) -> bool:
-        return self.modes.get(action_type, DEFAULT_MODE) != "never"
+        return self.modes.get(action_type, default_mode(action_type)) != "never"
 
     async def handle(self, call: ToolCall, prepared: PreparedAction) -> ToolResult:
-        mode = self.modes.get(prepared.action_type, DEFAULT_MODE)
+        mode = self.modes.get(
+            prepared.action_type, default_mode(prepared.action_type)
+        )
         if (prepared.action_type in ALWAYS_ASK or prepared.force_ask) and mode == "auto":
             mode = "ask"
         if mode == "never":

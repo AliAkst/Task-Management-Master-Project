@@ -17,7 +17,7 @@ from mcp.server import Server, ServerRequestContext
 
 from app.config import settings
 from app.db.models import session_maker
-from app.mcp_tools import McpBridge
+from app.mcp_tools import ENGLISH_PROMPT, McpBridge, english_prompt_text
 
 
 def build_server(bridge: McpBridge) -> Server:
@@ -43,10 +43,46 @@ def build_server(bridge: McpBridge) -> Server:
             is_error=reply.is_error,
         )
 
+    async def on_list_prompts(
+        ctx: ServerRequestContext, params: types.PaginatedRequestParams | None
+    ) -> types.ListPromptsResult:
+        return types.ListPromptsResult(
+            prompts=[
+                types.Prompt(
+                    name=ENGLISH_PROMPT,
+                    description="Ajanda İngilizce koçu verileriyle derin pratik seansı",
+                    arguments=[
+                        types.PromptArgument(
+                            name="minutes",
+                            description="Seans süresi (dakika, varsayılan 20)",
+                            required=False,
+                        )
+                    ],
+                )
+            ]
+        )
+
+    async def on_get_prompt(
+        ctx: ServerRequestContext, params: types.GetPromptRequestParams
+    ) -> types.GetPromptResult:
+        if params.name != ENGLISH_PROMPT:
+            raise ValueError(f"Bilinmeyen prompt: {params.name}")
+        text = english_prompt_text((params.arguments or {}).get("minutes"))
+        return types.GetPromptResult(
+            description="İngilizce derin pratik seansı",
+            messages=[
+                types.PromptMessage(
+                    role="user", content=types.TextContent(type="text", text=text)
+                )
+            ],
+        )
+
     return Server(
         "ajanda",
         on_list_tools=on_list_tools,
         on_call_tool=on_call_tool,
+        on_list_prompts=on_list_prompts,
+        on_get_prompt=on_get_prompt,
     )
 
 

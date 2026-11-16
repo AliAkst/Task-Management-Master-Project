@@ -45,6 +45,15 @@ from app.tools.delete_tools import (
     prepare_cancel_day,
     prepare_delete_cards,
 )
+from app.tools.english_tools import (
+    ENGLISH_ACTION,
+    ENGLISH_LABEL,
+    ENGLISH_TOOL_TO_ACTION,
+    execute_english,
+    prepare_add_vocab,
+    prepare_log_mistakes,
+    prepare_log_session,
+)
 from app.tools.memory_tools import (
     MEMORY_ACTION_TYPES,
     MEMORY_SPECS,
@@ -87,6 +96,7 @@ ACTION_TYPES: dict[str, str] = {
     **CONTENT_ACTION_TYPES,
     **DELETE_ACTION_TYPES,
     **MEMORY_ACTION_TYPES,
+    ENGLISH_ACTION: ENGLISH_LABEL,
 }
 
 PRIORITIES = ("low", "medium", "high")
@@ -235,7 +245,8 @@ WRITE_TOOL_NAMES = {s.name for s in WRITE_SPECS}
 def action_type_of(tool_name: str) -> str:
     """Arac adi -> izin turu (orn. save_goal -> manage_goal)."""
     return (
-        CONTENT_TOOL_TO_ACTION.get(tool_name)
+        ENGLISH_TOOL_TO_ACTION.get(tool_name)
+        or CONTENT_TOOL_TO_ACTION.get(tool_name)
         or CARD_TOOL_TO_ACTION.get(tool_name)
         or TOOL_TO_ACTION.get(tool_name, tool_name)
     )
@@ -1491,9 +1502,30 @@ class WriteTools:
             summary += f" — neden: «{_clip(body['why'], 60)}»"
         return PreparedAction("manage_goal", {"goal_id": None, "body": body}, summary)
 
+    # ---------------- Ingilizce (Faz 13j2; yalniz MCP / web Ingilizce uclari) ----------------
+    async def _prepare_english_log_mistakes(self, items: Any) -> PreparedAction:
+        body, summary = prepare_log_mistakes(items, "claude")
+        return PreparedAction(ENGLISH_ACTION, body, summary)
+
+    async def _prepare_english_add_vocab(self, items: Any) -> PreparedAction:
+        body, summary = prepare_add_vocab(items, "claude")
+        return PreparedAction(ENGLISH_ACTION, body, summary)
+
+    async def _prepare_english_log_session(
+        self,
+        minutes: Any,
+        summary: Any,
+        new_vocab: Any = None,
+        mistakes_count: Any = None,
+    ) -> PreparedAction:
+        body, text = prepare_log_session(minutes, summary, new_vocab, mistakes_count)
+        return PreparedAction(ENGLISH_ACTION, body, text)
+
     # ---------------- calistirma ----------------
     async def execute(self, action_type: str, args: dict[str, Any]) -> dict[str, Any]:
         api = self.api
+        if action_type == ENGLISH_ACTION:
+            return await execute_english(api, args)
         if action_type in ("remember_fact", "forget_fact", "merge_facts"):
             if self.memory is None:
                 raise ValueError("Hafıza şu an kullanılamıyor")

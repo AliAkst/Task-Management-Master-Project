@@ -329,3 +329,37 @@ async def test_other_user_cannot_decide(client):
         await client.post(f"{API}/actions/{action['id']}/reject", json={})
     ).status_code == 404
     assert (await client.get(f"{API}/actions")).json()["data"] == []
+
+
+# ---------------- Faz 13j2: log_english izin turu (T10) ----------------
+async def test_log_english_defaults_to_auto_others_stay_ask(db_session_maker):
+    from app.agent.actions import load_modes, set_mode
+    from app.tools.write_tools import ACTION_TYPES
+
+    assert "log_english" in ACTION_TYPES
+    async with db_session_maker() as s:
+        modes = await load_modes(s, 7)
+        assert modes["log_english"] == "auto"
+        assert modes["create_card"] == "ask"
+        await set_mode(s, 7, "log_english", "never")
+        await s.commit()
+    async with db_session_maker() as s:
+        assert (await load_modes(s, 7))["log_english"] == "never"
+
+
+async def test_permissions_endpoint_lists_log_english_as_auto(db_session_maker):
+    from app.api.actions import get_session as actions_get_session
+
+    async def fake_session():
+        async with db_session_maker() as s:
+            yield s
+
+    app.dependency_overrides[current_user] = lambda: USER
+    app.dependency_overrides[actions_get_session] = fake_session
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+            rows = (await c.get(f"{API}/permissions")).json()["data"]
+    finally:
+        app.dependency_overrides.clear()
+    row = next(r for r in rows if r["action_type"] == "log_english")
+    assert row["mode"] == "auto" and row["label"] == "İngilizce kaydı"

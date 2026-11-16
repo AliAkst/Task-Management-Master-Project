@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.actions import router as actions_router
 from app.api.chat import router as chat_router
+from app.api.english import router as english_router
 from app.api.facts import router as facts_router
 from app.api.insights import router as insights_router
 from app.api.jobs import recover_stale_jobs
@@ -68,6 +69,7 @@ app.include_router(jobs_router, prefix="/api/v1/assistant")
 app.include_router(insights_router, prefix="/api/v1/assistant")
 app.include_router(notify_router, prefix="/api/v1/assistant")
 app.include_router(mcp_router, prefix="/api/v1/assistant")
+app.include_router(english_router, prefix="/api/v1/assistant")
 
 
 @app.get("/health")

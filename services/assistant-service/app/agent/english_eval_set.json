@@ -1,0 +1,22 @@
+[
+  {"sentence": "I have went to the office yesterday.", "expected_category": "tense", "expected_fix": "I went to the office yesterday."},
+  {"sentence": "She is living in this city since 2019.", "expected_category": "tense", "expected_fix": "She has been living in this city since 2019."},
+  {"sentence": "When I will arrive, I will call you.", "expected_category": "tense", "expected_fix": "When I arrive, I will call you."},
+  {"sentence": "We arrived to the station at noon.", "expected_category": "preposition", "expected_fix": "We arrived at the station at noon."},
+  {"sentence": "He is good in playing chess.", "expected_category": "preposition", "expected_fix": "He is good at playing chess."},
+  {"sentence": "She bought a umbrella for the trip.", "expected_category": "article", "expected_fix": "She bought an umbrella for the trip."},
+  {"sentence": "I need to buy new laptop this month.", "expected_category": "article", "expected_fix": "I need to buy a new laptop this month."},
+  {"sentence": "He did a mistake in the report.", "expected_category": "word_choice", "expected_fix": "He made a mistake in the report."},
+  {"sentence": "I am very interested about this subject.", "expected_category": "word_choice", "expected_fix": "I am very interested in this subject."},
+  {"sentence": "The meeting was postponed becouse of the rain.", "expected_category": "spelling", "expected_fix": "The meeting was postponed because of the rain."},
+  {"sentence": "I went to the market and bought some apples.", "expected_category": null, "expected_fix": null},
+  {"sentence": "She has been studying English for two years.", "expected_category": null, "expected_fix": null},
+  {"sentence": "They are waiting for the bus at the corner.", "expected_category": null, "expected_fix": null},
+  {"sentence": "If it rains tomorrow, we will stay at home.", "expected_category": null, "expected_fix": null},
+  {"sentence": "He gave me an interesting book about history.", "expected_category": null, "expected_fix": null},
+  {"sentence": "The children were playing in the garden.", "expected_category": null, "expected_fix": null},
+  {"sentence": "I usually drink tea in the morning.", "expected_category": null, "expected_fix": null},
+  {"sentence": "We have lived here since last summer.", "expected_category": null, "expected_fix": null},
+  {"sentence": "She made a delicious cake for the party.", "expected_category": null, "expected_fix": null},
+  {"sentence": "My brother is good at solving puzzles.", "expected_category": null, "expected_fix": null}
+]
