@@ -64,6 +64,7 @@ const KIND_LABEL: Record<PlanSuggestion['kind'], string> = {
   in_progress: 'Devam eden',
   worked: 'Üzerinde çalışılan',
   course: 'Kurs parçası',
+  english: 'İngilizce',
 }
 
 /** Oneri <-> taslak eslestirmesi icin referans (satir anahtari degil). */

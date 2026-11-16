@@ -44,6 +44,7 @@ from app.models.day_plan import (
 )
 from app.models.task import TaskStatus
 from app.services.activity import ActivityLogger
+from app.services.nl_when import fold
 from app.services.ordering import STEP
 from app.services.recurrence import events_in_range, occurrences
 from app.services.timeutil import day_bounds, local_today, session_span, user_tz
@@ -332,6 +333,23 @@ class DayPlanService:
                     board_id=part.board_id,
                     planned_minutes=part.estimated_minutes,
                     reason=f"Sıradaki kurs parçası ({course_title})",
+                )
+            )
+        # 7) Ingilizce pratik (13j1): profil var, o gun seans yok, planda ingilizce maddesi yok
+        from app.services.english import EnglishService
+
+        english = EnglishService(self.uow)
+        minutes = await english.daily_minutes(user_id)
+        if (
+            minutes is not None
+            and not any("ingilizce" in fold(i.title) for i in planned_items)
+            and not await english.practiced_on(user_id, day)
+        ):
+            add(
+                PlanSuggestion(
+                    kind="english",
+                    title="İngilizce pratik",
+                    planned_minutes=minutes,
                 )
             )
         for s in result:

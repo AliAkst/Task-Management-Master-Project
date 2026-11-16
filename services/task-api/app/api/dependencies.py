@@ -29,6 +29,7 @@ from app.services.card import CardService
 from app.services.analytics import AnalyticsService
 from app.services.day_plan import DayPlanService
 from app.services.day_template import DayTemplateService
+from app.services.english import EnglishService
 from app.services.event import EventService
 from app.services.goal import GoalService
 from app.services.learning import LearningService
@@ -145,6 +146,13 @@ async def get_learning_service(
     return LearningService(uow, actor)
 
 
+async def get_english_service(
+    uow: TaskUnitOfWork = Depends(get_unit_of_work),
+    actor: str = Depends(get_actor),
+) -> EnglishService:
+    return EnglishService(uow, actor)
+
+
 async def get_goal_service(
     uow: TaskUnitOfWork = Depends(get_unit_of_work),
     actor: str = Depends(get_actor),
@@ -249,3 +257,4 @@ DayTemplateServiceDep = Annotated[
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 GoalServiceDep = Annotated[GoalService, Depends(get_goal_service)]
 LearningServiceDep = Annotated[LearningService, Depends(get_learning_service)]
+EnglishServiceDep = Annotated[EnglishService, Depends(get_english_service)]

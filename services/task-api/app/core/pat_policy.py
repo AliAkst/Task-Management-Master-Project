@@ -19,6 +19,9 @@ SETTINGS_PREFIX = f"{API_PREFIX}/settings"
 DAY_TEMPLATES_PREFIX = f"{API_PREFIX}/day-templates"
 # Faz 13g: /learning/courses - GET read ile okunur, POST (kurs olustur) write ister;
 # ozel bir kural gerekmez (varsayilan yontem kurali). Test: test_learning.TestPatPolicy
+# Faz 13j1: /english/* yasak degil; GET read ile okunur, POST/PUT/PATCH/DELETE (kelime,
+# hata, seans, profil, tekrar notu) write kapsami ister - ozel kural yok, bilincli karar.
+# Test: test_english.TestPatPolicy
 # Faz 13h1: GET /reports/work-summary ve GET /boards/{id}/sweep-candidates read ile
 # okunur; POST /cards/bulk (toplu arsiv/tamamla/tasi) write kapsami ister - ozel kural
 # yok, bilincli karar. Test: test_sweep.TestPatPolicy

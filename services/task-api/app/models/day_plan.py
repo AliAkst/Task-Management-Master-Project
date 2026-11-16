@@ -148,6 +148,7 @@ SuggestionKind = Literal[
     "next_in_chain",
     "worked",
     "course",
+    "english",
 ]
 
 

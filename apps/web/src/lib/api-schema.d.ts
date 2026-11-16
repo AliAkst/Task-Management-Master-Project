@@ -1543,6 +1543,173 @@ export interface paths {
         patch: operations["update_template_api_v1_day_templates__template_id__patch"];
         trace?: never;
     };
+    "/api/v1/english/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Profile */
+        get: operations["get_profile_api_v1_english_profile_get"];
+        /** Put Profile */
+        put: operations["put_profile_api_v1_english_profile_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/english/vocab": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vocab */
+        get: operations["list_vocab_api_v1_english_vocab_get"];
+        put?: never;
+        /**
+         * Create Vocab
+         * @description Tek kelime ya da {items: [...]} (en cok 20). Var olan terim `existing: true` doner.
+         */
+        post: operations["create_vocab_api_v1_english_vocab_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/english/vocab/{vocab_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Vocab */
+        delete: operations["delete_vocab_api_v1_english_vocab__vocab_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Vocab */
+        patch: operations["update_vocab_api_v1_english_vocab__vocab_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/english/vocab/{vocab_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review Vocab
+         * @description SM-2 tekrar notu (0-5).
+         */
+        post: operations["review_vocab_api_v1_english_vocab__vocab_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/english/mistakes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Mistakes */
+        get: operations["list_mistakes_api_v1_english_mistakes_get"];
+        put?: never;
+        /**
+         * Create Mistakes
+         * @description Tek hata ya da {items: [...]} (en cok 20).
+         */
+        post: operations["create_mistakes_api_v1_english_mistakes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/english/mistakes/{mistake_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Mistake */
+        delete: operations["delete_mistake_api_v1_english_mistakes__mistake_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/english/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sessions */
+        get: operations["list_sessions_api_v1_english_sessions_get"];
+        put?: never;
+        /** Create Session */
+        post: operations["create_session_api_v1_english_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/english/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Today */
+        get: operations["today_api_v1_english_today_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/english/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Progress */
+        get: operations["progress_api_v1_english_progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/work-summary": {
         parameters: {
             query?: never;
@@ -2047,6 +2214,30 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[ProfileResponse] */
+        ApiResponse_ProfileResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["ProfileResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[ProgressResponse] */
+        ApiResponse_ProgressResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["ProgressResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[SessionResponse] */
         ApiResponse_SessionResponse_: {
             /** Success */
@@ -2107,11 +2298,49 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[TodayResponse] */
+        ApiResponse_TodayResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["TodayResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[TokenResponse] */
         ApiResponse_TokenResponse_: {
             /** Success */
             success: boolean;
             data?: components["schemas"]["TokenResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[Union[MistakeResponse, list[MistakeResponse]]] */
+        ApiResponse_Union_MistakeResponse__list_MistakeResponse___: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["MistakeResponse"] | components["schemas"]["MistakeResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[Union[VocabResponse, list[VocabResponse]]] */
+        ApiResponse_Union_VocabResponse__list_VocabResponse___: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["VocabResponse"] | components["schemas"]["VocabResponse"][] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -2136,6 +2365,18 @@ export interface components {
             /** Success */
             success: boolean;
             data?: components["schemas"]["UserSettingsResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[VocabResponse] */
+        ApiResponse_VocabResponse_: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["VocabResponse"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -2300,6 +2541,19 @@ export interface components {
              */
             timestamp?: string;
         };
+        /** ApiResponse[list[MistakeResponse]] */
+        ApiResponse_list_MistakeResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["MistakeResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
         /** ApiResponse[list[OAuthClientInfo]] */
         ApiResponse_list_OAuthClientInfo__: {
             /** Success */
@@ -2358,6 +2612,19 @@ export interface components {
             success: boolean;
             /** Data */
             data?: components["schemas"]["TrelloImportResult"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[list[VocabResponse]] */
+        ApiResponse_list_VocabResponse__: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["VocabResponse"][] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /**
              * Timestamp
@@ -3078,6 +3345,13 @@ export interface components {
             graph_y?: number | null;
             /** Assigned To */
             assigned_to?: number | null;
+        };
+        /** CategoryCount */
+        CategoryCount: {
+            /** Category */
+            category: string;
+            /** Count */
+            count: number;
         };
         /** ChecklistItemCreate */
         ChecklistItemCreate: {
@@ -3849,6 +4123,49 @@ export interface components {
             /** Failed Push */
             failed_push: number;
         };
+        /** MistakeBatch */
+        MistakeBatch: {
+            /** Items */
+            items: components["schemas"]["MistakeItem"][];
+        };
+        /** MistakeItem */
+        MistakeItem: {
+            /** Source */
+            source?: ("local" | "claude" | "self") | null;
+            /** Original */
+            original: string;
+            /** Corrected */
+            corrected: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "grammar" | "tense" | "preposition" | "article" | "word_choice" | "spelling" | "other";
+            /** Explanation Tr */
+            explanation_tr?: string | null;
+        };
+        /** MistakeResponse */
+        MistakeResponse: {
+            /** Id */
+            id: number;
+            /** Source */
+            source: string;
+            /** Original */
+            original: string;
+            /** Corrected */
+            corrected: string;
+            /** Category */
+            category: string;
+            /** Explanation Tr */
+            explanation_tr: string | null;
+            /** Review Count */
+            review_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** NotDoneLine */
         NotDoneLine: {
             /** Title */
@@ -3947,7 +4264,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "event" | "carry_over" | "due" | "overdue" | "in_progress" | "next_in_chain" | "worked" | "course";
+            kind: "event" | "carry_over" | "due" | "overdue" | "in_progress" | "next_in_chain" | "worked" | "course" | "english";
             /** Card Id */
             card_id?: number | null;
             /** Event Id */
@@ -3989,6 +4306,58 @@ export interface components {
             /** Count */
             count: number;
         };
+        /** ProfileInput */
+        ProfileInput: {
+            /**
+             * Target Level
+             * @enum {string}
+             */
+            target_level: "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
+            /** Current Level */
+            current_level?: ("A1" | "A2" | "B1" | "B2" | "C1" | "C2") | null;
+            /** Daily Minutes */
+            daily_minutes: number;
+            /** Focus */
+            focus: ("speaking" | "writing" | "vocab" | "grammar")[];
+        };
+        /** ProfileResponse */
+        ProfileResponse: {
+            /** Id */
+            id: number;
+            /** Target Level */
+            target_level: string;
+            /** Current Level */
+            current_level: string | null;
+            /** Daily Minutes */
+            daily_minutes: number;
+            /** Focus */
+            focus: string[];
+            /**
+             * Started At
+             * Format: date
+             */
+            started_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ProgressResponse */
+        ProgressResponse: {
+            /** Streak Days */
+            streak_days: number;
+            /** Weekly Minutes */
+            weekly_minutes: components["schemas"]["WeekMinutes"][];
+            vocab_stats: components["schemas"]["VocabStats"];
+            /** Mistakes By Category */
+            mistakes_by_category: components["schemas"]["WeekCategoryCount"][];
+        };
         /**
          * RefreshRequest
          * @description Token yenileme istegi icin basit sema
@@ -3996,6 +4365,32 @@ export interface components {
         RefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /** SessionCreate */
+        SessionCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "daily" | "deep" | "speaking";
+            /** Started At */
+            started_at?: string | null;
+            /** Minutes */
+            minutes: number;
+            /** Summary */
+            summary?: string | null;
+            /**
+             * New Vocab
+             * @default 0
+             */
+            new_vocab: number;
+            /**
+             * Mistakes Count
+             * @default 0
+             */
+            mistakes_count: number;
+            /** Source */
+            source?: ("local" | "claude" | "self") | null;
         };
         /**
          * SessionManualCreate
@@ -4215,6 +4610,18 @@ export interface components {
         /** TitleParseResponse */
         TitleParseResponse: {
             match?: components["schemas"]["WhenMatchOut"] | null;
+        };
+        /** TodayResponse */
+        TodayResponse: {
+            profile: components["schemas"]["ProfileResponse"] | null;
+            /** Due Vocab */
+            due_vocab: components["schemas"]["VocabResponse"][];
+            /** Top Categories */
+            top_categories: components["schemas"]["CategoryCount"][];
+            /** Practiced Today */
+            practiced_today: boolean;
+            /** Task */
+            task: string | null;
         };
         /** TodoListInfo */
         TodoListInfo: {
@@ -4475,6 +4882,99 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** VocabBatch */
+        VocabBatch: {
+            /** Items */
+            items: components["schemas"]["VocabItem"][];
+        };
+        /** VocabItem */
+        VocabItem: {
+            /** Term */
+            term: string;
+            /** Meaning Tr */
+            meaning_tr: string;
+            /** Example */
+            example?: string | null;
+            /** Source */
+            source?: ("local" | "claude" | "self") | null;
+        };
+        /** VocabResponse */
+        VocabResponse: {
+            /** Id */
+            id: number;
+            /** Term */
+            term: string;
+            /** Meaning Tr */
+            meaning_tr: string;
+            /** Example */
+            example: string | null;
+            /** Source */
+            source: string;
+            /** Ease */
+            ease: number;
+            /** Interval Days */
+            interval_days: number;
+            /** Reps */
+            reps: number;
+            /** Lapses */
+            lapses: number;
+            /**
+             * Due On
+             * Format: date
+             */
+            due_on: string;
+            /** Last Reviewed At */
+            last_reviewed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Existing
+             * @default false
+             */
+            existing: boolean;
+        };
+        /** VocabReview */
+        VocabReview: {
+            /** Grade */
+            grade: number;
+        };
+        /** VocabStats */
+        VocabStats: {
+            /** Total */
+            total: number;
+            /** Due */
+            due: number;
+            /** Mature */
+            mature: number;
+        };
+        /** VocabUpdate */
+        VocabUpdate: {
+            /** Term */
+            term?: string | null;
+            /** Meaning Tr */
+            meaning_tr?: string | null;
+            /** Example */
+            example?: string | null;
+        };
+        /** WeekCategoryCount */
+        WeekCategoryCount: {
+            /** Week */
+            week: string;
+            /** Category */
+            category: string;
+            /** Count */
+            count: number;
+        };
+        /** WeekMinutes */
+        WeekMinutes: {
+            /** Week */
+            week: string;
+            /** Minutes */
+            minutes: number;
+        };
         /** WhenMatchOut */
         WhenMatchOut: {
             /** Spans */
@@ -4528,6 +5028,58 @@ export interface components {
             sections: components["schemas"]["WorkSections"];
             /** Text */
             text: string;
+        };
+        /** ApiResponse[SessionResponse] */
+        app__models__common__ApiResponse_SessionResponse___2: {
+            /** Success */
+            success: boolean;
+            data?: components["schemas"]["app__models__english__SessionResponse"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** ApiResponse[list[SessionResponse]] */
+        app__models__common__ApiResponse_list_SessionResponse____2: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["app__models__english__SessionResponse"][] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
+        };
+        /** SessionResponse */
+        app__models__english__SessionResponse: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Minutes */
+            minutes: number;
+            /** Summary */
+            summary: string | null;
+            /** New Vocab */
+            new_vocab: number;
+            /** Mistakes Count */
+            mistakes_count: number;
+            /** Source */
+            source: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
     };
     responses: never;
@@ -7860,6 +8412,478 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_DayTemplateResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_profile_api_v1_english_profile_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ProfileResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_profile_api_v1_english_profile_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ProfileResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vocab_api_v1_english_vocab_get: {
+        parameters: {
+            query?: {
+                due?: boolean;
+                limit?: number;
+            };
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_VocabResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_vocab_api_v1_english_vocab_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VocabItem"] | components["schemas"]["VocabBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_Union_VocabResponse__list_VocabResponse___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_vocab_api_v1_english_vocab__vocab_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                vocab_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vocab_api_v1_english_vocab__vocab_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                vocab_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VocabUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_VocabResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_vocab_api_v1_english_vocab__vocab_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                vocab_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VocabReview"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_VocabResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mistakes_api_v1_english_mistakes_get: {
+        parameters: {
+            query?: {
+                category?: ("grammar" | "tense" | "preposition" | "article" | "word_choice" | "spelling" | "other") | null;
+                limit?: number;
+            };
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_MistakeResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_mistakes_api_v1_english_mistakes_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MistakeItem"] | components["schemas"]["MistakeBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_Union_MistakeResponse__list_MistakeResponse___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_mistake_api_v1_english_mistakes__mistake_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                mistake_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sessions_api_v1_english_sessions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__models__common__ApiResponse_list_SessionResponse____2"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_session_api_v1_english_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__models__common__ApiResponse_SessionResponse___2"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    today_api_v1_english_today_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_TodayResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    progress_api_v1_english_progress_get: {
+        parameters: {
+            query?: {
+                weeks?: number;
+            };
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ProgressResponse_"];
                 };
             };
             /** @description Validation Error */

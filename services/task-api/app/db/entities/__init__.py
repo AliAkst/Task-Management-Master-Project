@@ -16,6 +16,12 @@ from .card_content import (
 )
 from .day_plan import DayPlanEntity, DayPlanItemEntity
 from .day_template import DayTemplateEntity
+from .english import (
+    EnglishMistakeEntity,
+    EnglishProfileEntity,
+    EnglishSessionEntity,
+    EnglishVocabEntity,
+)
 from .event import EventEntity
 from .goal import GoalEntity
 from .integration import ExternalLinkEntity, IntegrationAccountEntity, OAuthClientEntity
@@ -41,6 +47,10 @@ __all__ = [
     "DayPlanEntity",
     "DayPlanItemEntity",
     "DayTemplateEntity",
+    "EnglishMistakeEntity",
+    "EnglishProfileEntity",
+    "EnglishSessionEntity",
+    "EnglishVocabEntity",
     "EventEntity",
     "ExternalLinkEntity",
     "GoalEntity",

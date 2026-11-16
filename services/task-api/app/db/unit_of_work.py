@@ -23,6 +23,12 @@ from app.db.repositories.day_plan import (
     DayPlanRepository,
 )
 from app.db.repositories.day_template import DayTemplateRepository
+from app.db.repositories.english import (
+    EnglishMistakeRepository,
+    EnglishProfileRepository,
+    EnglishSessionRepository,
+    EnglishVocabRepository,
+)
 from app.db.repositories.event import EventRepository
 from app.db.repositories.integration import (
     ExternalLinkRepository,
@@ -100,6 +106,10 @@ class TaskUnitOfWork(BaseUnitOfWork):
         self.external_links = ExternalLinkRepository(session)
         self.oauth_clients = OAuthClientRepository(session)
         self.api_tokens = ApiTokenRepository(session)
+        self.english_profiles = EnglishProfileRepository(session)
+        self.english_vocab = EnglishVocabRepository(session)
+        self.english_mistakes = EnglishMistakeRepository(session)
+        self.english_sessions = EnglishSessionRepository(session)
     
     @with_db_retry
     async def commit(self):
