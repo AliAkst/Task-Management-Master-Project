@@ -650,6 +650,45 @@ async def test_english_write_ask_mode_proposes_without_writing(
     assert eng.writes == [] and len(notifier.sent) == 1
 
 
+async def test_english_ask_proposal_executes_on_web_approve(
+    make_client, eng, db_session_maker, notifier, monkeypatch
+):
+    """T5-D4: MCP'nin ask onerisi web'de onaylaninca /english/vocab'a yazilir."""
+    async with db_session_maker() as s:
+        await set_mode(s, USER_ID, "log_english", "ask")
+        await s.commit()
+    bridge = await make_client(httpx.MockTransport(eng))
+    r = await with_client(
+        bridge,
+        lambda c: c.call_tool(
+            "english_add_vocab", {"items": [{"term": "thrive", "meaning_tr": "gelişmek"}]}
+        ),
+    )
+    assert text_of(r).startswith("ONAY BEKLİYOR (#") and eng.writes == []
+    monkeypatch.setattr(chat_module, "session_maker", db_session_maker)
+    monkeypatch.setattr(
+        chat_module, "TaskApiClient", lambda token: TaskApiClient(token, transport=httpx.MockTransport(eng))
+    )
+
+    async def fake_session():
+        async with db_session_maker() as s:
+            yield s
+
+    app.dependency_overrides[current_user] = lambda: {
+        "id": USER_ID, "full_name": "Ali", "token": "jwt-token"
+    }
+    app.dependency_overrides[chat_module.get_session] = fake_session
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as web:
+            listed = (await web.get("/api/v1/assistant/actions?status=proposed")).json()["data"]
+            res = await web.post(f"/api/v1/assistant/actions/{listed[0]['id']}/approve", json={})
+    finally:
+        app.dependency_overrides.clear()
+    assert res.json()["data"]["status"] == "executed"
+    post = next(w for w in eng.writes if w["path"] == "/english/vocab")
+    assert post["body"]["items"][0]["term"] == "thrive" and post["body"]["items"][0]["source"] == "claude"
+
+
 @pytest.mark.parametrize(
     ("tool", "args"),
     [

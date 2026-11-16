@@ -280,6 +280,33 @@ async def test_correct_ask_mode_proposes_instead_of_writing(client, eng_api, db_
         assert row.status == "proposed" and row.action_type == "log_english"
 
 
+async def test_correct_ask_mode_approve_executes_english_writes(
+    client, eng_api, db_session_maker, monkeypatch
+):
+    """T5-D4: ask onerisi onaylaninca genel yol execute_english'i task-api'ye yazdirir."""
+    import app.api.chat as chat_module
+
+    monkeypatch.setattr(
+        chat_module,
+        "TaskApiClient",
+        lambda token: TaskApiClient(token, transport=httpx.MockTransport(eng_api)),
+    )
+    async with db_session_maker() as s:
+        await set_mode(s, USER["id"], "log_english", "ask")
+        await s.commit()
+    set_provider(client, [good(ROW1, ROW2)])
+    data = (await client.post(f"{API}/correct", json={"sentences": S2})).json()["data"]
+    assert eng_api.writes == []
+    res = await client.post(f"/api/v1/assistant/actions/{data['pending_action_id']}/approve", json={})
+    assert res.status_code == 200, res.text
+    assert res.json()["data"]["status"] == "executed"
+    posts = {w["path"]: w for w in eng_api.writes}
+    m = posts["/english/mistakes"]["body"]["items"][0]
+    assert m["original"] == "I have went" and m["source"] == "local"
+    sess = posts["/english/sessions"]["body"]
+    assert sess["kind"] == "daily" and sess["mistakes_count"] == 1
+
+
 async def test_correct_never_mode_still_returns_corrections_without_saving(
     client, eng_api, db_session_maker
 ):

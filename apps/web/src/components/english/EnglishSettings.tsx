@@ -6,6 +6,7 @@ import {
   RATE_KEY,
   VOICE_KEY,
   getRate,
+  isOnlineVoice,
   localCorrectEnabled,
   readPref,
   speak,
@@ -57,7 +58,7 @@ export default function EnglishSettings({ profile }: { profile: EnglishProfile }
         </Row>
         {speechSupported() ? (
           <>
-            <Row title="Ses" hint="Tarayıcının İngilizce sesleri.">
+            <Row title="Ses" hint="Tarayıcının İngilizce sesleri. Çevrimiçi seslerde okunan metin ses üreticisinin sunucusuna gider.">
               <select
                 aria-label="Ses seçimi"
                 className="max-w-56 rounded-md border border-slate-300 bg-surface px-2 py-1 text-sm"
@@ -67,10 +68,10 @@ export default function EnglishSettings({ profile }: { profile: EnglishProfile }
                   writePref(VOICE_KEY, e.target.value)
                 }}
               >
-                <option value="">Varsayılan</option>
+                <option value="">Varsayılan (yerel ses)</option>
                 {voices.map((v) => (
                   <option key={v.voiceURI} value={v.voiceURI}>
-                    {v.name} ({v.lang})
+                    {v.name} ({v.lang}){isOnlineVoice(v) ? ' — çevrimiçi, metin üreticiye gider' : ''}
                   </option>
                 ))}
               </select>
@@ -107,7 +108,10 @@ export default function EnglishSettings({ profile }: { profile: EnglishProfile }
       </section>
 
       <p className="max-w-prose text-sm text-slate-600">
-        Dikte, tarayıcının konuşma tanıma servisine (Chrome/Edge: üreticinin sunucusu) ses gönderir.
+        Dikte, tarayıcının konuşma tanıma servisine (Chrome/Edge: üreticinin sunucusu) ses gönderir. Çevrimiçi seslerle
+        seslendirmede okunan metin de ses üreticisinin sunucusuna gider; yerel sesler cihazda kalır.
+        Yerel düzeltmede metin modele gitmez, ama kaydedilen hata örnekleri, kelimeler ve seans özetleri Claude bağlantısı
+        açıksa Claude&apos;a görünür (kaydı İzinler → İngilizce kaydı = Asla ile kapatabilirsin).
       </p>
     </div>
   )

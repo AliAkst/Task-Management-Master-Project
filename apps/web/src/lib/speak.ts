@@ -33,6 +33,16 @@ export function localCorrectEnabled(): boolean {
   return readPref(LOCAL_CORRECT_KEY) !== 'off'
 }
 
+/** Cevrimici (localService=false) sesin metni uretici sunucusuna gider; varsayilan hep yerel olsun. */
+export function isOnlineVoice(v: SpeechSynthesisVoice): boolean {
+  return v.localService === false
+}
+
+/** Kayitli secim yokken kullanilacak ses: ilk yerel en- sesi (yoksa undefined = tarayici varsayilani). */
+export function defaultLocalVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
+  return voices.find((v) => v.lang.toLowerCase().startsWith('en-') && !isOnlineVoice(v))
+}
+
 export function isSpeaking(): boolean {
   return speechSupported() && (window.speechSynthesis.speaking || window.speechSynthesis.pending)
 }
@@ -50,12 +60,11 @@ export function speak(text: string, opts: { voiceURI?: string | null; rate?: num
   u.lang = 'en-US'
   u.rate = opts.rate ?? getRate()
   const uri = opts.voiceURI ?? readPref(VOICE_KEY)
-  if (uri) {
-    const v = synth.getVoices().find((x) => x.voiceURI === uri)
-    if (v) {
-      u.voice = v
-      u.lang = v.lang
-    }
+  const all = synth.getVoices()
+  const v = (uri ? all.find((x) => x.voiceURI === uri) : undefined) ?? defaultLocalVoice(all)
+  if (v) {
+    u.voice = v
+    u.lang = v.lang
   }
   synth.speak(u)
 }

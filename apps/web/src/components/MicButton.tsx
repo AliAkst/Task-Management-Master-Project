@@ -18,11 +18,11 @@ export interface MicControl {
  * Dikte dugmesi + ilk kullanim bilgisi + Ctrl+M. Parent onFinal ile metni girisine ekler.
  * Dugme ve kisayol tek yerden yonetilir; bilgi uyarisi atlanamaz.
  */
-export function useMic(onFinal: (text: string) => void): MicControl {
+export function useMic(onFinal: (text: string) => void, lang?: string): MicControl {
   const enabled = usePrefs((s) => s.dictationEnabled)
   const noticeSeen = usePrefs((s) => s.dictationNoticeSeen)
   const markSeen = usePrefs((s) => s.markDictationNoticeSeen)
-  const dictation = useDictation({ onFinal })
+  const dictation = useDictation({ onFinal, lang })
   const [notice, setNotice] = useState(false)
   const active = enabled && dictation.supported
 

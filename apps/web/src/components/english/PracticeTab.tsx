@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react'
-import { Mic } from 'lucide-react'
 import {
   CATEGORY_LABELS,
   assistantErrorText,
@@ -7,7 +6,7 @@ import {
   useDialog,
   type DialogTurn,
 } from '../../api/english'
-import { useDictation } from '../../lib/useDictation'
+import { DictationStatus, useMic } from '../MicButton'
 import { localCorrectEnabled, speak } from '../../lib/speak'
 import SpeakButton from './SpeakButton'
 
@@ -18,10 +17,12 @@ const box = 'w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text
 function Corrector() {
   const [text, setText] = useState('')
   const correct = useCorrect()
-  const dictation = useDictation({
-    lang: 'en-US',
-    onFinal: (t) => setText((cur) => (cur.trim() ? `${cur.replace(/\s+$/, '')}\n${t}` : t)),
-  })
+  // Genel dikte tercihi + ilk kullanim bilgisi MicButton'da (T5-D1); dil Ingilizce
+  const mic = useMic(
+    (t) => setText((cur) => (cur.trim() ? `${cur.replace(/\s+$/, '')}\n${t}` : t)),
+    'en-US',
+  )
+  const dictation = mic.dictation
 
   const lines = text
     .split('\n')
@@ -47,6 +48,7 @@ function Corrector() {
           value={text}
           readOnly={pending}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={mic.onKey}
           placeholder="I goes to school yesterday."
         />
       </label>
@@ -56,23 +58,7 @@ function Corrector() {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        {dictation.supported && (
-          <button
-            type="button"
-            aria-label="Sesle yaz (İngilizce)"
-            aria-pressed={dictation.listening}
-            title="Sesle yaz"
-            disabled={pending}
-            onClick={() => (dictation.listening ? dictation.stop() : dictation.start())}
-            className={`rounded p-2 ${
-              dictation.listening
-                ? 'bg-rec text-on-ink motion-safe:animate-pulse'
-                : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            <Mic size={16} aria-hidden />
-          </button>
-        )}
+        {mic.button}
         <button
           disabled={pending || lines.length === 0 || tooMany}
           className="rounded-md bg-slate-900 px-4 py-1.5 text-[15px] text-on-ink disabled:opacity-40"
@@ -81,11 +67,7 @@ function Corrector() {
         </button>
         {pending && <span className="text-sm text-slate-600">Model düşünüyor…</span>}
       </div>
-      {dictation.supported && (dictation.listening || dictation.error) && (
-        <p aria-live="polite" className={`text-sm ${dictation.error && !dictation.listening ? 'text-red-700' : 'text-slate-500 italic'}`}>
-          {dictation.error && !dictation.listening ? dictation.error : dictation.interim || 'Dinleniyor…'}
-        </p>
-      )}
+      <DictationStatus mic={mic} />
 
       {correct.isError && (
         <p role="alert" className="text-sm text-red-700">
